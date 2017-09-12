@@ -11,6 +11,7 @@ namespace LIBOOPT
 int initDevice        (int fd, int& iDeviceType); // device type: 0 - HR4000, 1 - USB2000P
 int queryConfig       (int fd, int iConfigVar, char lbConfigVal[OOPT_CONFIGVAR_RETLEN]);
 int setConfig         (int fd, int iConfigVar, const char lbConfigVal[OOPT_CONFIGVAR_RETLEN]);
+int readFirmware      (int fd, uint16_t& u16FirmawareVal);
 int readRegister      (int fd, int iRegisterAddr, uint16_t& u16RegisterVal);
 int setRegister       (int fd, int iRegisterAddr, uint16_t u16RegisterVal);
 int getTemperature    (int fd, bool& bReadOk, double& fTemperatureInC);
@@ -54,6 +55,10 @@ enum TriggerMode
   TRIGGER_USB2000P_EXT_HW_LEVEL = 2,
   TRIGGER_USB2000P_EXT_SYNC     = 3,
   TRIGGER_USB2000P_EXT_HW_EDGE  = 4,
+
+  TRIGGER_MODE_EXT_HW_LEVEL     = 2,
+  TRIGGER_MODE_SHUTTER          = 3,
+  TRIGGER_MODE_EXT_HW_EDGE      = 4,
 };
 int setTriggerMode    (int fd, TriggerMode eTriggerMode);
 

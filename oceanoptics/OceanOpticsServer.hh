@@ -60,6 +60,7 @@ class OceanOpticsServer
    int          _iOutDataSize;
    uint64_t     _count;
    int          _iDebugLevel;
+   uint16_t     _iDeviceFirmware;
 }; //class OceanOpticsServer
 
 class OceanOpticsServerException : public std::runtime_error

@@ -32,6 +32,7 @@ static int          iNumTotalPixels;
 static int          iPixelDataSize;
 static int          iPostheaderOffset;
 static int          iNumLongInterval    = 0;
+static uint16_t     iNewTriggerFirmware = 0x3000;
 static HistReport   histLongIntervalShot(0,30,1);
 static HistReport   histFetchInterval(0,32,0.5);
 static HistReport   histTimeFrame(0,32,0.1);
@@ -75,6 +76,15 @@ OceanOpticsServer::OceanOpticsServer(const Src& client, int iDevice, int iDebugL
 
   if (_iDebugLevel >= 1)
     printf("Device type = %d\n", _iDeviceType);
+
+  if (LIBOOPT::readFirmware(fdDevice, _iDeviceFirmware) != 0)
+  {
+    close(fdDevice);
+    throw OceanOpticsServerException("OceanOpticsServer::OceanOpticsServer(): readFirmware() failed");
+  }
+
+  if (_iDebugLevel >= 1)
+    printf("Device firmware = 0x%04x\n", _iDeviceFirmware);
 
   switch (_iDeviceType)
   {
@@ -209,7 +219,10 @@ unsigned OceanOpticsServer::configure(OceanOpticsConfigType& config)
   }
 
   if (_iDeviceType == 0 || _iDeviceType == 2) // HR4000 or USB4000
-    iError = LIBOOPT::setTriggerMode(fd(), LIBOOPT::TRIGGER_MODE_EXT_HW);
+    if (_iDeviceFirmware >= iNewTriggerFirmware)
+      iError = LIBOOPT::setTriggerMode(fd(), LIBOOPT::TRIGGER_MODE_EXT_HW_EDGE);
+    else
+      iError = LIBOOPT::setTriggerMode(fd(), LIBOOPT::TRIGGER_MODE_EXT_HW);
   else
     iError = LIBOOPT::setTriggerMode(fd(), LIBOOPT::TRIGGER_USB2000P_EXT_HW_EDGE);
   if (iError != 0)

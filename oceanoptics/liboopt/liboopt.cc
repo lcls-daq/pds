@@ -29,7 +29,8 @@ typedef enum
 } ArmLimitType;
 
 #pragma pack(4)
-#define OOPT_CMD_BULK_SIZE    64
+#define OOPT_CMD_BULK_SIZE      64
+#define OOPT_FIRMWARE_REG_INDEX 0x04
 
 typedef struct tagIoctlInfo
 {
@@ -229,6 +230,11 @@ int setRegister(int fd, int iRegisterAddr, uint16_t u16RegisterVal)
 
   sleepInSeconds(0.0001); // 100 us
   return iError;
+}
+
+int readFirmware(int fd, uint16_t& u16FirmwareVal)
+{
+  return readRegister(fd, OOPT_FIRMWARE_REG_INDEX, u16FirmwareVal);
 }
 
 int getTemperature(int fd, bool& bReadOk, double& fTemperatureInC)

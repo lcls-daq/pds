@@ -76,7 +76,8 @@ bool SegmentLevel::attach()
         _streams = new TaggedStreams(*this,
                                      _settings.max_event_size (),
                                      _settings.max_event_depth(),
-                                     vname);
+                                     vname,
+                                     _settings.is_unsynced());
       }
       else {
         _streams = new SegStreams(*this,

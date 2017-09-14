@@ -12,7 +12,8 @@ namespace Pds {
     TaggedStreams(PartitionMember&, 
                   unsigned max_event_size,
                   unsigned max_event_depth,
-                  const char* name);
+                  const char* name,
+                  bool is_unsynced);
 
     virtual ~TaggedStreams();
   };

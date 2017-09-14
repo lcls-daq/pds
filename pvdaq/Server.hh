@@ -17,7 +17,7 @@ namespace Pds {
   class GenericPool;
   namespace PvDaq {
     class Server : public EbServer,
-		   public BldSequenceSrv,
+                   public BldSequenceSrv,
                    public Action {
 
     public:

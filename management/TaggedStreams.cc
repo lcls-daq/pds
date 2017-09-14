@@ -15,7 +15,8 @@ static const unsigned MaxSize = 16*1024*1024;
 TaggedStreams::TaggedStreams(PartitionMember& cmgr,
                              unsigned max_event_size,
                              unsigned max_event_depth,
-                             const char* name) :
+                             const char* name,
+                             bool is_unsynced) :
   WiredStreams(VmonSourceId(cmgr.header().level(), cmgr.header().ip()))
 {
   if (!max_event_size)
@@ -42,7 +43,7 @@ TaggedStreams::TaggedStreams(PartitionMember& cmgr,
                        ipaddress,
                        max_event_size, max_event_depth, 0,
                        new VmonEb(src,32,max_event_depth,(1<<23),max_event_size));
-    ebs->require_in_order(false);
+    ebs->require_in_order(is_unsynced);
     ebs->printSinks(false); // these are routine
     _inlet_wires[s] = ebs;
 

@@ -12,13 +12,15 @@ StdSegWire::StdSegWire(EbServer&   server,
                        bool        is_triggered,
                        unsigned    evr_module,
                        unsigned    evr_channel,
-                       bool        has_fiducial) :
+                       bool        has_fiducial,
+                       bool        is_unsynced) :
   _maxeventsize (maxeventsize),
   _maxeventdepth(maxeventdepth),
   _istriggered  (is_triggered),
   _evrmodule    (evr_module),
   _evrchannel   (evr_channel),
-  _hasfiducial  (has_fiducial)
+  _hasfiducial  (has_fiducial),
+  _isunsynced   (is_unsynced)
 {
   _sources.push_back(server.client()); 
 
@@ -37,14 +39,16 @@ StdSegWire::StdSegWire(std::list<EbServer*> servers,
                        bool        is_triggered,
                        unsigned    evr_module,
                        unsigned    evr_channel,
-                       bool        has_fiducial) :
+                       bool        has_fiducial,
+                       bool        is_unsynced) :
   _server       (servers),
   _maxeventsize (maxeventsize),
   _maxeventdepth(maxeventdepth),
   _istriggered  (is_triggered),
   _evrmodule    (evr_module),
   _evrchannel   (evr_channel),
-  _hasfiducial  (has_fiducial)
+  _hasfiducial  (has_fiducial),
+  _isunsynced   (is_unsynced)
 {
   for(std::list<EbServer*>::iterator it=servers.begin(); it!=servers.end(); it++)
     _sources.push_back((*it)->client()); 
@@ -106,4 +110,9 @@ unsigned StdSegWire::max_event_depth() const
 bool StdSegWire::has_fiducial() const
 {
   return _hasfiducial;
+}
+
+bool StdSegWire::is_unsynced() const
+{
+  return _isunsynced;
 }

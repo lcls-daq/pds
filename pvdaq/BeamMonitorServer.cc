@@ -72,7 +72,6 @@ BeamMonitorServer::BeamMonitorServer(const char*         pvbase,
   _ConfigBuff (0),
   _configMonitor(new ConfigMonitor(*this)),
   _nprint     (NPRINT),
-  _rdp        (0),
   _wrp        (0),
   _pool       (8)
 {
@@ -150,11 +149,9 @@ BeamMonitorServer::~BeamMonitorServer()
 //
 int  BeamMonitorServer::fill(char* payload, const void* p)
 {
-  Dgram* dg = reinterpret_cast<Dgram*>(_pool[_rdp]);
+  const Dgram* dg = reinterpret_cast<const Dgram*>(p);
   if (_last > dg->seq.clock())
     return -1;
-
-  if (++_rdp == _pool.size()) _rdp=0;
 
   _last = dg->seq.clock();
 
@@ -310,7 +307,6 @@ Pds::InDatagram* BeamMonitorServer::fire(Pds::InDatagram* dg)
 {
   if (dg->seq.service()==Pds::TransitionId::Configure) {
     _last = ClockTime(0,0);
-    _rdp  = 0;
     _wrp  = 0;
     for(unsigned i=0; i<_pool.size(); i++)
       reinterpret_cast<Dgram*>(_pool[i])->seq = Sequence(ClockTime(0,0),

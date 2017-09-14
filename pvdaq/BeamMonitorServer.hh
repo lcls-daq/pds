@@ -46,7 +46,6 @@ namespace Pds {
       Pds_Epics::PVMonitorCb* _configMonitor;
       unsigned               _nprint;
       ClockTime              _last;
-      unsigned               _rdp;
       unsigned               _wrp;
       std::vector<char*>     _pool;
     };

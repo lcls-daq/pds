@@ -31,6 +31,7 @@ public:
   virtual unsigned module         () const { return -1U; }
   virtual unsigned channel        () const { return -1U; }
   virtual bool     has_fiducial   () const { return false; }
+  virtual bool     is_unsynced    () const { return false; }
 };
 }
 #endif

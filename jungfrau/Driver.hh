@@ -68,10 +68,12 @@ namespace Pds {
         bool start();
         bool stop();
         void reset();
+        bool get_packet(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data, bool* first_packet, bool* last_packet, unsigned* npackets);
         bool get_frame(uint64_t* framenum, uint16_t* data);
         bool get_frame(uint64_t* framenum, JungfrauModInfoType* metadata, uint16_t* data);
         const char* error();
         void clear_error();
+        int fd() const;
         unsigned get_num_rows() const;
         unsigned get_num_columns() const;
         unsigned get_num_pixels() const;
@@ -99,7 +101,7 @@ namespace Pds {
 
     class Detector {
       public:
-        Detector(std::vector<Module*>& modules);
+        Detector(std::vector<Module*>& modules, bool use_threads, int thread_rtprio=0);
         ~Detector();
         bool configure(uint64_t nframes, JungfrauConfigType::GainMode gain, JungfrauConfigType::SpeedMode speed, double trig_delay, double exposure_time, double exposure_period, uint32_t bias, const DacsConfig& dac_config);
         bool check_size(uint32_t num_modules, uint32_t num_rows, uint32_t num_columns) const;
@@ -110,13 +112,24 @@ namespace Pds {
         unsigned get_num_rows(unsigned module) const;
         unsigned get_num_columns(unsigned module) const;
         unsigned get_num_modules() const;
+        unsigned get_num_pixels() const;
         unsigned get_frame_size() const;
         const char** errors();
         void clear_errors();
       private:
+        bool get_frame_thread(uint64_t* framenum, JungfrauModInfoType* metadata, uint16_t* data);
+        bool get_frame_poll(uint64_t* framenum, JungfrauModInfoType* metadata, uint16_t* data);
+      private:
+        bool                  _use_threads;
         pthread_t*            _threads;
+        pthread_attr_t*       _thread_attr;
+        pollfd*               _pfds;
         unsigned              _num_modules;
         uint64_t*             _module_frames;
+        bool*                 _module_first_packet;
+        bool*                 _module_last_packet;
+        unsigned*             _module_npackets;
+        uint16_t**            _module_data;
         std::vector<Module*>& _modules;
         const char**          _msgbuf;
     };

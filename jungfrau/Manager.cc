@@ -143,7 +143,6 @@ namespace Pds {
             const double clkratio  = 360./10e6;
             const double tolerance = 0.003;  // AC line rate jitter and Jungfrau clock drift
             const unsigned maxdfid = 21600; // if there is more than 1 minute between triggers
-            if (_nfid > 3) printf("nfid: %u\n", _nfid);
 
             for (unsigned i=0; i<_num_modules; i++) {
               double fdelta = double(mod_info[i].timestamp() - _mod_ts[i])*clkratio/double(_nfid) - 1;

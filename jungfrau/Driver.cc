@@ -45,8 +45,6 @@ static const char* ADCREG   = "adcreg";
 static const char* REG      = "reg";
 static const char* SETBIT   = "setbit";
 static const char* CLEARBIT = "clearbit";
-static struct sockaddr_in clientaddr;
-static socklen_t clientaddrlen = sizeof(clientaddr);
 
 #pragma pack(push)
 #pragma pack(2)
@@ -80,7 +78,7 @@ struct frame_thread_args {
 static void* frame_thread(void* args_ptr)
 {
   frame_thread_args* args = (frame_thread_args*) args_ptr;
-   args->status = args->module->get_frame(args->frame, args->metadata, args->data);
+  args->status = args->module->get_frame(args->frame, args->metadata, args->data);
 
   return NULL;
 }
@@ -568,40 +566,56 @@ bool Module::get_frame(uint64_t* frame, uint16_t* data)
   return get_frame(frame, NULL, data);
 }
 
-bool Module::get_frame(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data)
+bool Module::get_packet(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data, bool* first_packet, bool* last_packet, unsigned* npackets)
 {
   int nb;
+  struct sockaddr_in clientaddr;
+  socklen_t clientaddrlen = sizeof(clientaddr);
+  jungfrau_dgram* packet = NULL;
+
+  nb = ::recvfrom(_socket, _readbuf, sizeof(jungfrau_dgram), 0, (struct sockaddr *)&clientaddr, &clientaddrlen);
+  if (nb<0) {
+    fprintf(stderr,"Error: failure receiving packet from Jungfru at %s on port %d: %s\n", _host, _port, strerror(errno));
+    return false;
+  } else {
+    packet = (jungfrau_dgram*) _readbuf;
+
+    if (*first_packet) {
+      *frame = packet->framenum;
+      *first_packet = false;
+    } else if(*frame != packet->framenum) {
+      *last_packet = true;
+      fprintf(stderr,"Error: data out-of-order got data for frame %lu, but was expecting frame %lu from Jungfru at %s\n", packet->framenum, *frame, _host);
+      return false;
+    }
+
+    memcpy(&data[_frame_elem*packet->packetnum], packet->data, _frame_sz);
+    *last_packet = (packet->packetnum == (PACKET_NUM -1));
+    (*npackets)++;
+  }
+
+  if ((*npackets == PACKET_NUM) && packet) {
+    if (metadata) new(metadata) JungfrauModInfoType(packet->timestamp, packet->exptime, packet->moduleID, packet->xCoord, packet->yCoord, packet->zCoord);
+  }
+
+  return true;
+}
+
+bool Module::get_frame(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data)
+{
   unsigned npackets = 0;
   uint64_t cur_frame = 0;
   bool first_packet = true;
   bool last_packet = false;
-  jungfrau_dgram* packet = NULL;
 
   while (!last_packet) {
-    nb = ::recvfrom(_socket, _readbuf, sizeof(jungfrau_dgram), 0, (struct sockaddr *)&clientaddr, &clientaddrlen);
-    if (nb<0) {
-      fprintf(stderr,"Error: failure receiving packet from Jungfru at %s on port %d: %s\n", _host, _port, strerror(errno));
-      return false;
-    }
-
-    packet = (jungfrau_dgram*) _readbuf;
-
-    if (first_packet) {
-      cur_frame = packet->framenum;
-      first_packet = false;
-    } else if(cur_frame != packet->framenum) {
-      fprintf(stderr,"Error: data out-of-order got data for frame %lu, but was expecting frame %lu\n", packet->framenum, cur_frame);
-      return false;
-    }
-    
-    memcpy(&data[_frame_elem*packet->packetnum], packet->data, _frame_sz);
-    last_packet = (packet->packetnum == (PACKET_NUM -1));
-    npackets++;
+    get_packet(&cur_frame, metadata, data, &first_packet, &last_packet, &npackets);
   }
 
-  if ((npackets == PACKET_NUM) && packet) {
+  if (npackets == PACKET_NUM) {
     *frame = cur_frame;
-    if (metadata) new(metadata) JungfrauModInfoType(packet->timestamp, packet->exptime, packet->moduleID, packet->xCoord, packet->yCoord, packet->zCoord);
+  } else {
+    fprintf(stderr,"Error: frame %lu from Jungfrau at %s is incomplete, received %u out of %d expected\n", cur_frame, _host, npackets, PACKET_NUM);
   }
  
   return (npackets == PACKET_NUM);
@@ -615,6 +629,11 @@ const char* Module::error()
 void Module::clear_error()
 {
   _msgbuf[0] = 0;
+}
+
+int Module::fd() const
+{
+  return _socket;
 }
 
 unsigned Module::get_num_rows() const
@@ -637,12 +656,46 @@ unsigned Module::get_frame_size() const
   return NUM_ROWS * NUM_COLUMNS * sizeof(uint16_t);
 }
 
-Detector::Detector(std::vector<Module*>& modules) :
-  _threads(new pthread_t[modules.size()]),
+Detector::Detector(std::vector<Module*>& modules, bool use_threads, int thread_rtprio) :
+  _use_threads(use_threads),
+  _threads(0),
+  _thread_attr(0),
+  _pfds(0),
   _num_modules(modules.size()),
   _module_frames(new uint64_t[modules.size()]),
+  _module_first_packet(new bool[modules.size()]),
+  _module_last_packet(new bool[modules.size()]),
+  _module_npackets(new unsigned[modules.size()]),
+  _module_data(new uint16_t*[modules.size()]),
   _modules(modules),
-  _msgbuf(new const char*[modules.size()]) {}
+  _msgbuf(new const char*[modules.size()])
+{
+  if (_use_threads) {
+    _threads = new pthread_t[_num_modules];
+    _thread_attr = new pthread_attr_t;
+    pthread_attr_init(_thread_attr);
+    if (thread_rtprio > 0) {
+      if (thread_rtprio > sched_get_priority_max(SCHED_FIFO)) {
+        thread_rtprio = sched_get_priority_max(SCHED_FIFO);
+      } else if (thread_rtprio < sched_get_priority_min(SCHED_FIFO)) {
+        thread_rtprio = sched_get_priority_min(SCHED_FIFO);
+      }
+      struct sched_param params = {
+        .sched_priority = thread_rtprio,
+      };
+      pthread_attr_setschedpolicy(_thread_attr, SCHED_FIFO);
+      pthread_attr_setinheritsched(_thread_attr, PTHREAD_EXPLICIT_SCHED);
+      pthread_attr_setschedparam(_thread_attr, &params);
+    }
+  } else {
+    _pfds = new pollfd[_num_modules];
+    for (unsigned i=0; i<_num_modules; i++) {
+      _pfds[i].fd       = _modules[i]->fd();
+      _pfds[i].events   = POLLIN;
+      _pfds[i].revents  = 0;
+    }
+  }
+}
 
 Detector::~Detector()
 {
@@ -651,7 +704,16 @@ Detector::~Detector()
   }
   _modules.clear();
   if (_threads) delete[] _threads;
+  if (_thread_attr) {
+    pthread_attr_destroy(_thread_attr);
+    delete _thread_attr;
+  }
+  if (_pfds) delete[] _pfds;
   if (_module_frames) delete[] _module_frames;
+  if (_module_first_packet) delete[] _module_first_packet;
+  if (_module_last_packet) delete[] _module_last_packet;
+  if (_module_npackets) delete[] _module_npackets;
+  if (_module_data) delete[] _module_data;
   if (_msgbuf) delete[] _msgbuf;
 }
 
@@ -686,6 +748,15 @@ bool Detector::get_frame(uint64_t* frame, uint16_t* data)
 
 bool Detector::get_frame(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data)
 {
+  if (_use_threads)
+    return get_frame_thread(frame, metadata, data);
+  else
+    return get_frame_poll(frame, metadata, data);
+}
+
+bool Detector::get_frame_thread(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data)
+{
+  int thread_ret = 0;
   bool drop_frame = false;
   bool frame_unset = true;
   frame_thread_args args[_num_modules];
@@ -696,7 +767,11 @@ bool Detector::get_frame(uint64_t* frame, JungfrauModInfoType* metadata, uint16_
     args[i].data = data;
     args[i].metadata = metadata;
     args[i].module = _modules[i];
-    pthread_create(&_threads[i], NULL, frame_thread, &args);
+    thread_ret = pthread_create(&_threads[i], _thread_attr, frame_thread, &args[i]);
+    if (thread_ret) {
+      fprintf(stderr, "Error: failed to launch frame fetching thread for module %u: %s\n", i, strerror(thread_ret));
+      return false;
+    }
 
     data += _modules[i]->get_num_pixels();
     if(metadata) metadata++;
@@ -722,6 +797,58 @@ bool Detector::get_frame(uint64_t* frame, JungfrauModInfoType* metadata, uint16_
           fprintf(stderr,"Error: data out-of-order got data for module %u got frame %lu, but was expecting frame %lu\n", i, _module_frames[i], *frame);
           drop_frame = true;
         }
+      }
+    }
+  }
+
+  return !drop_frame;
+}
+
+bool Detector::get_frame_poll(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data)
+{
+  int npoll = 0;
+  bool drop_frame = false;
+  bool frame_unset = true;
+  bool frame_complete = false;
+
+  for (unsigned i=0; i<_num_modules; i++) {
+    _module_first_packet[i] = true;
+    _module_last_packet[i] = false;
+    _module_npackets[i] = 0;
+    _module_data[i] = data;
+    data += _modules[i]->get_num_pixels();
+  }
+
+  while(!frame_complete) {
+    frame_complete = true;
+    npoll = ::poll(_pfds, (nfds_t) _num_modules, -1);
+    if (npoll < 0) {
+      fprintf(stderr,"Error: frame poller failed with error code: %s\n", strerror(errno));
+      return false;
+    }
+
+    for (unsigned i=0; i<_num_modules; i++) {
+      if ((_pfds[i].revents & POLLIN) && (!_module_last_packet[i])) {
+        if (_modules[i]->get_packet(&_module_frames[i], &metadata[i], _module_data[i], &_module_first_packet[i], &_module_last_packet[i], &_module_npackets[i])) {
+          if (frame_unset) {
+            *frame = _module_frames[i];
+            frame_unset = false;
+          } else {
+            if (*frame != _module_frames[i]) {
+              fprintf(stderr,"Error: data out-of-order got data for module %u got frame %lu, but was expecting frame %lu\n", i, _module_frames[i], *frame);
+              drop_frame = true;
+            }
+          }
+
+          if (_module_last_packet[i] && (_module_npackets[i] != PACKET_NUM)) {
+            fprintf(stderr,"Error: frame %lu from module %u is incomplete, received %u out of %d expected\n", _module_frames[i], i, _module_npackets[i], PACKET_NUM);
+            drop_frame = true;
+          }
+        }
+      }
+
+      if (!_module_last_packet[i]) {
+        frame_complete = false;
       }
     }
   }
@@ -776,6 +903,15 @@ unsigned Detector::get_num_columns(unsigned module) const
 unsigned Detector::get_num_modules() const
 {
   return _num_modules;
+}
+
+unsigned Detector::get_num_pixels() const
+{
+  unsigned total_num_pixels = 0;
+  for (unsigned i=0; i<_num_modules; i++) {
+    total_num_pixels += _modules[i]->get_num_pixels();
+  }
+  return total_num_pixels;
 }
 
 unsigned Detector::get_frame_size() const

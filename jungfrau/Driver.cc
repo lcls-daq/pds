@@ -836,6 +836,7 @@ bool Detector::get_frame_poll(uint64_t* frame, JungfrauModInfoType* metadata, ui
           } else {
             if (*frame != _module_frames[i]) {
               fprintf(stderr,"Error: data out-of-order got data for module %u got frame %lu, but was expecting frame %lu\n", i, _module_frames[i], *frame);
+              _module_last_packet[i] = true;
               drop_frame = true;
             }
           }

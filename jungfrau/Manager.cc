@@ -26,9 +26,6 @@ namespace Pds {
         _detector(detector),
         _server(server),
         _disable(true),
-        _current_frame(0),
-        _last_frame(0),
-        _first_frame(true),
         _header_sz(0),
         _frame_sz(0),
         _entry_sz(0),
@@ -55,15 +52,8 @@ namespace Pds {
           _frame_ptr = (uint16_t*) (_buffer + sizeof(JungfrauDataType) + _header_sz);
           _framenum_ptr = (uint64_t*) _buffer;
           _metadata_ptr = (JungfrauModInfoType*) (_buffer + sizeof(JungfrauDataType));
-          if (_detector.get_frame(&_current_frame, _metadata_ptr, _frame_ptr)) {
-            *_framenum_ptr = _current_frame;
+          if (_detector.get_frame(_framenum_ptr, _metadata_ptr, _frame_ptr)) {
             _server.post((char*) _buffer, sizeof(JungfrauDataType) + _header_sz + _frame_sz);
-            if (_first_frame) {
-              _first_frame = false;
-            } else if (_current_frame != (_last_frame+1)) {
-              fprintf(stderr, "Error: FrameReader frame out-of-order: got frame %lu, but expected frame %lu\n", _current_frame, _last_frame+1);
-            }
-            _last_frame = _current_frame;
           } else {
             fprintf(stderr, "Error: FrameReader failed to retrieve frame from Jungfrau receiver\n");
           }
@@ -75,9 +65,6 @@ namespace Pds {
       Detector& _detector;
       Server&   _server;
       bool      _disable;
-      uint64_t  _current_frame;
-      uint64_t  _last_frame;
-      bool      _first_frame;
       unsigned  _header_sz;
       unsigned  _frame_sz;
       unsigned  _entry_sz;

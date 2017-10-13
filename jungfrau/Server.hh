@@ -8,7 +8,7 @@
 namespace Pds {
   namespace Jungfrau {
     class Server : public EbServer,
-       public EbCountSrv {
+                   public EbCountSrv {
 
     public:
       Server( const Src& client );
@@ -34,17 +34,17 @@ namespace Pds {
       unsigned count() const;
       void resetCount();
 
-      void post(char*, unsigned);
+      void post(const void*);
 
       void set_frame_sz(unsigned);
 
     private:
-      Xtc _xtc;
-      unsigned _count;
-      unsigned _framesz;
-      uint64_t _last_frame;
-      bool     _first_frame; 
-      int _pfd[2];
+      Xtc       _xtc;
+      unsigned  _count;
+      unsigned  _framesz;
+      uint64_t  _last_frame;
+      bool      _first_frame; 
+      int       _pfd[4];
     };
   }
 }

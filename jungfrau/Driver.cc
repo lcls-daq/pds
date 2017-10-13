@@ -48,7 +48,7 @@ static const char* CLEARBIT = "clearbit";
 
 #pragma pack(push)
 #pragma pack(2)
-  struct jungfrau_dgram {
+  struct jungfrau_header {
     char emptyheader[6];
     uint64_t framenum;
     uint32_t exptime;
@@ -63,6 +63,10 @@ static const char* CLEARBIT = "clearbit";
     uint16_t roundRobin;
     uint8_t detectortype;
     uint8_t headerVersion;
+  };
+
+  struct jungfrau_dgram {
+    struct jungfrau_header header;
     uint16_t data[DATA_ELEM];
   };
 #pragma pack(pop)
@@ -109,7 +113,7 @@ uint16_t DacsConfig::vdd_prot() const   { return _vdd_prot; }
 Module::Module(const int id, const char* control, const char* host, unsigned port, const char* mac, const char* det_ip, bool config_det_ip) :
   _id(id), _control(control), _host(host), _port(port), _mac(mac), _det_ip(det_ip),
   _socket(-1), _connected(false), _boot(true),
-  _sockbuf_sz(sizeof(jungfrau_dgram)*PACKET_NUM*EVENTS_TO_BUFFER), _readbuf_sz(sizeof(jungfrau_dgram)), _frame_sz(DATA_ELEM * sizeof(uint16_t)), _frame_elem(DATA_ELEM),
+  _sockbuf_sz(sizeof(jungfrau_dgram)*PACKET_NUM*EVENTS_TO_BUFFER), _readbuf_sz(sizeof(jungfrau_header)), _frame_sz(DATA_ELEM * sizeof(uint16_t)), _frame_elem(DATA_ELEM),
   _speed(JungfrauConfigType::Quarter)
 {
   _readbuf = new char[_readbuf_sz];
@@ -571,31 +575,42 @@ bool Module::get_packet(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t
   int nb;
   struct sockaddr_in clientaddr;
   socklen_t clientaddrlen = sizeof(clientaddr);
-  jungfrau_dgram* packet = NULL;
+  jungfrau_header* header = NULL;
+  struct iovec dgram_vec[2];
 
-  nb = ::recvfrom(_socket, _readbuf, sizeof(jungfrau_dgram), 0, (struct sockaddr *)&clientaddr, &clientaddrlen);
+  nb = ::recvfrom(_socket, _readbuf, sizeof(jungfrau_header), MSG_PEEK, (struct sockaddr *)&clientaddr, &clientaddrlen);
   if (nb<0) {
     fprintf(stderr,"Error: failure receiving packet from Jungfru at %s on port %d: %s\n", _host, _port, strerror(errno));
     return false;
   } else {
-    packet = (jungfrau_dgram*) _readbuf;
+    header = (jungfrau_header*) _readbuf;
 
     if (*first_packet) {
-      *frame = packet->framenum;
+      *frame = header->framenum;
       *first_packet = false;
-    } else if(*frame != packet->framenum) {
+    } else if(*frame != header->framenum) {
       *last_packet = true;
-      fprintf(stderr,"Error: data out-of-order got data for frame %lu, but was expecting frame %lu from Jungfru at %s\n", packet->framenum, *frame, _host);
+      fprintf(stderr,"Error: data out-of-order got data for frame %lu, but was expecting frame %lu from Jungfru at %s\n", header->framenum, *frame, _host);
       return false;
     }
 
-    memcpy(&data[_frame_elem*packet->packetnum], packet->data, _frame_sz);
-    *last_packet = (packet->packetnum == (PACKET_NUM -1));
+    dgram_vec[0].iov_base = _readbuf;
+    dgram_vec[0].iov_len = sizeof(jungfrau_header);
+    dgram_vec[1].iov_base = &data[_frame_elem*header->packetnum];
+    dgram_vec[1].iov_len = sizeof(jungfrau_dgram) - sizeof(jungfrau_header);
+
+    nb = ::readv(_socket, dgram_vec, 2);
+    if (nb<0) {
+      fprintf(stderr,"Error: failure receiving packet from Jungfru at %s on port %d: %s\n", _host, _port, strerror(errno));
+      return false;
+    }
+
+    *last_packet = (header->packetnum == (PACKET_NUM -1));
     (*npackets)++;
   }
 
-  if ((*npackets == PACKET_NUM) && packet) {
-    if (metadata) new(metadata) JungfrauModInfoType(packet->timestamp, packet->exptime, packet->moduleID, packet->xCoord, packet->yCoord, packet->zCoord);
+  if ((*npackets == PACKET_NUM) && header) {
+    if (metadata) new(metadata) JungfrauModInfoType(header->timestamp, header->exptime, header->moduleID, header->xCoord, header->yCoord, header->zCoord);
   }
 
   return true;

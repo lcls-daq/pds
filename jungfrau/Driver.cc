@@ -695,9 +695,8 @@ Detector::Detector(std::vector<Module*>& modules, bool use_threads, int thread_r
       } else if (thread_rtprio < sched_get_priority_min(SCHED_FIFO)) {
         thread_rtprio = sched_get_priority_min(SCHED_FIFO);
       }
-      struct sched_param params = {
-        .sched_priority = thread_rtprio,
-      };
+      struct sched_param params;
+      params.sched_priority = thread_rtprio;
       pthread_attr_setschedpolicy(_thread_attr, SCHED_FIFO);
       pthread_attr_setinheritsched(_thread_attr, PTHREAD_EXPLICIT_SCHED);
       pthread_attr_setschedparam(_thread_attr, &params);

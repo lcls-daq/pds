@@ -21,8 +21,14 @@
 #define NUM_ROWS 512
 #define NUM_COLUMNS 1024
 
+#define get_command_print(cmd, ...) \
+  { printf("cmd_put %s: %s\n", cmd, get_command(cmd, ##__VA_ARGS__).c_str()); }
+
 #define put_command_print(cmd, val, ...) \
   { printf("cmd_put %s: %s\n", cmd, put_command(cmd, val, ##__VA_ARGS__).c_str()); }
+
+#define get_register_print(cmd, val, ...) \
+  { printf("reg_gett %#x: %s\n", cmd, get_register(cmd, val, ##__VA_ARGS__).c_str()); }
 
 #define put_register_print(cmd, val, ...) \
   { printf("reg_put %#x - %#x: %s\n", cmd, val, put_register(cmd, val, ##__VA_ARGS__).c_str()); }
@@ -87,6 +93,28 @@ static void* frame_thread(void* args_ptr)
   return NULL;
 }
 
+DacsConfig::DacsConfig() :
+  _vb_ds(0),
+  _vb_comp(0),
+  _vb_pixbuf(0),
+  _vref_ds(0),
+  _vref_comp(0),
+  _vref_prech(0),
+  _vin_com(0),
+  _vdd_prot(0)
+{}
+
+/*DacsConfig::DacsConfig(const DacsConfig& rhs) :
+  _vb_ds(rhs.vb_ds()),
+  _vb_comp(rhs.vb_comp()),
+  _vb_pixbuf(rhs.vb_pixbuf()),
+  _vref_ds(rhs.vref_ds()),
+  _vref_comp(rhs.vref_comp()),
+  _vref_prech(rhs.vref_prech()),
+  _vin_com(rhs.vin_com()),
+  _vdd_prot(rhs.vdd_prot())
+{}*/
+
 DacsConfig::DacsConfig(uint16_t vb_ds, uint16_t vb_comp, uint16_t vb_pixbuf, uint16_t vref_ds,
                        uint16_t vref_comp, uint16_t vref_prech, uint16_t vin_com, uint16_t  vdd_prot):
   _vb_ds(vb_ds),
@@ -100,6 +128,38 @@ DacsConfig::DacsConfig(uint16_t vb_ds, uint16_t vb_comp, uint16_t vb_pixbuf, uin
 {}
 
 DacsConfig::~DacsConfig() {}
+
+bool DacsConfig::operator==(DacsConfig& rhs) const
+{
+  return equals(rhs);
+}
+
+bool DacsConfig::operator!=(DacsConfig& rhs) const
+{
+  return !equals(rhs);
+}
+
+bool DacsConfig::equals(DacsConfig& rhs) const
+{
+  if (_vb_ds != rhs.vb_ds())
+    return false;
+  else if (_vb_comp != rhs.vb_comp())
+    return false;
+  else if (_vb_pixbuf != rhs.vb_pixbuf())
+    return false;
+  else if (_vref_ds != rhs.vref_ds())
+    return false;
+  else if (_vref_comp != rhs.vref_comp())
+    return false;
+  else if (_vref_prech != rhs.vref_prech())
+    return false;
+  else if (_vin_com != rhs.vin_com())
+    return false;
+  else if (_vdd_prot != rhs.vdd_prot())
+    return false;
+
+  return true;
+}
 
 uint16_t DacsConfig::vb_ds() const      { return _vb_ds; }
 uint16_t DacsConfig::vb_comp() const    { return _vb_comp; }
@@ -200,7 +260,7 @@ Module::~Module()
   }
 }
 
-bool Module::configure(uint64_t nframes, JungfrauConfigType::GainMode gain, JungfrauConfigType::SpeedMode speed, double trig_delay, double exposure_time, double exposure_period, uint32_t bias, const DacsConfig& dac_config)
+bool Module::check_config()
 {
   if (!_connected) {
     error_print("Error: failed to connect to Jungfrau at address %s\n", _control);
@@ -215,7 +275,21 @@ bool Module::configure(uint64_t nframes, JungfrauConfigType::GainMode gain, Jung
     }
   }
 
+  int power_status = 0;
+  get_register_print(0x5e, &power_status);
+  _boot = (power_status == 0);
   if (_boot) {
+    printf("module chips need to be powered on\n");
+  } else {
+    printf("module chips are already on\n");
+  }
+
+  return true;
+}
+
+bool Module::configure_dacs(const DacsConfig& dac_config)
+{
+  if (_boot || dac_config != _dac_config) {
     // Setting Dacs 12bit on 2.5V  (i.e. 2.5v=4096)
     printf("Setting Dacs:\n");
   
@@ -251,6 +325,15 @@ bool Module::configure(uint64_t nframes, JungfrauConfigType::GainMode gain, Jung
     printf("setting vdd_prot to %hu\n", dac_config.vdd_prot());
     put_command_print("dac:1", dac_config.vdd_prot());
 
+    _dac_config = dac_config;
+  }
+
+  return status() != ERROR;
+}
+
+bool Module::configure_adc()
+{
+  if (_boot) {
     // power on the chips
     printf("powering on the chip\n");
     put_register_print(0x5e, 0x1);
@@ -266,6 +349,11 @@ bool Module::configure(uint64_t nframes, JungfrauConfigType::GainMode gain, Jung
     put_register_print(0x43, 0x453b2a9c);
   }
 
+  return status() != ERROR;
+}
+
+bool Module::configure_speed(JungfrauConfigType::SpeedMode speed, bool& sleep)
+{
   if (_boot || speed != _speed) {
     // set speed
     switch (speed) {
@@ -290,9 +378,14 @@ bool Module::configure(uint64_t nframes, JungfrauConfigType::GainMode gain, Jung
       return false;
     } 
     _speed = speed;
-    sleep(1);
+    sleep = true;
   }
 
+  return status() != ERROR;
+}
+
+bool Module::configure_acquistion(uint64_t nframes, double trig_delay, double exposure_time, double exposure_period)
+{
   reset();
 
   printf("setting trigger delay to %.6f\n", trig_delay);
@@ -300,13 +393,13 @@ bool Module::configure(uint64_t nframes, JungfrauConfigType::GainMode gain, Jung
 
   if (!nframes) {
     printf("configuring triggered mode\n");
-    put_register_print(0x4e, 0x3333);
+    put_register_print(0x4e, 0x3);
     put_command_print("cycles", 10000000000);
     put_command_print("frames", 1);
     put_command_print("period", exposure_period);
   } else {
     printf("configuring for free run\n");
-    put_register_print(0x4e, 0x0000);
+    put_register_print(0x4e, 0x0);
     put_command_print("cycles", 1);
     put_command_print("frames", nframes);
     put_command_print("period", exposure_period);
@@ -315,6 +408,11 @@ bool Module::configure(uint64_t nframes, JungfrauConfigType::GainMode gain, Jung
   printf("setting exposure time to %.6f seconds\n", exposure_time);
   put_command_print("exptime", 0.000010);
 
+  return status() != ERROR;
+}
+
+bool Module::configure_gain(uint32_t bias, JungfrauConfigType::GainMode gain)
+{
   printf("setting bias voltage to %d volts\n", bias);
   put_command_print("vhighvoltage", bias);
 
@@ -347,8 +445,6 @@ bool Module::configure(uint64_t nframes, JungfrauConfigType::GainMode gain, Jung
       setbit_print(0x5d, 0);
       break;
   }
-
-  _boot = false;
 
   return status() != ERROR;
 }
@@ -469,6 +565,19 @@ std::string Module::get_command(const char* cmd, int pos)
   }
   strcpy(_cmdbuf[0], cmd);
   return _det->getCommand(1, _cmdbuf, pos);
+}
+
+std::string Module::get_register(const int reg, int* register_value, int pos)
+{
+  strcpy(_cmdbuf[0], REG);
+  sprintf(_cmdbuf[1], "%#x", reg);
+  std::string reply = _det->getCommand(2, _cmdbuf, pos);
+
+  if (register_value) {
+    *register_value = (int) strtol(reply.c_str(), NULL, 0);
+  }
+
+  return reply;
 }
 
 std::string Module::put_register(const int reg, const int value, int pos)
@@ -743,11 +852,61 @@ bool Detector::check_size(uint32_t num_modules, uint32_t num_rows, uint32_t num_
 
 bool Detector::configure(uint64_t nframes, JungfrauConfigType::GainMode gain, JungfrauConfigType::SpeedMode speed, double trig_delay, double exposure_time, double exposure_period, uint32_t bias, const DacsConfig& dac_config)
 {
+  bool bsleep = false;
   bool success = true;
 
+  printf("Configuring %u modules\n", _num_modules);
+  
   for (unsigned i=0; i<_num_modules; i++) {
-    if (!_modules[i]->configure(nframes, gain, speed, trig_delay, exposure_time, exposure_period, bias, dac_config)) {
-      fprintf(stderr,"Error: module %u failed to configure!\n", i);
+    printf("checking status of module %u\n", i);
+    if(!_modules[i]->check_config()) {
+      fprintf(stderr, "Error: module %u is not in a configurable state!\n", i);
+      success = false;
+    }
+  }
+
+  for (unsigned i=0; i<_num_modules; i++) {
+    printf("configuring dacs of module %u\n", i);
+    if(!_modules[i]->configure_dacs(dac_config)) {
+      fprintf(stderr, "Error: module %u dac configuration failed!\n", i);
+      success = false;
+    }
+  }
+
+  for (unsigned i=0; i<_num_modules; i++) {
+    printf("configuring adc of module %u\n", i);
+    if(!_modules[i]->configure_adc()) {
+      fprintf(stderr, "Error: module %u adc configuration failed!\n", i);
+      success = false;
+    }
+  }
+
+  for (unsigned i=0; i<_num_modules; i++) {
+    printf("configuring clock speed of module %u\n", i);
+    if(!_modules[i]->configure_speed(speed, bsleep)) {
+      fprintf(stderr, "Error: module %u clock speed configuration failed!\n", i);
+      success = false;
+    }
+  }
+
+  if (bsleep) {
+    // sleeping after reconfiguring clock
+    sleep(1);
+    bsleep = false;
+  }
+
+  for (unsigned i=0; i<_num_modules; i++) {
+    printf("configuring acquistion settings of module %u\n", i);
+    if(!_modules[i]->configure_acquistion(nframes, trig_delay, exposure_time, exposure_period)) {
+      fprintf(stderr, "Error: module %u acquistion settings configuration failed!\n", i);
+      success = false;
+    }
+  }
+
+  for (unsigned i=0; i<_num_modules; i++) {
+    printf("configuring gain and bias of module %u\n", i);
+    if(!_modules[i]->configure_gain(bias, gain)) {
+      fprintf(stderr, "Error: module %u gain and bias configuration failed!\n", i);
       success = false;
     }
   }
@@ -960,7 +1119,9 @@ void Detector::clear_errors()
 #undef MSG_LEN
 #undef NUM_ROWS
 #undef NUM_COLUMNS
+#undef get_command_print
 #undef put_command_print
+#undef get_register_print
 #undef put_register_print
 #undef put_adcreg_print
 #undef setbit_print

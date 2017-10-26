@@ -16,9 +16,12 @@ namespace Pds {
   namespace Jungfrau {
     class DacsConfig {
       public:
+        DacsConfig();
         DacsConfig(uint16_t vb_ds, uint16_t vb_comp, uint16_t vb_pixbuf, uint16_t vref_ds,
                    uint16_t vref_comp, uint16_t vref_prech, uint16_t vin_com, uint16_t  vdd_prot);
         ~DacsConfig();
+        bool operator==(DacsConfig& rhs) const;
+        bool operator!=(DacsConfig& rhs) const;
       public:
         uint16_t vb_ds() const;
         uint16_t vb_comp() const;
@@ -28,6 +31,8 @@ namespace Pds {
         uint16_t vref_prech() const;
         uint16_t vin_com() const;
         uint16_t vdd_prot() const;
+      private:
+        bool equals(DacsConfig& rhs) const;
       private:
         uint16_t  _vb_ds;
         uint16_t  _vb_comp;
@@ -44,7 +49,12 @@ namespace Pds {
         enum Status { IDLE, RUNNING, WAIT, DATA, ERROR };
         Module(const int id, const char* control, const char* host, const unsigned port, const char* mac, const char* det_ip, bool config_det_ip=true);
         ~Module();
-        bool configure(uint64_t nframes, JungfrauConfigType::GainMode gain, JungfrauConfigType::SpeedMode speed, double trig_delay, double exposure_time, double exposure_period, uint32_t bias, const DacsConfig& dac_config);
+        bool check_config();
+        bool configure_dacs(const DacsConfig& dac_config);
+        bool configure_adc();
+        bool configure_speed(JungfrauConfigType::SpeedMode speed, bool& sleep);
+        bool configure_acquistion(uint64_t nframes, double trig_delay, double exposure_time, double exposure_period);
+        bool configure_gain(uint32_t bias, JungfrauConfigType::GainMode gain);
         bool check_size(uint32_t num_rows, uint32_t num_columns) const;
         std::string put_command(const char* cmd, const char* value, int pos=-1);
         std::string put_command(const char* cmd, const short value, int pos=-1);
@@ -57,6 +67,7 @@ namespace Pds {
         std::string put_command(const char* cmd, const unsigned long long value, int pos=-1);
         std::string put_command(const char* cmd, const double value, int pos=-1);
         std::string put_register(const int reg, const int value, int pos=-1);
+        std::string get_register(const int reg, int* register_value, int pos=-1);
         std::string setbit(const int reg, const int bit, int pos=-1);
         std::string clearbit(const int reg, const int bit, int pos=-1);
         std::string put_adcreg(const int reg, const int value, int pos=-1);
@@ -96,6 +107,7 @@ namespace Pds {
         char*             _msgbuf;
         char*             _cmdbuf[MAX_JUNGFRAU_CMDS];
         slsDetectorUsers* _det;
+        DacsConfig        _dac_config;
         JungfrauConfigType::SpeedMode _speed;
     };
 

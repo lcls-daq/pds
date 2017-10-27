@@ -705,7 +705,7 @@ bool Module::get_packet(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t
 
     dgram_vec[0].iov_base = _readbuf;
     dgram_vec[0].iov_len = sizeof(jungfrau_header);
-    dgram_vec[1].iov_base = &data[_frame_elem*header->packetnum];
+    dgram_vec[1].iov_base = &data[_frame_elem*(PACKET_NUM - header->packetnum - 1)];
     dgram_vec[1].iov_len = sizeof(jungfrau_dgram) - sizeof(jungfrau_header);
 
     nb = ::readv(_socket, dgram_vec, 2);

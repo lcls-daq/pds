@@ -1,5 +1,6 @@
 #include "pds/pvdaq/BeamMonitorServer.hh"
 #include "pds/pvdaq/PvServer.hh"
+#include "pds/pvdaq/ConfigMonitor.hh"
 #include "pds/xtc/InDatagram.hh"
 #include "pds/utility/Occurrence.hh"
 #include "pdsdata/xtc/TypeId.hh"
@@ -20,20 +21,6 @@
 //    Remove EVR argument from command-line; configure which eventcode to expect data on (PV?)
 //    Name each channel (read from PV) (alias, sub-alias?) [hmmm]
 //
-
-namespace Pds {
-  namespace PvDaq {
-    class ConfigMonitor : public Pds_Epics::PVMonitorCb {
-    public:
-      ConfigMonitor(BeamMonitorServer& o) : _o(o) {}
-      ~ConfigMonitor() {}
-    public:
-      void updated() { _o.config_updated(); }
-    private:
-      BeamMonitorServer& _o;
-    };
-  };
-};
 
 static const unsigned NPRINT=20;
 static const unsigned _API_VERSION=0;

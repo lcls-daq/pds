@@ -10,6 +10,7 @@
 namespace Pds {
   namespace PvDaq {
     class PvServer;
+    class ConfigMonitor;
     class BeamMonitorServer : public Pds::PvDaq::Server, 
                               public Pds_Epics::PVMonitorCb {
     public:
@@ -43,7 +44,7 @@ namespace Pds {
       uint32_t               _Length[NCHANNELS];
       int32_t                _Offset[NCHANNELS];
       char *                 _ConfigBuff;
-      Pds_Epics::PVMonitorCb* _configMonitor;
+      ConfigMonitor*         _configMonitor;
       unsigned               _nprint;
       ClockTime              _last;
       unsigned               _wrp;

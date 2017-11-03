@@ -65,8 +65,10 @@ ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
   _offset     (32),
   _roi_x_org  (0),
   _roi_x_len  (0),
+  _roi_x_end  (0),
   _roi_y_org  (0),
   _roi_y_len  (0),
+  _roi_y_end  (0),
   _exposure_val (0.0),
   _gain_val     (0.0),
   _xscale_val   (1.0),
@@ -76,6 +78,7 @@ ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
   _enabled    (false),
   _configured (false),
   _scale      (flags & (1<<SCALEPV)),
+  _unixcam    (flags & (1<<UNIXCAM)),
   _max_evt_sz (max_event_size),
   _frame_sz   (0),
   _configMonitor(new ConfigMonitor(*this)),
@@ -92,36 +95,69 @@ ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
   //
   char pvname[PV_LEN];
 
-  // image waveform
-  CREATE_IMG_PV(_image, "%s:IMAGE1:ArrayData");
-  // nrows config pv
-  CREATE_PV(_nrows, "%s:IMAGE1:ArraySize1_RBV");
-  // ncols config pv
-  CREATE_PV(_ncols, "%s:IMAGE1:ArraySize0_RBV");
-  // bits config pv
-  CREATE_PV(_nbits, "%s:IMAGE1:BitsPerPixel_RBV");
-  // gain config pv
-  CREATE_PV(_gain, "%s:Gain_RBV");
-  // model config pv
-  CREATE_PV(_model, "%s:Model_RBV");
-  // manufacturer config pv
-  CREATE_PV(_manufacturer, "%s:Manufacturer_RBV");
-  // exposure config pv
-  CREATE_PV(_exposure, "%s:AcquireTime_RBV");
-  // roi x begin config pv
-  CREATE_PV(_xorg, "%s:MinX_RBV");
-  // roi x len config pv
-  CREATE_PV(_xlen, "%s:SizeX_RBV");
-  // roi y begin config pv
-  CREATE_PV(_yorg, "%s:MinY_RBV");
-  // roi y len config pv
-  CREATE_PV(_ylen, "%s:SizeY_RBV");
+  if (_unixcam) {
+    // image waveform
+    CREATE_IMG_PV(_image, "%s:LIVE_IMAGE_FAST");
+    // nrows config pv
+    CREATE_PV(_nrows, "%s:N_OF_ROW");
+    // ncols config pv
+    CREATE_PV(_ncols, "%s:N_OF_COL");
+    // bits config pv
+    CREATE_PV(_nbits, "%s:N_OF_BITS");
+    // gain config pv
+    CREATE_PV(_gain, "%s:Gain");
+    // model config pv
+    CREATE_PV(_model, "%s:Model");
+    // manufacturer config pv
+    CREATE_PV(_manufacturer, "%s:ID");
+    // exposure config pv
+    // UNIX CAM HAS NONE!
+    // roi x begin config pv
+    CREATE_PV(_xorg, "%s:StartROI_X");
+    // roi x len config pv
+    CREATE_PV(_xlen, "%s:EndROI_X");
+    // roi y begin config pv
+    CREATE_PV(_yorg, "%s:StartROI_Y");
+    // roi y len config pv
+    CREATE_PV(_ylen, "%s:EndROI_Y");
 
-  if (_scale) {
-    // xscale config pv
-    CREATE_PV(_xscale, "%s:ScaleX_RBV");
-    // yscale config pv
-    CREATE_PV(_yscale, "%s:ScaleY_RBV");
+    // Disable scale - not supported for UNIXCAM
+    if (_scale) {
+      printf("Warning: scaling PVs requested but this is not supported for UNIXCAM!\n");
+      _scale = false;
+    }
+  } else {
+    // image waveform
+    CREATE_IMG_PV(_image, "%s:IMAGE1:ArrayData");
+    // nrows config pv
+    CREATE_PV(_nrows, "%s:IMAGE1:ArraySize1_RBV");
+    // ncols config pv
+    CREATE_PV(_ncols, "%s:IMAGE1:ArraySize0_RBV");
+    // bits config pv
+    CREATE_PV(_nbits, "%s:IMAGE1:BitsPerPixel_RBV");
+    // gain config pv
+    CREATE_PV(_gain, "%s:Gain_RBV");
+    // model config pv
+    CREATE_PV(_model, "%s:Model_RBV");
+    // manufacturer config pv
+    CREATE_PV(_manufacturer, "%s:Manufacturer_RBV");
+    // exposure config pv
+    CREATE_PV(_exposure, "%s:AcquireTime_RBV");
+    // roi x begin config pv
+    CREATE_PV(_xorg, "%s:MinX_RBV");
+    // roi x len config pv
+    CREATE_PV(_xlen, "%s:SizeX_RBV");
+    // roi y begin config pv
+    CREATE_PV(_yorg, "%s:MinY_RBV");
+    // roi y len config pv
+    CREATE_PV(_ylen, "%s:SizeY_RBV");
+
+    if (_scale) {
+      // xscale config pv
+      CREATE_PV(_xscale, "%s:ScaleX_RBV");
+      // yscale config pv
+      CREATE_PV(_yscale, "%s:ScaleY_RBV");
+    }
   }
 
   for(unsigned i=0; i<_pool.size(); i++) {
@@ -289,20 +325,32 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
     CHECK_PV(_nrows,    _height);
     CHECK_PV(_nbits,    _depth);
     CHECK_PV(_gain,     _gain_val);
-    CHECK_PV(_exposure, _exposure_val);
+    if (_exposure) { // Not all cameras have this!
+      CHECK_PV(_exposure, _exposure_val);
+    }
     CHECK_PV(_xorg,     _roi_x_org);
     CHECK_PV(_xlen,     _roi_x_len);
     CHECK_PV(_yorg,     _roi_y_org);
     CHECK_PV(_ylen,     _roi_y_len);
-    if (_xscale) {
+    if (_xscale) { // Not all cameras have this!
       CHECK_PV(_xscale, _xscale_val);
     }
-    if (_yscale) {
+    if (_yscale) { // Not all cameras have this!
       CHECK_PV(_yscale, _yscale_val);
     }
 
     CHECK_STR_PV(_model,        _model_str,         EpicsCamConfigType::DESC_CHAR_MAX);
     CHECK_STR_PV(_manufacturer, _manufacturer_str,  EpicsCamConfigType::DESC_CHAR_MAX);
+
+    if (_unixcam) {
+      // Unixcam directly gives the end coordinate of the ROI
+      _roi_x_end = _roi_x_len;
+      _roi_y_end = _roi_y_len;
+    } else {
+      // Areadet gives the len of the ROI
+      _roi_x_end = _roi_x_org+_roi_x_len;
+      _roi_y_end = _roi_y_org+_roi_y_len;
+    }
 
     printf("Camera configuration information:\n"
            "  manufacturer:     %s\n"
@@ -312,20 +360,20 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
            "  nbits:            %u\n"
            "  gain:             %f\n"
            "  exposure:         %f\n"
-           "  roi (org, len):   x: (%u, %u), y: (%u, %u)\n",
+           "  roi (org, end):   x: (%u, %u), y: (%u, %u)\n",
            _manufacturer_str,
            _model_str,
            _width, _height, _depth,
            _gain_val, _exposure_val,
-           _roi_x_org, _roi_x_len, _roi_y_org, _roi_y_len);
+           _roi_x_org, _roi_x_end, _roi_y_org, _roi_y_end);
     if (_scale) {
       printf("  xscale:           %f\n"
              "  yscale:           %f\n",
              _xscale_val, _yscale_val);
     }
 
-    Pds::Camera::FrameCoord roi_beg(_roi_x_org, _roi_x_org+_roi_x_len);
-    Pds::Camera::FrameCoord roi_end(_roi_y_org, _roi_y_org+_roi_y_len);
+    Pds::Camera::FrameCoord roi_beg(_roi_x_org, _roi_x_end);
+    Pds::Camera::FrameCoord roi_end(_roi_y_org, _roi_y_end);
 
     Pds::Xtc* xtc = new ((char*)dg->xtc.next())
       Pds::Xtc(_epicsCamConfigType, _xtc.src );

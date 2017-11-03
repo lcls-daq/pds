@@ -14,7 +14,7 @@ namespace Pds {
     class ControlsCameraServer : public Pds::PvDaq::Server,
                                  public Pds_Epics::PVMonitorCb {
     public:
-      enum Flags { SCALEPV = 0 };
+      enum Flags { SCALEPV = 0, UNIXCAM = 1 };
       ControlsCameraServer(const char*, const DetInfo&, const unsigned, const unsigned);
       ~ControlsCameraServer();
     public:
@@ -48,8 +48,10 @@ namespace Pds {
       uint32_t                    _offset;
       uint32_t                    _roi_x_org;
       uint32_t                    _roi_x_len;
+      uint32_t                    _roi_x_end;
       uint32_t                    _roi_y_org;
       uint32_t                    _roi_y_len;
+      uint32_t                    _roi_y_end;
       double                      _exposure_val;
       double                      _gain_val;
       double                      _xscale_val;
@@ -59,6 +61,7 @@ namespace Pds {
       bool                        _enabled;
       bool                        _configured;
       bool                        _scale;
+      bool                        _unixcam;
       const unsigned              _max_evt_sz;
       size_t                      _frame_sz;
       ConfigMonitor*              _configMonitor;

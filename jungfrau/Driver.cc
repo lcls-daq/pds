@@ -620,7 +620,7 @@ uint64_t Module::nframes()
 
 uint64_t Module::serialnum()
 {
-  std::string reply = get_command("detectornum");
+  std::string reply = get_command("detectornumber");
   return strtoull(reply.c_str(), NULL, 0);
 }
 

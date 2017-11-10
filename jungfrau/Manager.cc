@@ -235,6 +235,17 @@ namespace Pds {
               _error = true;
             }
 
+            for (unsigned i=0; i<_detector.get_num_modules(); i++) {
+              printf("Module %u version info:\n"
+                     "  serial number:  0x%lx\n"
+                     "  version number: 0x%lx\n"
+                     "  firmware:       0x%lx\n",
+                     i,
+                     _module_config[i].serialNumber(),
+                     _module_config[i].moduleVersion(),
+                     _module_config[i].firmwareVersion());
+            }
+
             JungfrauConfig::setSize(_config, _detector.get_num_modules(), nrows, ncols, _module_config);
             DacsConfig dacs_config(_config.vb_ds(), _config.vb_comp(), _config.vb_pixbuf(), _config.vref_ds(),
                                    _config.vref_comp(), _config.vref_prech(), _config.vin_com(), _config.vdd_prot());

@@ -3,8 +3,20 @@
 void Pds::JungfrauConfig::setSize(JungfrauConfigType& c,
                                   unsigned modules,
                                   unsigned rows,
-                                  unsigned columns)
+                                  unsigned columns,
+                                  JungfrauModConfigType* modcfg)
 {
+  JungfrauModConfigType _modcfg[JungfrauConfigType::MaxModulesPerDetector];
+  if (modcfg) {
+    for (unsigned i=0; i<modules; i++) {
+      _modcfg[i] = modcfg[i];
+    }
+  } else {
+    for (unsigned i=0; i<c.numberOfModules(); i++) {
+      _modcfg[i] = c.moduleConfig(i);
+    }
+  }
+
   new(&c) JungfrauConfigType(modules,
                              rows,
                              columns,
@@ -21,5 +33,6 @@ void Pds::JungfrauConfig::setSize(JungfrauConfigType& c,
                              c.vref_comp(),
                              c.vref_prech(),
                              c.vin_com(),
-                             c.vdd_prot());
+                             c.vdd_prot(),
+                             _modcfg);
 }

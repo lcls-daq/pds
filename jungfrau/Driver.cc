@@ -618,6 +618,24 @@ uint64_t Module::nframes()
   return strtoull(reply.c_str(), NULL, 10);
 }
 
+uint64_t Module::serialnum()
+{
+  std::string reply = get_command("detectornum");
+  return strtoull(reply.c_str(), NULL, 0);
+}
+
+uint64_t Module::version()
+{
+  std::string reply = get_command("detectorversion");
+  return strtoull(reply.c_str(), NULL, 0);
+}
+
+uint64_t Module::firmware()
+{
+  std::string reply = get_command("softwareversion");
+  return strtoull(reply.c_str(), NULL, 0);
+}
+
 Module::Status Module::status(const std::string& reply)
 {
   if (!strcmp(reply.c_str(), "waiting"))
@@ -1028,6 +1046,20 @@ bool Detector::get_frame_poll(uint64_t* frame, JungfrauModInfoType* metadata, ui
   }
 
   return !drop_frame;
+}
+
+bool Detector::get_module_config(JungfrauModConfigType* module_config, unsigned max_modules)
+{
+  if (_num_modules > max_modules) {
+    fprintf(stderr,"Error: configuration array size (%u) is smaller than the number of modules (%u) in the detector!\n", max_modules, _num_modules);
+    return false;
+  }
+
+  for (unsigned i=0; i<_num_modules; i++) {
+    module_config[i] = JungfrauModConfigType(_modules[i]->serialnum(), _modules[i]->version(), _modules[i]->firmware());
+  }
+
+  return true;
 }
 
 bool Detector::start()

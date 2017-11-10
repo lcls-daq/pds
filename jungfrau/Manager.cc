@@ -227,7 +227,15 @@ namespace Pds {
           }
 
           if (!_error) {
-            JungfrauConfig::setSize(_config, _detector.get_num_modules(), nrows, ncols);
+            // Retrieve the module specific read-only configuration info to update config object
+            if (!_detector.get_module_config(_module_config)) {
+              printf("ConfigAction: failed to retrieve module version information!\n");
+              UserMessage* msg = new (&_occPool) UserMessage("Jungfrau Config Error: failed to retrieve module version information!\n");
+              _mgr.appliance().post(msg);
+              _error = true;
+            }
+
+            JungfrauConfig::setSize(_config, _detector.get_num_modules(), nrows, ncols, _module_config);
             DacsConfig dacs_config(_config.vb_ds(), _config.vb_comp(), _config.vb_pixbuf(), _config.vref_ds(),
                                    _config.vref_comp(), _config.vref_prech(), _config.vin_com(), _config.vdd_prot());
             if(!_detector.configure(0, _config.gainMode(), _config.speedMode(), _config.triggerDelay(), _config.exposureTime(), _config.exposurePeriod(), _config.biasVoltage(), dacs_config) ||
@@ -254,16 +262,17 @@ namespace Pds {
         return tr;
       }
     private:
-      Manager&            _mgr;
-      Detector&           _detector;
-      Server&             _server;
-      FrameReader&        _reader;
-      CfgClientNfs&       _cfg;
-      L1Action&           _l1;
-      JungfrauConfigType  _config;
-      Xtc                 _cfgtc;
-      GenericPool         _occPool;
-      bool                _error;
+      Manager&              _mgr;
+      Detector&             _detector;
+      Server&               _server;
+      FrameReader&          _reader;
+      CfgClientNfs&         _cfg;
+      L1Action&             _l1;
+      JungfrauConfigType    _config;
+      JungfrauModConfigType _module_config[JungfrauConfigType::MaxModulesPerDetector];
+      Xtc                   _cfgtc;
+      GenericPool           _occPool;
+      bool                  _error;
     };
 
     class EnableAction : public Action {

@@ -73,6 +73,9 @@ namespace Pds {
         std::string put_adcreg(const int reg, const int value, int pos=-1);
         std::string get_command(const char* cmd, int pos=-1);
         uint64_t nframes();
+        uint64_t serialnum();
+        uint64_t version();
+        uint64_t firmware();
         Status status();
         Status status(const std::string& reply);
         std::string status_str();
@@ -119,6 +122,7 @@ namespace Pds {
         bool check_size(uint32_t num_modules, uint32_t num_rows, uint32_t num_columns) const;
         bool get_frame(uint64_t* framenum, uint16_t* data);
         bool get_frame(uint64_t* framenum, JungfrauModInfoType* metadata, uint16_t* data);
+        bool get_module_config(JungfrauModConfigType* module_config, unsigned max_modules=JungfrauConfigType::MaxModulesPerDetector);
         bool start();
         bool stop();
         unsigned get_num_rows(unsigned module) const;

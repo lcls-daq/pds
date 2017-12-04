@@ -373,7 +373,7 @@ unsigned Epix10kConfigurator::writeASIC() {
           if (_debug & 1) printf(" data(0x%x) configValue[%u] Asic(%u)\n", u[i], i, index);
        }
       }
-      uint32_t pixel = _config->asicPixelConfigArray()[0][0][0] & 0xffff;
+      uint32_t pixel = _config->asicPixelConfigArray()(0,0,0) & 0xffff;
       printf(" ==0x%x== ", pixel);
        for (unsigned i=0; i<RepeatControlCount; i++) {
         if (_pgp->writeRegister( &_d, a+WritePixelCommand, 0, false, Pgp::PgpRSBits::Waiting)) {

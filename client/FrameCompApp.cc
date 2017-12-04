@@ -461,7 +461,7 @@ void FCA::MyIter::process(Xtc* xtc)
                 for(unsigned i=0; i<s.shape()[0]; i++) {
                   unsigned newMask = roiMask & (roiMask-1);
                   if ((roiMask ^ newMask) & tgtMask)
-                    _write(&s[i][0][0],s.strides()[0]*sizeof(int16_t));
+                    _write(&s(i,0,0),s.strides()[0]*sizeof(int16_t));
                   roiMask = newMask;
                 }
 		_write(s.data()+s.size(),sizeof(uint32_t));

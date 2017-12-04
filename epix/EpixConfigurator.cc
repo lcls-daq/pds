@@ -388,8 +388,8 @@ unsigned EpixConfigurator::writeASIC() {
           if (_debug & 1) printf(" data(0x%x) configValue[%u] Asic(%u)\n", u[i], i, index);
        }
       }
-      unsigned test = _config->asicPixelTestArray()[index][0][0];
-      unsigned mask = _config->asicPixelMaskArray()[index][0][0];
+      unsigned test = _config->asicPixelTestArray()(index,0,0);
+      unsigned mask = _config->asicPixelMaskArray()(index,0,0);
       uint32_t bits = (test ? 1 : 0) | (mask ? 2 : 0);
       for (unsigned i=0; i<RepeatControlCount; i++) {
         if (_pgp->writeRegister( &_d, a+WritePixelCommand, 0)) {

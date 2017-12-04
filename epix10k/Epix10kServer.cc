@@ -182,8 +182,8 @@ void Epix10kServer::process(char* d) {
   ndarray<const uint16_t,2> iframe = e->frame(_cnfgrtr->configuration());
   ndarray<const uint16_t,2> oframe = o->frame(_cnfgrtr->configuration());
   for(unsigned i=0; i<nrows; i++) {
-    memcpy(const_cast<uint16_t*>(&oframe[nrows+i+0][0]), &iframe[2*i+0][0], colsize);
-    memcpy(const_cast<uint16_t*>(&oframe[nrows-i-1][0]), &iframe[2*i+1][0], colsize);
+    memcpy(const_cast<uint16_t*>(&oframe(nrows+i+0,0)), &iframe(2*i+0,0), colsize);
+    memcpy(const_cast<uint16_t*>(&oframe(nrows-i-1,0)), &iframe(2*i+1,0), colsize);
   }
 
   unsigned tsz = reinterpret_cast<const uint8_t*>(e) + e->_sizeof(_cnfgrtr->configuration()) - reinterpret_cast<const uint8_t*>(iframe.end());

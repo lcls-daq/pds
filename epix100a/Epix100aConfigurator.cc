@@ -584,12 +584,12 @@ unsigned Epix100aConfigurator::writePixelBits() {
   for (unsigned r=0; r<rows; r++) {
     if (r<writeAhead) synchDepthHisto[r] = 0;
     for (unsigned c=0; c<cols; c++) {
-      pops[_config->asicPixelConfigArray()[r][c]&3] += 1;
+      pops[_config->asicPixelConfigArray()(r,c)&3] += 1;
       written[r][c] = false;
     }
   }
   unsigned max = 0;
-  uint32_t pixel = _config->asicPixelConfigArray()[0][0] & 0xffff;
+  uint32_t pixel = _config->asicPixelConfigArray()(0,0) & 0xffff;
   printf("\nEpix100aConfigurator::writePixelBits() histo");
   for (unsigned n=0; n<4; n++) {
     printf(" %u,", pops[n]);
@@ -644,13 +644,13 @@ unsigned Epix100aConfigurator::writePixelBits() {
   for (unsigned row=0; row<rows; row++) {
     blk.row(row);
     for (unsigned col=0; col<cols; col++) {
-      if ((!written[row][col]) && ((_config->asicPixelConfigArray()[row][col]&3) != pixel)) {
+      if ((!written[row][col]) && ((_config->asicPixelConfigArray()(row,col)&3) != pixel)) {
         blk.col(col);
         unsigned half = col < halfRow ? 0 : halfRow;
         for (unsigned i=0; i<BanksPerAsic; i++) {
           unsigned thisCol = half + (i * PixelsPerBank) + (col % PixelsPerBank);
           written[row][thisCol] = true;
-          blk.b()[i] = _config->asicPixelConfigArray()[row][thisCol] & 3;
+          blk.b()[i] = _config->asicPixelConfigArray()(row,thisCol) & 3;
         }
         if (mySynch.take() == false) {
           printf("Epix100aConfigurator::writePixelBits synchronization failed on write %u\n", writeCount);
@@ -686,7 +686,7 @@ unsigned Epix100aConfigurator::writePixelBits() {
       unsigned half = col < halfRow ? 0 : halfRow;
       for (unsigned i=0; i<BanksPerAsic; i++) {
         unsigned thisCol = half + (i * PixelsPerBank) + (col % PixelsPerBank);
-        blk.b()[i] = _config->calibPixelConfigArray()[row][thisCol] & 3;
+        blk.b()[i] = _config->calibPixelConfigArray()(row,thisCol) & 3;
       }
       if (mySynch.take() == false) {
         printf("Epix100aConfigurator::writePixelBits synchronization failed on write of calib row %u\n", row);

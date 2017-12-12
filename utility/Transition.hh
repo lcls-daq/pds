@@ -54,7 +54,8 @@ namespace Pds {
     enum { ShapeTmo       =1,
            ShortDisableTmo=2,
            L3Tag          =4,
-           L3Veto         =8 };
+           L3Veto         =8,
+           LongDisableTmo =16 };
     Allocation();
     Allocation(const char* partition,
                const char* dbpath,

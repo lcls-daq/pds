@@ -1020,7 +1020,7 @@ bool Detector::get_frame_poll(uint64_t* frame, JungfrauModInfoType* metadata, ui
 
     for (unsigned i=0; i<_num_modules; i++) {
       if ((_pfds[i].revents & POLLIN) && (!_module_last_packet[i])) {
-        if (_modules[i]->get_packet(&_module_frames[i], &metadata[i], _module_data[i], &_module_first_packet[i], &_module_last_packet[i], &_module_npackets[i])) {
+        if (_modules[i]->get_packet(&_module_frames[i], metadata?&metadata[i]:NULL, _module_data[i], &_module_first_packet[i], &_module_last_packet[i], &_module_npackets[i])) {
           if (frame_unset) {
             *frame = _module_frames[i];
             frame_unset = false;

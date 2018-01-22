@@ -19,6 +19,7 @@ packages += pvdaq
 packages += monreq
 packages += archon
 packages += gsc16ai
+packages += quadadc
 
 ifneq ($(findstring x86_64,$(tgt_arch)),)
   packages += firewire jungfrau

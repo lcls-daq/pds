@@ -4,6 +4,7 @@
 namespace Pds {
 
   class Sequence;
+  class AnySequenceSrv;
   class BldSequenceSrv;
   class EbSequenceSrv;
   class EbCountSrv;
@@ -26,6 +27,7 @@ namespace Pds {
   public:
     EbEventKeyDeclare(EbSequenceSrv);
     EbEventKeyDeclare(BldSequenceSrv);
+    EbEventKeyDeclare(AnySequenceSrv);
     EbEventKeyDeclare(EbCountSrv);
     EbEventKeyDeclare(EvrServer);
   public:

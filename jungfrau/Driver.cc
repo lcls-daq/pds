@@ -16,13 +16,15 @@
 #define DATA_ELEM 4096
 #define CMD_LEN 128
 #define MSG_LEN 256
+#define ADCPHASE_HALF 72
+#define ADCPHASE_QUARTER 25
 
 // Temporary fixed sizes :(
 #define NUM_ROWS 512
 #define NUM_COLUMNS 1024
 
 #define get_command_print(cmd, ...) \
-  { printf("cmd_put %s: %s\n", cmd, get_command(cmd, ##__VA_ARGS__).c_str()); }
+  { printf("cmd_get %s: %s\n", cmd, get_command(cmd, ##__VA_ARGS__).c_str()); }
 
 #define put_command_print(cmd, val, ...) \
   { printf("cmd_put %s: %s\n", cmd, put_command(cmd, val, ##__VA_ARGS__).c_str()); }
@@ -172,7 +174,7 @@ uint16_t DacsConfig::vdd_prot() const   { return _vdd_prot; }
 
 Module::Module(const int id, const char* control, const char* host, unsigned port, const char* mac, const char* det_ip, bool config_det_ip) :
   _id(id), _control(control), _host(host), _port(port), _mac(mac), _det_ip(det_ip),
-  _socket(-1), _connected(false), _boot(true),
+  _socket(-1), _connected(false), _boot(true), _freerun(false),
   _sockbuf_sz(sizeof(jungfrau_dgram)*PACKET_NUM*EVENTS_TO_BUFFER), _readbuf_sz(sizeof(jungfrau_header)), _frame_sz(DATA_ELEM * sizeof(uint16_t)), _frame_elem(DATA_ELEM),
   _speed(JungfrauConfigType::Quarter)
 {
@@ -186,57 +188,62 @@ Module::Module(const int id, const char* control, const char* host, unsigned por
 
   _det = new slsDetectorUsers(_id);
   std::string reply = put_command("hostname", _control);
-  std::string type  = get_command("type");
+  // Check if detector control interface is present
+  if (!reply.empty()) {
+    std::string type  = get_command("type");
 
-  bool needs_config = false;
-  bool detmac_status = false;
-  std::string rx_ip  = get_command("rx_udpip");
-  std::string rx_mac = get_command("rx_udpmac");
+    bool needs_config = false;
+    bool detmac_status = false;
+    std::string rx_ip  = get_command("rx_udpip");
+    std::string rx_mac = get_command("rx_udpmac");
 
-  if (!strcmp(rx_ip.c_str(), "none") || !strcmp(rx_mac.c_str(), "none")) {
-    printf("detector udp_rx interface appears to be unset\n");
-    needs_config = true;
-  }
+    if (!strcmp(rx_ip.c_str(), "none") || !strcmp(rx_mac.c_str(), "none")) {
+      printf("detector udp_rx interface appears to be unset\n");
+      needs_config = true;
+    }
 
-  if (config_det_ip || needs_config) {
-    printf("setting up detector udp_rx interface\n");
-    put_command_print("rx_udpport", _port);
-    put_command_print("rx_udpip",   _host);
-    put_command_print("rx_udpmac", _mac);
-    put_command_print("detectorip", _det_ip);
-    put_command_print("detectormac", "00:aa:bb:cc:dd:ee");
-    std::string cfgmac_reply = put_command("configuremac", 0);
-    printf("cmd_put configuremac: %s\n", cfgmac_reply.c_str());
-    if (!strcmp(cfgmac_reply.c_str(), "3") || !strcmp(cfgmac_reply.c_str(), "0")) {
-      detmac_status = true;
-      printf("detector udp_rx interface is up\n");
+    if (config_det_ip || needs_config) {
+      printf("setting up detector udp_rx interface\n");
+      put_command_print("rx_udpport", _port);
+      put_command_print("rx_udpip",   _host);
+      put_command_print("rx_udpmac", _mac);
+      put_command_print("detectorip", _det_ip);
+      put_command_print("detectormac", "00:aa:bb:cc:dd:ee");
+      std::string cfgmac_reply = put_command("configuremac", 0);
+      printf("cmd_put configuremac: %s\n", cfgmac_reply.c_str());
+      if (!strcmp(cfgmac_reply.c_str(), "3") || !strcmp(cfgmac_reply.c_str(), "0")) {
+        detmac_status = true;
+        printf("detector udp_rx interface is up\n");
+      } else {
+        error_print("Error: detector udp_rx interface did not come up\n");
+      }
     } else {
-      error_print("Error: detector udp_rx interface did not come up\n");
+      printf("detector udp_rx interface is being set externally\n");
+      detmac_status = true;
+    }
+
+    hostent* entries = gethostbyname(host);
+    if (entries) {
+      unsigned addr = htonl(*(in_addr_t*)entries->h_addr_list[0]);
+
+      sockaddr_in sa;
+      sa.sin_family = AF_INET;
+      sa.sin_addr.s_addr = htonl(addr);
+      sa.sin_port        = htons(port);
+
+      int nb = ::bind(_socket, (sockaddr*)&sa, sizeof(sa));
+      if (nb<0) {
+        error_print("Error: failed to bind to Jungfrau data receiver at %s on port %d: %s\n", host, port, strerror(errno));
+      } else if (strncmp(control, reply.c_str(), strlen(control)) != 0) {
+        error_print("Error: failed to connect to Jungfrau control interface at %s: %s\n", control, reply.c_str());
+      } else if (strcmp(type.c_str(), "Jungfrau+") !=0) {
+        error_print("Error: detector at %s on port %d is not a Jungfrau: %s\n", host, port, type.c_str());
+      } else {
+        _connected=detmac_status;
+      }
     }
   } else {
-    printf("detector udp_rx interface is being set externally\n");
-    detmac_status = true;
-  }
-
-  hostent* entries = gethostbyname(host);
-  if (entries) {
-    unsigned addr = htonl(*(in_addr_t*)entries->h_addr_list[0]);
-
-    sockaddr_in sa;
-    sa.sin_family = AF_INET;
-    sa.sin_addr.s_addr = htonl(addr);
-    sa.sin_port        = htons(port);
-
-    int nb = ::bind(_socket, (sockaddr*)&sa, sizeof(sa));
-    if (nb<0) {
-      error_print("Error: failed to bind to Jungfrau data receiver at %s on port %d: %s\n", host, port, strerror(errno));
-    } else if (strncmp(control, reply.c_str(), strlen(control)) != 0) {
-      error_print("Error: failed to connect to Jungfrau control interface at %s: %s\n", control, reply.c_str());
-    } else if (strcmp(type.c_str(), "Jungfrau+") !=0) {
-      error_print("Error: detector at %s on port %d is not a Jungfrau: %s\n", host, port, type.c_str());
-    } else {
-      _connected=detmac_status;
-    }
+      error_print("Error: failed to connect to Jungfrau control interface of %s!\n", _control);
   }
 }
 
@@ -251,13 +258,24 @@ Module::~Module()
   if (_msgbuf) {
     delete[] _msgbuf;
   }
-  if (_det) {
-    put_command("free", "0");
-    delete _det;
-  }
+  shutdown();
   for (int i=0; i<MAX_JUNGFRAU_CMDS; i++) {
     if (_cmdbuf[i]) delete[] _cmdbuf[i];
   }
+}
+
+void Module::shutdown()
+{
+  if (_det) {
+    put_command("free", "0");
+    delete _det;
+    _det = 0;
+  }
+}
+
+bool Module::connected() const
+{
+  return _connected;
 }
 
 bool Module::check_config()
@@ -363,7 +381,8 @@ bool Module::configure_speed(JungfrauConfigType::SpeedMode speed, bool& sleep)
       put_register_print(0x4d, 0x00000000);
       put_register_print(0x42, 0x0f);
       put_register_print(0x5d, 0x00000f00);
-      put_command_print("adcphase", 25);
+      printf("setting adcphase to %d\n", ADCPHASE_QUARTER);
+      put_command_print("adcphase", ADCPHASE_QUARTER);
       break;
     case JungfrauConfigType::Half:
       printf("setting detector to half speed\n");
@@ -371,7 +390,8 @@ bool Module::configure_speed(JungfrauConfigType::SpeedMode speed, bool& sleep)
       put_register_print(0x4d, 0x00100000);
       put_register_print(0x42, 0x20);
       put_register_print(0x5d, 0x00000f00);
-      put_command_print("adcphase", 65);
+      printf("setting adcphase to %d\n", ADCPHASE_HALF);
+      put_command_print("adcphase", ADCPHASE_HALF);
       break;
     default:
       error_print("Error: invalid clock speed setting for the camera %d\n", speed);
@@ -397,12 +417,14 @@ bool Module::configure_acquistion(uint64_t nframes, double trig_delay, double ex
     put_command_print("cycles", 10000000000);
     put_command_print("frames", 1);
     put_command_print("period", exposure_period);
+    _freerun = false;
   } else {
     printf("configuring for free run\n");
     put_register_print(0x4e, 0x0);
     put_command_print("cycles", 1);
     put_command_print("frames", nframes);
     put_command_print("period", exposure_period);
+    _freerun = true;
   }
 
   printf("setting exposure time to %.6f seconds\n", exposure_time);
@@ -454,6 +476,24 @@ bool Module::check_size(uint32_t num_rows, uint32_t num_columns) const
   return (num_rows == NUM_ROWS) && (num_columns == NUM_COLUMNS);
 }
 
+std::string Module::put_command_raw(int narg, int pos)
+{
+  if(_det) {
+    return _det->putCommand(narg, _cmdbuf, pos);
+  } else {
+    return "unable to send command";
+  }
+}
+
+std::string Module::get_command_raw(int narg, int pos)
+{
+  if(_det) {
+    return _det->getCommand(narg, _cmdbuf, pos);
+  } else {
+    return "unable to send command";
+  }
+}
+
 std::string Module::put_command(const char* cmd, const char* value, int pos)
 {
   if (strlen(cmd) >= CMD_LEN || strlen(value) >= CMD_LEN) {
@@ -462,9 +502,9 @@ std::string Module::put_command(const char* cmd, const char* value, int pos)
   strcpy(_cmdbuf[0], cmd);
   strcpy(_cmdbuf[1], value);
   if (value) {
-    return _det->putCommand(2, _cmdbuf, pos);
+    return put_command_raw(2, pos);
   } else {
-    return _det->putCommand(1, _cmdbuf, pos);
+    return put_command_raw(1, pos);
   }
 }
 
@@ -475,7 +515,7 @@ std::string Module::put_command(const char* cmd, const short value, int pos)
   }
   strcpy(_cmdbuf[0], cmd);
   sprintf(_cmdbuf[1], "%hd", value);
-  return _det->putCommand(2, _cmdbuf, pos);
+  return put_command_raw(2, pos);
 }
 
 std::string Module::put_command(const char* cmd, const unsigned short value, int pos)
@@ -485,7 +525,7 @@ std::string Module::put_command(const char* cmd, const unsigned short value, int
   }
   strcpy(_cmdbuf[0], cmd);
   sprintf(_cmdbuf[1], "%hu", value);
-  return _det->putCommand(2, _cmdbuf, pos);
+  return put_command_raw(2, pos);
 }
 
 std::string Module::put_command(const char* cmd, const int value, int pos)
@@ -495,7 +535,7 @@ std::string Module::put_command(const char* cmd, const int value, int pos)
   }
   strcpy(_cmdbuf[0], cmd);
   sprintf(_cmdbuf[1], "%d", value);
-  return _det->putCommand(2, _cmdbuf, pos); 
+  return put_command_raw(2, pos);
 }
 
 std::string Module::put_command(const char* cmd, const unsigned int value, int pos)
@@ -505,7 +545,7 @@ std::string Module::put_command(const char* cmd, const unsigned int value, int p
   }
   strcpy(_cmdbuf[0], cmd);
   sprintf(_cmdbuf[1], "%u", value);
-  return _det->putCommand(2, _cmdbuf, pos);
+  return put_command_raw(2, pos);
 }
 
 std::string Module::put_command(const char* cmd, const long value, int pos)
@@ -515,7 +555,7 @@ std::string Module::put_command(const char* cmd, const long value, int pos)
   }
   strcpy(_cmdbuf[0], cmd);
   sprintf(_cmdbuf[1], "%ld", value);
-  return _det->putCommand(2, _cmdbuf, pos);
+  return put_command_raw(2, pos);
 }
 
 std::string Module::put_command(const char* cmd, const unsigned long value, int pos)
@@ -525,7 +565,7 @@ std::string Module::put_command(const char* cmd, const unsigned long value, int 
   }
   strcpy(_cmdbuf[0], cmd);
   sprintf(_cmdbuf[1], "%lu", value);
-  return _det->putCommand(2, _cmdbuf, pos);
+  return put_command_raw(2, pos);
 }
 
 std::string Module::put_command(const char* cmd, const long long value, int pos)
@@ -535,7 +575,7 @@ std::string Module::put_command(const char* cmd, const long long value, int pos)
   }
   strcpy(_cmdbuf[0], cmd);
   sprintf(_cmdbuf[1], "%lld", value);
-  return _det->putCommand(2, _cmdbuf, pos);
+  return put_command_raw(2, pos);
 }
 
 std::string Module::put_command(const char* cmd, const unsigned long long value, int pos)
@@ -545,7 +585,7 @@ std::string Module::put_command(const char* cmd, const unsigned long long value,
   }
   strcpy(_cmdbuf[0], cmd);
   sprintf(_cmdbuf[1], "%llu", value);
-  return _det->putCommand(2, _cmdbuf, pos);
+  return put_command_raw(2, pos);
 }
 
 std::string Module::put_command(const char* cmd, const double value, int pos)
@@ -555,7 +595,7 @@ std::string Module::put_command(const char* cmd, const double value, int pos)
   }
   strcpy(_cmdbuf[0], cmd);
   sprintf(_cmdbuf[1], "%f", value);
-  return _det->putCommand(2, _cmdbuf, pos);
+  return put_command_raw(2, pos);
 }
 
 std::string Module::get_command(const char* cmd, int pos)
@@ -564,14 +604,14 @@ std::string Module::get_command(const char* cmd, int pos)
     return "invalid command or value length";
   }
   strcpy(_cmdbuf[0], cmd);
-  return _det->getCommand(1, _cmdbuf, pos);
+  return get_command_raw(1, pos);
 }
 
 std::string Module::get_register(const int reg, int* register_value, int pos)
 {
   strcpy(_cmdbuf[0], REG);
   sprintf(_cmdbuf[1], "%#x", reg);
-  std::string reply = _det->getCommand(2, _cmdbuf, pos);
+  std::string reply = get_command_raw(2, pos);
 
   if (register_value) {
     *register_value = (int) strtol(reply.c_str(), NULL, 0);
@@ -585,7 +625,7 @@ std::string Module::put_register(const int reg, const int value, int pos)
   strcpy(_cmdbuf[0], REG);
   sprintf(_cmdbuf[1], "%#x", reg);
   sprintf(_cmdbuf[2], "%#x", value);
-  return _det->putCommand(3, _cmdbuf, pos);
+  return put_command_raw(3, pos);
 }
 
 std::string Module::put_adcreg(const int reg, const int value, int pos)
@@ -593,7 +633,7 @@ std::string Module::put_adcreg(const int reg, const int value, int pos)
   strcpy(_cmdbuf[0], ADCREG);
   sprintf(_cmdbuf[1], "%#x", reg);
   sprintf(_cmdbuf[2], "%#x", value);
-  return _det->putCommand(3, _cmdbuf, pos);
+  return put_command_raw(3, pos);
 }
 
 std::string Module::setbit(const int reg, const int bit, int pos)
@@ -601,7 +641,7 @@ std::string Module::setbit(const int reg, const int bit, int pos)
   strcpy(_cmdbuf[0], SETBIT);
   sprintf(_cmdbuf[1], "%#x", reg);
   sprintf(_cmdbuf[2],  "%d", bit);
-  return _det->putCommand(3, _cmdbuf, pos);
+  return put_command_raw(3, pos);
 }
 
 std::string Module::clearbit(const int reg, const int bit, int pos)
@@ -609,7 +649,7 @@ std::string Module::clearbit(const int reg, const int bit, int pos)
   strcpy(_cmdbuf[0], CLEARBIT);
   sprintf(_cmdbuf[1], "%#x", reg);
   sprintf(_cmdbuf[2],  "%d", bit);  
-  return _det->putCommand(3, _cmdbuf, pos);
+  return put_command_raw(3, pos);
 }
 
 uint64_t Module::nframes()
@@ -665,7 +705,14 @@ bool Module::start()
 {
   std::string reply = put_command("status", "start");
   printf("starting detector: %s\n", reply.c_str());
-  return status(reply) == RUNNING || status(reply) == WAIT;
+  /*
+   * IDLE status is okay when the detector is free running since the frame acquisiton may have finished
+   * before the status call happens. Often this happens in the case of aquiring only a single frame.
+   *
+   * Triggered mode always runs until explicitly stopped, so being at IDLE after starting aquisiton is
+   * an error state.
+   */
+  return status(reply) == RUNNING || status(reply) == WAIT || ((status(reply) == IDLE) && (_freerun)) ;
 }
 
 bool Module::stop()
@@ -858,6 +905,21 @@ Detector::~Detector()
   if (_msgbuf) delete[] _msgbuf;
 }
 
+void Detector::shutdown()
+{
+  for (unsigned i=0; i<_num_modules; i++) {
+    _modules[i]->shutdown();
+  }
+}
+
+bool Detector::connected() const
+{
+  for (unsigned i=0; i<_num_modules; i++) {
+    if(!_modules[i]->connected()) return false;
+  }
+  return true;
+}
+
 bool Detector::check_size(uint32_t num_modules, uint32_t num_rows, uint32_t num_columns) const
 {
   for (unsigned i=0; i<_num_modules; i++) {
@@ -883,49 +945,52 @@ bool Detector::configure(uint64_t nframes, JungfrauConfigType::GainMode gain, Ju
     }
   }
 
-  for (unsigned i=0; i<_num_modules; i++) {
-    printf("configuring dacs of module %u\n", i);
-    if(!_modules[i]->configure_dacs(dac_config)) {
-      fprintf(stderr, "Error: module %u dac configuration failed!\n", i);
-      success = false;
+  // If all modules are configurable then continue with config
+  if (success) {
+    for (unsigned i=0; i<_num_modules; i++) {
+      printf("configuring dacs of module %u\n", i);
+      if(!_modules[i]->configure_dacs(dac_config)) {
+        fprintf(stderr, "Error: module %u dac configuration failed!\n", i);
+        success = false;
+      }
     }
-  }
 
-  for (unsigned i=0; i<_num_modules; i++) {
-    printf("configuring adc of module %u\n", i);
-    if(!_modules[i]->configure_adc()) {
-      fprintf(stderr, "Error: module %u adc configuration failed!\n", i);
-      success = false;
+    for (unsigned i=0; i<_num_modules; i++) {
+      printf("configuring adc of module %u\n", i);
+      if(!_modules[i]->configure_adc()) {
+        fprintf(stderr, "Error: module %u adc configuration failed!\n", i);
+        success = false;
+      }
     }
-  }
 
-  for (unsigned i=0; i<_num_modules; i++) {
-    printf("configuring clock speed of module %u\n", i);
-    if(!_modules[i]->configure_speed(speed, bsleep)) {
-      fprintf(stderr, "Error: module %u clock speed configuration failed!\n", i);
-      success = false;
+    for (unsigned i=0; i<_num_modules; i++) {
+      printf("configuring clock speed of module %u\n", i);
+      if(!_modules[i]->configure_speed(speed, bsleep)) {
+        fprintf(stderr, "Error: module %u clock speed configuration failed!\n", i);
+        success = false;
+      }
     }
-  }
 
-  if (bsleep) {
-    // sleeping after reconfiguring clock
-    sleep(1);
-    bsleep = false;
-  }
-
-  for (unsigned i=0; i<_num_modules; i++) {
-    printf("configuring acquistion settings of module %u\n", i);
-    if(!_modules[i]->configure_acquistion(nframes, trig_delay, exposure_time, exposure_period)) {
-      fprintf(stderr, "Error: module %u acquistion settings configuration failed!\n", i);
-      success = false;
+    if (bsleep) {
+      // sleeping after reconfiguring clock
+      sleep(1);
+      bsleep = false;
     }
-  }
 
-  for (unsigned i=0; i<_num_modules; i++) {
-    printf("configuring gain and bias of module %u\n", i);
-    if(!_modules[i]->configure_gain(bias, gain)) {
-      fprintf(stderr, "Error: module %u gain and bias configuration failed!\n", i);
-      success = false;
+    for (unsigned i=0; i<_num_modules; i++) {
+      printf("configuring acquistion settings of module %u\n", i);
+      if(!_modules[i]->configure_acquistion(nframes, trig_delay, exposure_time, exposure_period)) {
+        fprintf(stderr, "Error: module %u acquistion settings configuration failed!\n", i);
+        success = false;
+      }
+    }
+
+    for (unsigned i=0; i<_num_modules; i++) {
+      printf("configuring gain and bias of module %u\n", i);
+      if(!_modules[i]->configure_gain(bias, gain)) {
+        fprintf(stderr, "Error: module %u gain and bias configuration failed!\n", i);
+        success = false;
+      }
     }
   }
 
@@ -1149,6 +1214,8 @@ void Detector::clear_errors()
 #undef DATA_ELEM
 #undef CMD_LEN
 #undef MSG_LEN
+#undef ADCPHASE_HALF
+#undef ADCPHASE_QUARTER
 #undef NUM_ROWS
 #undef NUM_COLUMNS
 #undef get_command_print

@@ -49,6 +49,8 @@ namespace Pds {
         enum Status { IDLE, RUNNING, WAIT, DATA, ERROR };
         Module(const int id, const char* control, const char* host, const unsigned port, const char* mac, const char* det_ip, bool config_det_ip=true);
         ~Module();
+        void shutdown();
+        bool connected() const;
         bool check_config();
         bool configure_dacs(const DacsConfig& dac_config);
         bool configure_adc();
@@ -93,6 +95,9 @@ namespace Pds {
         unsigned get_num_pixels() const;
         unsigned get_frame_size() const;
       private:
+        std::string put_command_raw(int narg, int pos);
+        std::string get_command_raw(int narg, int pos);
+      private:
         const int         _id;
         const char*       _control;
         const char*       _host;
@@ -102,6 +107,7 @@ namespace Pds {
         int               _socket;
         bool              _connected;
         bool              _boot;
+        bool              _freerun;
         unsigned          _sockbuf_sz;
         unsigned          _readbuf_sz;
         unsigned          _frame_sz;
@@ -118,6 +124,8 @@ namespace Pds {
       public:
         Detector(std::vector<Module*>& modules, bool use_threads, int thread_rtprio=0);
         ~Detector();
+        void shutdown();
+        bool connected() const;
         bool configure(uint64_t nframes, JungfrauConfigType::GainMode gain, JungfrauConfigType::SpeedMode speed, double trig_delay, double exposure_time, double exposure_period, uint32_t bias, const DacsConfig& dac_config);
         bool check_size(uint32_t num_modules, uint32_t num_rows, uint32_t num_columns) const;
         bool get_frame(uint64_t* framenum, uint16_t* data);

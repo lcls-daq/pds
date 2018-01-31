@@ -498,7 +498,7 @@ double Driver::exposure() const
 bool Driver::overlap_mode() const
 {
   AT_BOOL overlap;
-  AT_GetBool(_cam, AT3_SENSOR_COOLING, &overlap);
+  AT_GetBool(_cam, AT3_OVERLAP, &overlap);
   return (overlap == AT_TRUE);
 }
 

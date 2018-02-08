@@ -36,10 +36,10 @@ int Server::fetch(char* payload, int flags)
     uint32_t* p = (uint32_t*)_evBuffer;
     if (1) {
       int len = ((p[0]&0xffffff)-8)*4;
-      //_fid = p[4];
+      _fid = p[4];
       // Hack timing system has error
 
-      _fid = p[4]+1;
+      //_fid = p[4]+1;
 
       if (_fid == (1<<17)-32 )
 	_fid = 0;

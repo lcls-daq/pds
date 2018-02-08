@@ -118,27 +118,30 @@ Transition* Manager::transitions(Transition* tr) {
                                 &_config,
                                 sizeof(_config) );
     
+      UserMessage* msg = new (&_occPool) UserMessage;
+      _nerror = 0;
       if (len <= 0) {
         printf("ConfigAction: failed to retrieve configuration "
                ": (%d) %s.  Applying default.\n",
                errno,
                strerror(errno) );
-        _nerror += 1;
+        msg->append("failed to retreive configuration");
+	_nerror += 1;
       }
    
     
       else {
         _cfgtc.extent     = sizeof(Xtc) + sizeof(QuadAdcConfigType);
       }
-    }
-    { 
+    
+     
       double   sr = _config.sampleRate();
       unsigned ns = _config.nbrSamples();
       unsigned in = _config.interleaveMode();
       //printf("SAMPLE RATE: %i\n", sr);
     
-      UserMessage* msg = new (&_occPool) UserMessage;
-      _nerror = 0; 
+      //UserMessage* msg = new (&_occPool) UserMessage;
+      //_nerror = 0; 
       
       unsigned length=0;
       if (ns%16 == 0) {

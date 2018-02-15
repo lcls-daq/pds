@@ -8,6 +8,7 @@
 #include "pdsdata/xtc/Sequence.hh"
 #include "EbSequenceSrv.hh"
 #include "BldSequenceSrv.hh"
+#include "AnySequenceSrv.hh"
 #include "EvrServer.hh"
 
 namespace Pds {
@@ -31,6 +32,10 @@ namespace Pds {
 				   ts.vector(),
 				   ts.control()));
     }
+
+    virtual bool precedes (const AnySequenceSrv& s) { return true; }
+    virtual bool coincides(const AnySequenceSrv& s) { return true; }
+    virtual void assign   (const AnySequenceSrv& s) {}
 
     virtual bool precedes (const EvrServer& s) { return key.seq.stamp() <= s.sequence().stamp(); } 
     virtual bool coincides(const EvrServer& s) { return key.seq.stamp() == s.sequence().stamp(); } 

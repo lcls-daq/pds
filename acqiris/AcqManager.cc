@@ -467,6 +467,7 @@ public:
     //  I don't think it's actually necessary to do the DMA
     //      _server.headerComplete(_totalSize,_count++);   
   }
+  void advance(int n) { _count+=n; }  // attempt to recover by skipping the missed event
 public:
   VmonAcq& vmon() { return _vmon; }
 private:
@@ -614,12 +615,13 @@ private:
 class AcqL1Action : public AcqDC282Action,
 		    public XtcIterator {
 public:
-  AcqL1Action(ViSession instrumentId, AcqManager* mgr, const Src& src) :
+  AcqL1Action(ViSession instrumentId, AcqManager* mgr, const Src& src, AcqReader& reader) :
     AcqDC282Action(instrumentId),
     _src(src),
     _lastAcqTS(0),_lastEvrFid(0),_lastEvrClockNSec(0),_initFlag(0),_evrAbsDiffNSec(0),
     _mgr(mgr),
     _occPool   (new GenericPool(sizeof(UserMessage),4)), 
+    _reader    (reader),
     _outoforder(0) {}
   ~AcqL1Action() { delete _occPool; }
 
@@ -672,6 +674,7 @@ public:
     if (evrClkDiffNSec > (unsigned long long)300e9)	
       _evrAbsDiffNSec = evrClkDiffNSec;
     
+    int advance = 0;
     unsigned long long evrAcqDiff =  abs(_evrAbsDiffNSec - acqdiff);
     // Time adaptive offset comparison to detect a dropped trigger --> Adaptive Time Offset @ 6.5 uSec/Sec rate	
     if (_initFlag && ((double)evrAcqDiff> ((double)_evrAbsDiffNSec*6.5e-3)) &&
@@ -682,22 +685,41 @@ public:
         printf("*** Timestamps (current/previous) EvrFid= %d/%d AcqTimePS= %llu/%llu EvrSysClkNS= %llu/%llu \n",
                evrfid,_lastEvrFid,acqts,_lastAcqTS,evrClockNSec,_lastEvrClockNSec);		    
       }
-      _outoforder=1;	  
 
-      Pds::Occurrence* occ = new (_occPool)
-        Pds::Occurrence(Pds::OccurrenceId::ClearReadout);
-      _mgr->appliance().post(occ);
+      advance = (int(((float)(acqdiff))/(float)nsPerFiducial + 0.5) / int(((float)(evrdiff))/(float)nsPerFiducial + 0.5)) - 1;
+      if (advance > 0 && advance < 3) {
+        printf("\n*** Recovery attempt: fiducials since last evt: Evr= %f  Acq= %f EvrClk= %f\n",
+               ((float)(evrdiff))/(float)nsPerFiducial,((float)(acqdiff))/(float)nsPerFiducial,((float)(evrClkDiffNSec))/(float)nsPerFiducial);
+      }
+      else {
+        advance = 0;
+        _outoforder=1;	  
 
-      UserMessage* umsg = new (_occPool) UserMessage;
-      umsg->append("Event readout error\n");
-      umsg->append(DetInfo::name(static_cast<const DetInfo&>(xtc.src)));
-      _mgr->appliance().post(umsg);
-    }
-	
+#if 0
+        Pds::Occurrence* occ = new (_occPool)
+          Pds::Occurrence(Pds::OccurrenceId::ClearReadout);
+        _mgr->appliance().post(occ);
+
+        UserMessage* umsg = new (_occPool) UserMessage;
+        umsg->append("Event readout error\n");
+        umsg->append(DetInfo::name(static_cast<const DetInfo&>(xtc.src)));
+        _mgr->appliance().post(umsg);
+#endif
+      }
+    }	
 
     // Handle dropped event
+#if 0
     if (_outoforder) {
       _damage = (1<<Pds::Damage::OutOfOrder);
+      xtc.damage.increase(_damage);
+    }
+    else if (recover) {
+#else
+    if (advance || _outoforder) {
+#endif
+      _reader.advance(advance);
+      _damage |= (1<<Damage::UserDefined);
       xtc.damage.increase(_damage);
     }
     else {
@@ -722,6 +744,7 @@ private:
   unsigned long long _evrAbsDiffNSec;  
   AcqManager* _mgr;
   GenericPool* _occPool;
+  AcqReader&   _reader;
   unsigned _outoforder;
   unsigned _damage;
   Sequence _seq;
@@ -1133,7 +1156,7 @@ AcqManager::AcqManager(ViSession InstrumentID, AcqServer& server, CfgClientNfs& 
   AcqDma& dma = *new AcqDma(_instrumentId,reader,server,task,sem);
   server.setDma(&dma);
   Action* caction = new AcqConfigAction(_instrumentId,reader,dma,server.client(),cfg,*this);
-  AcqL1Action& acql1 = *new AcqL1Action(_instrumentId,this,cfg.src());
+  AcqL1Action& acql1 = *new AcqL1Action(_instrumentId,this,cfg.src(),reader);
   _fsm.callback(TransitionId::Configure,caction);
   _fsm.callback(TransitionId::Map, new AcqAllocAction(cfg)); 
   _fsm.callback(TransitionId::L1Accept,&acql1);

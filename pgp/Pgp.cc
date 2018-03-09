@@ -12,6 +12,7 @@
 #include "pds/pgp/PgpStatus.hh"
 #include "pds/pgp/PgpCardStatusWrap.hh"
 #include "pds/pgp/PgpCardG3StatusWrap.hh"
+#include "pds/pgp/AesDriverG2StatusWrap.hh"
 #include "pds/pgp/AesDriverG3StatusWrap.hh"
 #include "pgpcard/PgpCardMod.h"
 #include <PgpDriver.h>
@@ -70,7 +71,7 @@ Pgp::Pgp(bool use_aes, int f, bool pf) : _fd(f), _useAesDriver(use_aes) {
     }
   } else {
     if (use_aes) {
-      //_status = new AesDriverStatusWrap(_fd, 0, this);
+      _status = new AesDriverG2StatusWrap(_fd, 0, this);
     } else {
       _status = new PgpCardStatusWrap(_fd, 0, this);
     }

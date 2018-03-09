@@ -97,7 +97,7 @@ namespace Pds {
 
     int AesDriverG3StatusWrap::writeScratch(unsigned s) {
       ssize_t res = 0;
-      res |= dmaWriteRegister(_pgp->fd(), 3, s);
+      res |= dmaWriteRegister(_pgp->fd(), (unsigned)offsetof(PgpCardG3Regs, ScratchPad), s);
       return res;
     }
 

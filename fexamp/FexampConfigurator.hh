@@ -46,7 +46,7 @@ namespace Pds {
 
     class FexampConfigurator : public Pds::Pgp::Configurator {
       public:
-        FexampConfigurator(int, unsigned);
+        FexampConfigurator(bool, int, unsigned);
         virtual ~FexampConfigurator();
 
         enum resultReturn {Success=0, Failure=1, Terminate=2};

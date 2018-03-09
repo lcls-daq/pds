@@ -41,9 +41,10 @@ static unsigned configAddrs[EpixSamplerConfigShadow::NumberOfValues] = {
     0x2a     //  TestPatternEnable
 };
 
-EpixSamplerConfigurator::EpixSamplerConfigurator(int f, unsigned d) :
-                           Pds::Pgp::Configurator(f, d),
+EpixSamplerConfigurator::EpixSamplerConfigurator(bool use_aes, int f, unsigned d) :
+                           Pds::Pgp::Configurator(use_aes, f, d),
                            _config(0), _s(0), _rhisto(0) {
+  allocateVC(7);
   printf("EpixSamplerConfigurator constructor\n");
   //    printf("\tlocations _pool(%p), _config(%p)\n", _pool, &_config);
   //    _rhisto = (unsigned*) calloc(1000, 4);
@@ -128,11 +129,7 @@ bool EpixSamplerConfigurator::_flush(unsigned index=0) {
 
 unsigned EpixSamplerConfigurator::configure( EpixSamplerConfigType* c, unsigned mask) {
   _config = c; _s = (EpixSamplerConfigShadow*) c;
-  timespec      start, end, sleepTime, shortSleepTime;
-  sleepTime.tv_sec = 0;
-  sleepTime.tv_nsec = 25000000; // 25ms
-  shortSleepTime.tv_sec = 0;
-  shortSleepTime.tv_nsec = 5000000;  // 5ms (10 ms is shortest sleep on some computers
+  timespec      start, end;
   printf("EpixSampler Config config(%p)\n", c);
   unsigned ret = 0;
   mask = ~mask;

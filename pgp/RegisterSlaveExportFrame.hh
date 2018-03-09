@@ -36,9 +36,10 @@ namespace Pds {
       public:
         static unsigned    count;
         static unsigned    errors;
-        static void FileDescr(int i);
+        static void FileDescr(int i, bool use_aes=false);
 
       private:
+        static bool            _use_aes;
         static int             _fd;
 
       public:

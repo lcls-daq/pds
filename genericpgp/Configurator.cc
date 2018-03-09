@@ -22,9 +22,10 @@ using namespace Pds::GenericPgp;
 static unsigned tid=0;
 static unsigned VersionAddr=0;  // used to flush input
 
-Configurator::Configurator(int f, unsigned d) :
-  Pds::Pgp::Configurator(f, d),
+Configurator::Configurator(bool use_aes, int f, unsigned d) :
+  Pds::Pgp::Configurator(use_aes, f, d),
   _testModeState(0), _config(0), _rhisto(0) {
+  allocateVC(0xf);
 }
 
 Configurator::~Configurator() {}

@@ -73,7 +73,7 @@ namespace Pds {
 
     class EpixConfigurator : public Pds::Pgp::Configurator {
       public:
-        EpixConfigurator(int, unsigned);
+        EpixConfigurator(bool, int, unsigned);
         virtual ~EpixConfigurator();
 
         enum resultReturn {Success=0, Failure=1, Terminate=2};

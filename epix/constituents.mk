@@ -6,7 +6,7 @@ libsrcs_epix := \
 		 EpixServer.cc \
 		 EpixManager.cc
 #libsinc_epix :=
-libincs_epix := pgpcard pgp pdsdata/include ndarray/include boost/include
+libincs_epix := pgpcard aesdriver/include pgp pdsdata/include ndarray/include boost/include
 CPPFLAGS += -fno-strict-aliasing
 #CPPFLAGS += -fopenmp
 #LXFlAGS += -fopenmp

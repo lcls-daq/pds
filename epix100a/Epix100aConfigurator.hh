@@ -123,11 +123,11 @@ namespace Pds {
       ReadAcqCounter                    = 0x5,
       PowerEnableAddr                   = 0x8,
       PowerEnableValue                  = 0x7,
-      AdcControlAddr					= 0x80,
-      AdcCtrlReqMask					= 1,
+      AdcControlAddr                    = 0x80,
+      AdcCtrlReqMask                    = 1,
       AdcCtrlAckMask                    = 2,
       AdcCtrlFailMask                   = 4,
-      EnviroDataBaseAddr				= 0x140,
+      EnviroDataBaseAddr                = 0x140,
       RowCounterAdder                   = 0x6011,
       ColCounterAddr                    = 0x6013,
       PixelDataAddr                     = 0x5000,
@@ -169,7 +169,7 @@ namespace Pds {
 
     class Epix100aConfigurator : public Pds::Pgp::Configurator {
       public:
-        Epix100aConfigurator(int, unsigned);
+        Epix100aConfigurator(bool, int, unsigned);
         virtual ~Epix100aConfigurator();
 
         enum resultReturn {Success=0, Failure=1, Terminate=2};
@@ -192,6 +192,7 @@ namespace Pds {
         uint32_t             enviroData(unsigned);
         Epix100aConfigShadow* shadow() { return _s; }
         void                 fiberTriggering(bool b) { _fiberTriggering = b; }
+        bool                 fiberTriggering() { return _fiberTriggering; }
 
 
 

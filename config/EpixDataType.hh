@@ -14,5 +14,9 @@ typedef Pds::Epix::ElementV3 Epix100aDataType;
 static Pds::TypeId _epix100aDataType(Pds::TypeId::Id_EpixElement,
           Epix100aDataType::Version);
 
+typedef Pds::Epix::ElementV3 Epix10kaDataType;
+
+static Pds::TypeId _epix10kaDataType(Pds::TypeId::Id_EpixElement,
+          Epix10kaDataType::Version);
 
 #endif // Pds_EpixDataType_hh

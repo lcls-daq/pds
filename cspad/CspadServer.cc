@@ -16,6 +16,7 @@
 #include "pds/cspad/CspadDestination.hh"
 #include "pds/cspad/Processor.hh"
 #include "pgpcard/PgpCardMod.h"
+#include <PgpDriver.h>
 #include <unistd.h>
 #include <sys/uio.h>
 #include <string.h>
@@ -47,6 +48,7 @@ CspadServer::CspadServer( const Pds::Src& client, Pds::TypeId& myDataType, unsig
      _quads(0),
      _configMask(configMask),
      _configureResult(0xdead),
+     _use_aes(false),
      _occPool(new GenericPool(sizeof(UserMessage),4)),
      _configured(false),
      _firstFetch(true),
@@ -69,7 +71,7 @@ unsigned CspadServer::configure(CsPadConfigType* config) {
     _configureResult = 0xdead;
   } else {
     if (_cnfgrtr == 0) {
-      _cnfgrtr = new Pds::CsPad::CspadConfigurator(config, fd(), _debug);
+      _cnfgrtr = new Pds::CsPad::CspadConfigurator(_use_aes, config, fd(), _debug);
       _cnfgrtr->runTimeConfigName(_runTimeConfigName);
       pgp(_cnfgrtr->pgp());
     } else {
@@ -170,7 +172,10 @@ unsigned Pds::CspadServer::unconfigure(void) {
 
 int Pds::CspadServer::fetch( char* payload, int flags ) {
    int ret = 0;
+   void*           pgpRxBuff = 0;
+   size_t          pgpRxSize = 0;
    PgpCardRx       pgpCardRx;
+   DmaReadData     dmaReadData;
    unsigned        offset = 0;
    bool            exceptional = false;
    enum {Ignore=-1};
@@ -236,13 +241,27 @@ int Pds::CspadServer::fetch( char* payload, int flags ) {
      }
    }
 
-   pgpCardRx.model   = sizeof(&pgpCardRx);
-   pgpCardRx.maxSize = _payloadSize / sizeof(__u32);
-   pgpCardRx.data    = (__u32*)(payload + offset);
+   if (_use_aes) {
+     dmaReadData.is32   = sizeof(&dmaReadData) == 4;
+     dmaReadData.size   = _payloadSize;
+     dmaReadData.data   = (uint64_t)(payload + offset);
+     dmaReadData.dest   = 0;
+     dmaReadData.flags  = 0;
+     dmaReadData.index  = 0;
+     dmaReadData.error  = 0;
+     pgpRxBuff = &dmaReadData;
+     pgpRxSize = sizeof(DmaReadData);
+   } else {
+     pgpCardRx.model   = sizeof(&pgpCardRx);
+     pgpCardRx.maxSize = _payloadSize / sizeof(__u32);
+     pgpCardRx.data    = (__u32*)(payload + offset);
+     pgpRxBuff = &pgpCardRx;
+     pgpRxSize = sizeof(PgpCardRx);
+   }
    Pds::Pgp::DataImportFrame* data = (Pds::Pgp::DataImportFrame*)(payload + offset);
 
    clock_gettime(CLOCK_REALTIME, &_readTime1);
-   if ((ret = read(fd(), &pgpCardRx, sizeof(PgpCardRx))) < 0) {
+   if ((ret = read(fd(), pgpRxBuff, pgpRxSize)) < 0) {
      if (errno == ERESTART) {
        disable(false);
        char message[400];
@@ -258,7 +277,9 @@ int Pds::CspadServer::fetch( char* payload, int flags ) {
      }
      perror ("CspadServer::fetch pgpCard read error");
      ret =  Ignore;
-   } else ret *= sizeof(__u32);
+   } else if (!_use_aes) {
+     ret *= sizeof(__u32);
+   }
    clock_gettime(CLOCK_REALTIME, &_readTime2);
    long long int diff = timeDiff(&_readTime2, &_readTime1);
    diff += 5000;
@@ -270,7 +291,9 @@ int Pds::CspadServer::fetch( char* payload, int flags ) {
      printf("CspadServer::fetch() returning Ignore, ret was %d, looking for %u, frame(%u) quad(%u) quadmask(%x) ",
          ret, _payloadSize, data->frameNumber() - 1, data->elementId(), _quadMask);
      if (_debug & 4 || ret < 0) printf("\n\topcode(0x%x) acqcount(0x%x) fiducials(0x%x) _count(%u) _quadsThisCount(%u) lane(%u) vc(%u)",
-         data->second.opCode, data->acqCount(), data->fiducials(), _count, _quadsThisCount, pgpCardRx.pgpLane, pgpCardRx.pgpVc);
+         data->second.opCode, data->acqCount(), data->fiducials(), _count, _quadsThisCount,
+         _use_aes ? pgpGetLane(dmaReadData.dest)-Pds::Pgp::Pgp::portOffset() : pgpCardRx.pgpLane,
+         _use_aes ? pgpGetVc(dmaReadData.dest) : pgpCardRx.pgpVc);
      ret = Ignore;
      //     printf("\n\t ");
      //     unsigned* u= (unsigned*)data;
@@ -281,14 +304,28 @@ int Pds::CspadServer::fetch( char* payload, int flags ) {
    }
 
    unsigned damageMask = 0;
-   if (pgpCardRx.eofe)      damageMask |= 1;
-   if (pgpCardRx.fifoErr)   damageMask |= 2;
-   if (pgpCardRx.lengthErr) damageMask |= 4;
+   if (_use_aes) {
+     if (dmaReadData.error&DMA_ERR_FIFO)  damageMask |= 1;
+     if (dmaReadData.error&DMA_ERR_LEN)   damageMask |= 2;
+     if (dmaReadData.error&DMA_ERR_MAX)   damageMask |= 4;
+     if (dmaReadData.error&DMA_ERR_BUS)   damageMask |= 8;
+   } else {
+     if (pgpCardRx.eofe)      damageMask |= 1;
+     if (pgpCardRx.fifoErr)   damageMask |= 2;
+     if (pgpCardRx.lengthErr) damageMask |= 4;
+   }
    if (damageMask) {
      printf("CsPadServer::fetch %s damageMask 0x%x, quad(%u) quadmask(%x)", ret>0 ? "setting user damage" : "ignoring wrong length", damageMask, data->elementId(), _quadMask);
-     if (pgpCardRx.lengthErr) printf(" LENGTH_ERROR rxSize(%u)", (unsigned)pgpCardRx.rxSize);
-     if (pgpCardRx.fifoErr) printf(" FIFO_ERROR");
-     if (pgpCardRx.eofe) printf(" EOFE_ERROR");
+     if (_use_aes) {
+       if (dmaReadData.error&DMA_ERR_LEN) printf(" LENGTH_ERROR rxSize(%u)", (unsigned)dmaReadData.size);
+       if (dmaReadData.error&DMA_ERR_FIFO) printf(" FIFO_ERROR");
+       if (dmaReadData.error&DMA_ERR_MAX) printf(" MAX_ERROR");
+       if (dmaReadData.error&DMA_ERR_BUS) printf(" BUS_ERROR");
+     } else {
+       if (pgpCardRx.lengthErr) printf(" LENGTH_ERROR rxSize(%u)", (unsigned)pgpCardRx.rxSize);
+       if (pgpCardRx.fifoErr) printf(" FIFO_ERROR");
+       if (pgpCardRx.eofe) printf(" EOFE_ERROR");
+     }
      printf(" frame %u\n", data->frameNumber() - 1);
      if (ret > 0) {
        damageMask |= 0xe0;
@@ -300,7 +337,9 @@ int Pds::CspadServer::fetch( char* payload, int flags ) {
      _count = data->frameNumber() - 1;  // cspad starts counting at 1, not zero
      _fiducials = data->fiducials();    // for the other event builder
      if (_debug & 4 || ret < 0) printf("\n\tquad(%u) opcode(0x%x) acqcount(0x%x) fiducials(0x%x) _oldCount(%u) _count(%u) _quadsThisCount(%u) lane(%u) vc(%u)\n",
-         data->elementId(), data->second.opCode, data->acqCount(), data->fiducials(), oldCount, _count, _quadsThisCount, pgpCardRx.pgpLane, pgpCardRx.pgpVc);
+         data->elementId(), data->second.opCode, data->acqCount(), data->fiducials(), oldCount, _count, _quadsThisCount,
+         _use_aes ? pgpGetLane(dmaReadData.dest)-Pds::Pgp::Pgp::portOffset() : pgpCardRx.pgpLane,
+         _use_aes ? pgpGetVc(dmaReadData.dest) : pgpCardRx.pgpVc);
      if ((_count != oldCount) && (_quadsThisCount) && (!_sequenceServer)) {
        if ((_count < oldCount) || (_count - oldCount > 10)) {
          printf("CsPadServer::fetch ignoring unreasonable frame number, %u followed %u, quadMask 0x%x, quad %u\n", _count, oldCount, _quadMask, data->elementId());
@@ -364,10 +403,27 @@ unsigned CspadServer::flushInputQueue(int f, bool printFlag) {
   timeout.tv_usec = 2500;
   int ret;
   unsigned count = 0;
+  void*           pgpRxBuff = 0;
+  size_t          pgpRxSize = 0;
   PgpCardRx       pgpCardRx;
-  pgpCardRx.model   = sizeof(&pgpCardRx);
-  pgpCardRx.maxSize = DummySize;
-  pgpCardRx.data    = _dummy;
+  DmaReadData     dmaReadData;
+  if (_use_aes) {
+    dmaReadData.is32   = sizeof(&dmaReadData) == 4;
+    dmaReadData.size   = DummySize;
+    dmaReadData.data   = (uint64_t)_dummy;
+    dmaReadData.dest   = 0;
+    dmaReadData.flags  = 0;
+    dmaReadData.index  = 0;
+    dmaReadData.error  = 0;
+    pgpRxBuff = &dmaReadData;
+    pgpRxSize = sizeof(DmaReadData);
+  } else {
+    pgpCardRx.model   = sizeof(&pgpCardRx);
+    pgpCardRx.maxSize = DummySize / sizeof(__u32);
+    pgpCardRx.data    = _dummy;
+    pgpRxBuff = &pgpCardRx;
+    pgpRxSize = sizeof(PgpCardRx);
+  }
   do {
     FD_ZERO(&fds);
     FD_SET(f,&fds);
@@ -377,23 +433,31 @@ unsigned CspadServer::flushInputQueue(int f, bool printFlag) {
         if (printFlag) printf("\tflushed lanes ");
       }
       count += 1;
-      ::read(f, &pgpCardRx, sizeof(PgpCardRx));
-      if (printFlag) printf("-%u-", pgpCardRx.pgpLane);
+      ::read(f, pgpRxBuff, pgpRxSize);
+      if (printFlag) printf("-%u-", _use_aes ? pgpGetLane(dmaReadData.dest)-Pds::Pgp::Pgp::portOffset() : pgpCardRx.pgpLane);
     }
   } while ((ret > 0) && (count < 100));
   if (count) {
     if (printFlag) printf("\n");
     if (count == 100) {
-      printf("\tCspadServer::flushInputQueue: pgpCardRx lane(%u) vc(%u) rxSize(%u) eofe(%s) lengthErr(%s)\n",
-          pgpCardRx.pgpLane, pgpCardRx.pgpVc, pgpCardRx.rxSize, pgpCardRx.eofe ? "true" : "false",
-          pgpCardRx.lengthErr ? "true" : "false");
+      if (_use_aes) {
+        printf("\tCspadServer::flushInputQueue: pgpCardRx lane(%u) vc(%u) rxSize(%u) fifo(%s) lengthErr(%s)\n",
+            pgpGetLane(dmaReadData.dest)-Pds::Pgp::Pgp::portOffset(), pgpGetVc(dmaReadData.dest),
+            dmaReadData.size, dmaReadData.error&DMA_ERR_FIFO ? "true" : "false",
+            dmaReadData.error&DMA_ERR_LEN ? "true" : "false");
+      } else {
+        printf("\tCspadServer::flushInputQueue: pgpCardRx lane(%u) vc(%u) rxSize(%u) eofe(%s) lengthErr(%s)\n",
+            pgpCardRx.pgpLane, pgpCardRx.pgpVc, pgpCardRx.rxSize, pgpCardRx.eofe ? "true" : "false",
+            pgpCardRx.lengthErr ? "true" : "false");
+      }
       printf("\t\t"); for (ret=0; ret<8; ret++) printf("%u ", _dummy[ret]);  printf("/n");
     }
   }
   return count;
 }
 
-void CspadServer::setCspad( int f ) {
+void CspadServer::setCspad( int f, bool use_aes_driver ) {
+  _use_aes = use_aes_driver;
   fd( f );
 }
 

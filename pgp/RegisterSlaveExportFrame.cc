@@ -10,6 +10,8 @@
 #include "pds/pgp/RegisterSlaveImportFrame.hh"
 #include "pds/pgp/Destination.hh"
 #include "pds/pgp/Pgp.hh"
+#include "pgpcard/PgpCardMod.h"
+#include <PgpDriver.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -21,11 +23,13 @@
 namespace Pds {
   namespace Pgp {
 
+    bool      RegisterSlaveExportFrame::_use_aes = false;
     int       RegisterSlaveExportFrame::_fd  = 0;
     unsigned  RegisterSlaveExportFrame::count = 0;
     unsigned  RegisterSlaveExportFrame::errors = 0;
 
-    void RegisterSlaveExportFrame::FileDescr(int i) {
+    void RegisterSlaveExportFrame::FileDescr(int i, bool use_aes) {
+      _use_aes = use_aes; // maybe there is a way to reliably determine what driver a fd comes from but for now pass that when registering fd.
       _fd = i;
 //      printf("RegisterSlaveExportFrame::FileDescr(%d)\n", _fd);
     }
@@ -41,7 +45,7 @@ namespace Pds {
       bits._tid     = transID & ((1<<23)-1);
       bits._waiting = w;
 //      printf("RegisterSlaveExportFrame::RegisterSlaveExportFrame() lane %u offset %u\n", dest->lane(), Pgp::portOffset());
-      bits._lane   = (dest->lane() & 7) + Pgp::portOffset();
+      bits._lane   = (dest->lane() & 7) + _use_aes ? 0 : Pgp::portOffset();
       bits.mbz     = 0;
       bits._vc     = dest->vc() & 3;
       bits.oc      = o;
@@ -54,37 +58,61 @@ namespace Pds {
     // parameter is the size of the post in number of 32 bit words
     unsigned RegisterSlaveExportFrame::post(__u32 size, bool pf) {
       struct timeval  timeout;
-      PgpCardTx       pgpCardTx;
       int             ret;
       fd_set          fds;
-
-      pgpCardTx.model   = (sizeof(&pgpCardTx));
-      pgpCardTx.cmd     = IOCTL_Normal_Write;
-      pgpCardTx.pgpVc   = bits._vc;
-      pgpCardTx.pgpLane = bits._lane;
-      pgpCardTx.size    = size;
-      pgpCardTx.data    = (__u32 *)this;
-
-      if (pf) {
-    	  printf("RSEF::post: model 0x%x, cmd 0x%x, vd 0x%x, lane 0x%x, size 0x%x, data 0x%p\n",
-    			  pgpCardTx.model,
-    			  pgpCardTx.cmd,
-    			  pgpCardTx.pgpVc,
-    			  pgpCardTx.pgpLane,
-    			  pgpCardTx.size,
-    			  pgpCardTx.data);
-      }
 
       // Wait for write ready
       timeout.tv_sec=0;
       timeout.tv_usec=100000;
       FD_ZERO(&fds);
       FD_SET(_fd,&fds);
-//      uint32_t* u = (uint32_t*)this;
-//      printf("\n\t-->"); for (unsigned i=0;i<size;i++) printf("0x%x ", u[i]); printf("<--\n");
-      if ((ret = select( _fd+1, NULL, &fds, NULL, &timeout)) > 0) {
-        ::write(_fd, &pgpCardTx, sizeof(pgpCardTx));
+
+      if (_use_aes) {
+        struct DmaWriteData  pgpCardTx;
+        
+        pgpCardTx.is32   = 0;
+        pgpCardTx.flags  = 0;
+        pgpCardTx.dest   = this->bits._vc | ((this->bits._lane + Pgp::portOffset())<<2);
+        pgpCardTx.index  = 0;
+        pgpCardTx.size   = size * sizeof(uint32_t);
+        pgpCardTx.data   = (__u64)this;
+
+        if (pf) {
+          printf("RSEF::post: dest 0x%x, size 0x%x, data 0x%lx\n",
+            pgpCardTx.dest,
+            pgpCardTx.size,
+            pgpCardTx.data);
+        }
+
+        if ((ret = select( _fd+1, NULL, &fds, NULL, &timeout)) > 0) {
+          ::write(_fd, &pgpCardTx, sizeof(pgpCardTx));
+        }
       } else {
+        PgpCardTx       pgpCardTx;
+
+        pgpCardTx.model   = (sizeof(&pgpCardTx));
+        pgpCardTx.cmd     = IOCTL_Normal_Write;
+        pgpCardTx.pgpVc   = bits._vc;
+        pgpCardTx.pgpLane = bits._lane;
+        pgpCardTx.size    = size;
+        pgpCardTx.data    = (__u32 *)this;
+
+        if (pf) {
+    	    printf("RSEF::post: model 0x%x, cmd 0x%x, vd 0x%x, lane 0x%x, size 0x%x, data 0x%p\n",
+    			    pgpCardTx.model,
+    			    pgpCardTx.cmd,
+    			    pgpCardTx.pgpVc,
+    			    pgpCardTx.pgpLane,
+    			    pgpCardTx.size,
+    			    pgpCardTx.data);
+        }
+
+        if ((ret = select( _fd+1, NULL, &fds, NULL, &timeout)) > 0) {
+          ::write(_fd, &pgpCardTx, sizeof(pgpCardTx));
+        }
+      }
+
+      if (ret <= 0) {
         if (ret < 0) {
           perror("RegisterSlaveExportFrame post select error: ");
         } else {

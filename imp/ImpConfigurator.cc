@@ -37,13 +37,14 @@ static uint32_t configAddrs[Pds::ImpConfig::NumberOfValues] = {
       0x16,//    Adc_delay,
 };
 
-ImpConfigurator::ImpConfigurator(int f, unsigned d) :
-  Pds::Pgp::Configurator(f, d),
+ImpConfigurator::ImpConfigurator(bool use_aes, int f, unsigned d) :
+  Pds::Pgp::Configurator(use_aes, f, d),
   _testModeState(0), _runControl(0), _rhisto(0) {
   printf("ImpConfigurator constructor\n");
   strcpy(_runTimeConfigFileName, "");
   new(&_statRegs) ImpStatusRegisters();
   _statRegs.pgp = pgp();
+  allocateVC(0xf);
 
   //    printf("\tlocations _pool(%p), _config(%p)\n", _pool, &_config);
   //    _rhisto = (unsigned*) calloc(1000, 4);
@@ -96,11 +97,7 @@ bool ImpConfigurator::_flush(unsigned index=0) {
 unsigned ImpConfigurator::configure( ImpConfigType* c, unsigned mask) {
 
   _config = c;
-  timespec      start, end, sleepTime, shortSleepTime;
-  sleepTime.tv_sec = 0;
-  sleepTime.tv_nsec = 25000000; // 25ms
-  shortSleepTime.tv_sec = 0;
-  shortSleepTime.tv_nsec = 5000000;  // 5ms (10 ms is shortest sleep on some computers
+  timespec      start, end;
   bool printFlag = !(mask & 0x2000);
   if (printFlag) printf("Imp Config");
   printf(" config(%p) mask(0x%x)\n", _config, ~mask);

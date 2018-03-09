@@ -21,7 +21,7 @@ namespace Pds {
 
 		class Pgp {
 			public:
-				Pgp(int, bool printFlag = true);
+				Pgp(bool, int, bool printFlag = true);
 				virtual ~Pgp();
 
 			public:
@@ -54,6 +54,16 @@ namespace Pds {
 						bool pf=false);
 				unsigned      checkPciNegotiatedBandwidth();
 				unsigned      getCurrentFiducial();
+        int           allocateVC(unsigned);
+        int           allocateVC(unsigned, unsigned);
+        int           setFiducialTarget(unsigned);
+        int           waitForFiducialMode(bool);
+        int           evrRunCode(unsigned);
+        int           evrRunDelay(unsigned);
+        int           evrDaqCode(unsigned);
+        int           evrDaqDelay(unsigned);
+        int           evrLaneEnable(bool);
+        int           evrEnableHdrChk(unsigned, bool);
 				bool          getLatestLaneStatus();
 				int           resetPgpLane();
 				int           maskRunTrigger(unsigned m, bool b);
@@ -70,7 +80,11 @@ namespace Pds {
 				static void   portOffset(unsigned p) { _portOffset = p; }
 				static unsigned portOffset() { return _portOffset; }
         bool          evrEnabled(bool);
-			private:
+        int           evrEnable(bool);
+        int           writeScratch(unsigned);
+        int           fd() { return _fd;}
+        Pds::Pgp::PgpStatus* status() { return _status;}
+      private:
 				int                  _fd;
 				unsigned             _readBuffer[BufferWords];
 				PgpCardTx            _pt;
@@ -79,6 +93,7 @@ namespace Pds {
 				unsigned             _maskedHWerrorCount[4];
 				bool				         _maskHWerror;
 				bool                 _myG3Flag;
+        bool                 _useAesDriver;
 		};
 	}
 }

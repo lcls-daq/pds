@@ -28,6 +28,10 @@ namespace Pds {
       public:
         void              read();
         unsigned          checkPciNegotiatedBandwidth();
+        int               allocateVC(unsigned vcm);
+        int               allocateVC(unsigned vcm, unsigned l);
+        int               resetPgpLane(unsigned);
+        int               writeScratch(unsigned);
         void              print();
 
       protected:

@@ -19,14 +19,12 @@ namespace Pds {
 
     class Destination : public Pds::Pgp::Destination {
       public:
-        enum FEdest {Data, Registers, NumberOf};
+        enum FEdest {Data=1, Registers=2, NumberOf};
 
         Destination() {}
         ~Destination() {}
 
       public:
-        unsigned            lane() { return  0; }
-        unsigned            vc() {return _dest & 1; }
         const char*         name();
     };
   }

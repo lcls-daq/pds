@@ -47,7 +47,7 @@ class Pds::XampsServer
    bool more() const;
 
    unsigned count() const;
-   void setXamps( int fd );
+   void setXamps( int fd, bool use_aes_driver=false );
 
    unsigned configure(XampsConfigType*);
    unsigned unconfigure(void);
@@ -88,6 +88,7 @@ class Pds::XampsServer
    unsigned                       _configureResult;
    unsigned                       _debug;
    unsigned                       _offset;
+   bool                           _use_aes;
    timespec                       _thisTime;
    timespec                       _lastTime;
    unsigned*                      _histo;

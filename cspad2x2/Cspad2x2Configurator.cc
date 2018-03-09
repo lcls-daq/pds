@@ -75,8 +75,8 @@ namespace Pds {
 
     enum {sizeOfQuadWrite=21, sizeOfQuadReadOnly=2};
 
-    Cspad2x2Configurator::Cspad2x2Configurator( CsPad2x2ConfigType* c, int f, unsigned d) :
-                   Pds::Pgp::Configurator(f, d),
+    Cspad2x2Configurator::Cspad2x2Configurator( bool use_aes, CsPad2x2ConfigType* c, int f, unsigned d) :
+                   Pds::Pgp::Configurator(use_aes, f, d),
                    _config(c), _rhisto(0),
                    _conRegs(new Cspad2x2ConcentratorRegisters()),
                    _quadRegs(new Cspad2x2QuadRegisters()) {
@@ -146,11 +146,9 @@ namespace Pds {
 
     unsigned Cspad2x2Configurator::configure(CsPad2x2ConfigType* config, unsigned mask) {
       _config = config;
-      timespec      start, end, sleepTime, shortSleepTime;
+      timespec      start, end, sleepTime;
       sleepTime.tv_sec = 0;
       sleepTime.tv_nsec = 25000000; // 25ms
-      shortSleepTime.tv_sec = 0;
-      shortSleepTime.tv_nsec = 5000000;  // 5ms (10 ms is shortest sleep on some computers
       bool printFlag = !(mask & 0x2000);
       if (printFlag) printf("Cspad2x2 Config");
       printf(" config(%p) mask(0x%x)\n", &_config, ~mask);

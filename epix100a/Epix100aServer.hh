@@ -62,7 +62,7 @@ class Pds::Epix100aServer
 
    enum {DummySize = (1<<19)};
 
-   void setEpix100a( int fd );
+   void setEpix100a( int fd, bool use_aes_driver=false );
 
    unsigned configure(Epix100aConfigType*, bool forceConfig = false);
    unsigned unconfigure(void);
@@ -124,6 +124,7 @@ class Pds::Epix100aServer
    unsigned                       _configureResult;
    unsigned                       _debug;
    unsigned                       _offset;
+   bool                           _use_aes;
    timespec                       _thisTime;
    timespec                       _lastTime;
    unsigned*                      _histo;
@@ -144,7 +145,6 @@ class Pds::Epix100aServer
    unsigned                       _countBase;
    unsigned                       _neScopeCount;
    unsigned*                      _dummy;
-   int                            _myfd;
    unsigned                       _lastOpCode;
    bool                           _firstconfig;
    bool                           _configured;

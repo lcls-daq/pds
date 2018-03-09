@@ -67,7 +67,7 @@ namespace Pds {
 
     class EpixSamplerConfigurator : public Pds::Pgp::Configurator {
       public:
-        EpixSamplerConfigurator(int, unsigned);
+        EpixSamplerConfigurator(bool, int, unsigned);
         virtual ~EpixSamplerConfigurator();
 
         enum resultReturn {Success=0, Failure=1, Terminate=2};

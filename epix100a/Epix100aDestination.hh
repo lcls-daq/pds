@@ -19,14 +19,12 @@ namespace Pds {
 
     class Epix100aDestination : public Pds::Pgp::Destination {
       public:
-        enum FEdest {Data, Registers, Oscilloscope, NumberOf};
+        enum FEdest {Data=0, Registers=1, Oscilloscope=2, NumberOf=3};
 
         Epix100aDestination() {}
         ~Epix100aDestination() {}
 
       public:
-        unsigned            lane() { return  0; }
-        unsigned            vc() {return _dest < NumberOf ? _dest & 3 : 0; }
         const char*         name();
     };
   }

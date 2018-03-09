@@ -7,7 +7,7 @@ libsrcs_epixsampler := \
 		 EpixSamplerServer.cc \
 		 EpixSamplerManager.cc
 #libsinc_epixsampler :=
-libincs_epixsampler := pgpcard pgp pdsdata/include ndarray/include boost/include
+libincs_epixsampler := pgpcard aesdriver/include pgp pdsdata/include ndarray/include boost/include
 CPPFLAGS += -fno-strict-aliasing
 #CPPFLAGS += -fopenmp
 #LXFlAGS += -fopenmp

@@ -106,8 +106,8 @@ static uint32_t AconfigAddrs[Epix100aASIC_ConfigShadow::NumberOfValues][2] = {
 };
 
 
-Epix100aConfigurator::Epix100aConfigurator(int f, unsigned d) :
-                               Pds::Pgp::Configurator(f, d),
+Epix100aConfigurator::Epix100aConfigurator(bool use_aes, int f, unsigned d) :
+                               Pds::Pgp::Configurator(use_aes, f, d),
                                _testModeState(0), _config(0), _s(0), _rhisto(0),
                                _maintainLostRunTrigger(0) {
   allocateVC(7);
@@ -173,7 +173,7 @@ unsigned Epix100aConfigurator::resyncADC(unsigned c) {
 void Epix100aConfigurator::resetSequenceCount() {
   _d.dest(Epix100aDestination::Registers);
   if (_pgp) {
-    if (_pgp->G3Flag()) {
+    if(fiberTriggering()) {
       _pgp->resetSequenceCount();
     }
     _pgp->writeRegister(&_d, ResetFrameCounter, 1);
@@ -202,7 +202,7 @@ uint32_t Epix100aConfigurator::acquisitionCount() {
 
 uint32_t Epix100aConfigurator::enviroData(unsigned o) {
   _d.dest(Epix100aDestination::Registers);
-  uint32_t dat=1112;
+  uint32_t dat=1113;
   if (_pgp) _pgp->readRegister(&_d, EnviroDataBaseAddr+o, 0x5e4, &dat);
   else printf("Epix100aConfigurator::enviroData() found nil _pgp so not read\n");
   return (dat);
@@ -219,7 +219,7 @@ void Epix100aConfigurator::enableRunTrigger(bool f) {
   unsigned mask = 1<<(_pgp->portOffset());
   _d.dest(Epix100aDestination::Registers);
   _pgp->writeRegister(&_d, RunTriggerEnable, f ? Enable : Disable);
-  _pgp->maskRunTrigger(mask, f ? Enable : Disable);
+  _pgp->maskRunTrigger(mask, !f);
   printf("Epix100aConfigurator::enableRunTrigger(%s), mask 0x%x\n", f ? "true" : "false", mask);
 }
 
@@ -268,11 +268,7 @@ unsigned Epix100aConfigurator::configure( Epix100aConfigType* c, unsigned first)
   unsigned debugSaved = _debug;
   char* str = (char*) calloc( 256, sizeof(char));
   _debug = 0;
-  timespec      start, end, sleepTime, shortSleepTime;
-  sleepTime.tv_sec = 0;
-  sleepTime.tv_nsec = 25000000; // 25ms
-  shortSleepTime.tv_sec = 0;
-  shortSleepTime.tv_nsec = 5000000;  // 5ms (10 ms is shortest sleep on some computers
+  timespec      start, end;
   bool printFlag = true;
   if (printFlag) printf("Epix100a Config size(%u)", _config->_sizeof());
   printf(" config(%p) first(%u)\n", _config, first);
@@ -283,8 +279,8 @@ unsigned Epix100aConfigurator::configure( Epix100aConfigType* c, unsigned first)
   if (first) {
     resetFrontEnd();
   }
-  ret |= this->G3config(c);
   ret |= _robustReadVersion(0);
+  ret |= this->G3config(c);
   uint32_t returned = 0;
   _pgp->readRegister(&_d, AdcControlAddr, 0x5e9, &returned);
   if ((returned & AdcCtrlFailMask) != 0) {
@@ -339,29 +335,37 @@ unsigned Epix100aConfigurator::configure( Epix100aConfigType* c, unsigned first)
 
 unsigned Epix100aConfigurator::G3config(Epix100aConfigType* c) {
   unsigned ret = 0;
+  _d.dest(Epix100aDestination::Registers);
   if (_pgp->G3Flag()) {
-    if ((c->usePgpEvr() != 0)) {
+    if (fiberTriggering()) {
       if (evrEnabled() == false) {
         evrEnable(true);
       }
       if (evrEnabled(true) == true) {
-      ret |= evrEnableHdrChk(Epix100a::Epix100aDestination::Data, true);
-      ret |= evrRunCode((unsigned)c->evrRunCode());
-      ret |= evrRunDelay((unsigned)c->evrRunTrigDelay());
-      ret |= evrDaqCode((unsigned)c->evrDaqCode());
-      ret |= evrDaqDelay((unsigned)c->evrRunTrigDelay() + 11905);
-      ret |=  waitForFiducialMode(false);
-      microSpin(10);
-      ret |= evrLaneEnable(false);
-      microSpin(10);
-      ret |=  waitForFiducialMode(true);
+        ret |= evrEnableHdrChk(Epix100a::Epix100aDestination::Data, true);
+        ret |= evrRunCode((unsigned)c->evrRunCode());
+        ret |= evrRunDelay((unsigned)c->evrRunTrigDelay());
+        ret |= evrDaqCode((unsigned)c->evrDaqCode());
+        ret |= evrDaqDelay((unsigned)c->evrRunTrigDelay() + 11905);
+        ret |=  waitForFiducialMode(false);
+        microSpin(10);
+        ret |= evrLaneEnable(false);
+        microSpin(10);
+        ret |=  waitForFiducialMode(true);
+        printf("Epix100aConfigurator::G3config setting up fiber triggering on G3 pgpcard\n");
+        _pgp->writeRegister(&_d, PgpTriggerEnable, 1);
       } else {
         ret = 1;
       }
     } else {
       ret |= evrEnableHdrChk(Epix100a::Epix100aDestination::Data, false);
       ret |= waitForFiducialMode(false);
+      _pgp->writeRegister(&_d, PgpTriggerEnable, 0);
+      printf("Epix100aConfigurator::G3config setting up TTL triggering on G3 pgpcard\n");
     }
+  } else {
+    _pgp->writeRegister(&_d, PgpTriggerEnable, 0);
+    printf("Epix100aConfigurator::G3config setting up TTL triggering on G2 pgpcard\n");
   }
   return ret;
 }

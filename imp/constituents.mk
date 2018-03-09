@@ -8,7 +8,7 @@ libsrcs_imp := \
 		 ImpServer.cc \
 		 ImpManager.cc
 #libsinc_imp :=
-libincs_imp := pgpcard pdsdata/include ndarray/include boost/include 
+libincs_imp := pgpcard aesdriver/include pdsdata/include ndarray/include boost/include 
 CPPFLAGS += -fno-strict-aliasing
 #CPPFLAGS += -fopenmp
 #LXFlAGS += -fopenmp

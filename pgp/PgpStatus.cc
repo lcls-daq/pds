@@ -15,7 +15,7 @@ namespace Pds {
 	  int                PgpStatus::_fd = -1;
 	  unsigned           PgpStatus::_debug = 0;
 	  Pds::Pgp::Pgp*     PgpStatus::_pgp = 0;
-	  PgpCardTx*         PgpStatus::p = (PgpCardTx*)calloc(1, sizeof(PgpCardTx));
+	  PgpCardTx*         PgpStatus::p = 0;
 
 	  void PgpStatus::errorStringAppend(char* s) {
 	    sprintf(esp, "%s", s);

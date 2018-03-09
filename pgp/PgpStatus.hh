@@ -39,11 +39,11 @@ namespace Pds {
         	_fd = f;
         	_debug = d;
         	_pgp = pgp;
-        	p = new PgpCardTx;
+        	p = (PgpCardTx*)calloc(1, sizeof(PgpCardTx));
         	p->model = sizeof(p);
         };
         virtual ~PgpStatus() {
-          delete(p);
+          free(p);
           free(es);
         };
 
@@ -51,9 +51,24 @@ namespace Pds {
         virtual void              print() = 0; 
         virtual unsigned          checkPciNegotiatedBandwidth() = 0;
         virtual unsigned          getCurrentFiducial() {return 0;}
-        virtual bool              getLatestLaneStatus() {return false;}
-        virtual bool			        evrEnabled(bool printFlag = false) {return true;}
-        virtual char*             errorString() {return es;}
+        virtual int               setFiducialTarget(unsigned) {return 0;}
+        virtual int               waitForFiducialMode(bool) {return 0;}
+        virtual int               evrRunCode(unsigned) {return 0;}
+        virtual int               evrRunDelay(unsigned) {return 0;}
+        virtual int               evrDaqCode(unsigned) {return 0;}
+        virtual int               evrDaqDelay(unsigned) {return 0;}
+        virtual int               evrLaneEnable(bool) {return 0;}
+        virtual int               evrEnableHdrChk(unsigned, bool) {return 0;}
+        virtual bool              getLatestLaneStatus() {return true;}
+        virtual bool              evrEnabled(bool) {return true;}
+        virtual int               evrEnable(bool) {return 0;}
+        virtual int               allocateVC(unsigned vcm) {return 0;}
+        virtual int               allocateVC(unsigned vcm, unsigned l) { return 0;}
+        virtual int               resetSequenceCount(unsigned mask) { return 0;}
+        virtual int               maskRunTrigger(unsigned mask, bool b) { return 0;}
+        virtual int               resetPgpLane(unsigned) {return 0;}
+        virtual int               writeScratch(unsigned) = 0;
+        char*                     errorString() {return es;}
         void                      errorStringAppend(char*);
         void                      clearErrorString();
         int                       fd() { return _fd; }

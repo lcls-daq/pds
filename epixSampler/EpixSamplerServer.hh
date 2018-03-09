@@ -53,7 +53,7 @@ class Pds::EpixSamplerServer
    bool more() const;
 
    unsigned count() const;
-   void setEpixSampler( int fd );
+   void setEpixSampler( int fd, bool use_aes_driver=false );
 
    unsigned configure(EpixSamplerConfigType*);
    unsigned unconfigure(void);
@@ -95,6 +95,7 @@ class Pds::EpixSamplerServer
    unsigned                       _configureResult;
    unsigned                       _debug;
    unsigned                       _offset;
+   bool                           _use_aes;
    timespec                       _thisTime;
    timespec                       _lastTime;
    unsigned*                      _histo;

@@ -58,10 +58,11 @@ namespace Pds {
         0x86
     };
 
-    XampsConfigurator::XampsConfigurator( XampsConfigType* c, int f, unsigned d) :
-                   Pds::Pgp::Configurator(f, d),
+    XampsConfigurator::XampsConfigurator( bool use_aes, XampsConfigType* c, int f, unsigned d) :
+                   Pds::Pgp::Configurator(use_aes, f, d),
                    _testModeState(0), _config(c), _rhisto(0) {
        printf("XampsConfigurator constructor _config(%p)\n", _config);
+       allocateVC(0xf);
       //    printf("\tlocations _pool(%p), _config(%p)\n", _pool, &_config);
       //    _rhisto = (unsigned*) calloc(1000, 4);
       //    _lhisto = (LoopHisto*) calloc(4*10000, 4);
@@ -115,11 +116,9 @@ namespace Pds {
     }
 
     unsigned XampsConfigurator::configure(unsigned mask) {
-      timespec      start, end, sleepTime, shortSleepTime;
+      timespec      start, end, sleepTime;
       sleepTime.tv_sec = 0;
       sleepTime.tv_nsec = 25000000; // 25ms
-      shortSleepTime.tv_sec = 0;
-      shortSleepTime.tv_nsec = 5000000;  // 5ms (10 ms is shortest sleep on some computers
       bool printFlag = !(mask & 0x2000);
       if (printFlag) printf("Xamps Config");
       printf(" config(%p) mask(0x%x)\n\tResetting front end", _config, ~mask);

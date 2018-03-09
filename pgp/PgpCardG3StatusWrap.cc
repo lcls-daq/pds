@@ -43,6 +43,50 @@ namespace Pds {
       return (status.EvrFiducial);
     }
 
+    int PgpCardG3StatusWrap::setFiducialTarget(unsigned r) {
+      unsigned arg = (_pgp->portOffset()<<28) | (r & 0x1ffff);
+      return _pgp->IoctlCommand(IOCTL_Evr_Fiducial, arg);
+    }
+
+    int PgpCardG3StatusWrap::waitForFiducialMode(bool e) {
+      unsigned arg = (1u << _pgp->portOffset());
+      return _pgp->IoctlCommand(e ? IOCTL_Evr_LaneModeFiducial : IOCTL_Evr_LaneModeNoFiducial, arg);
+    }
+
+    int PgpCardG3StatusWrap::evrRunCode(unsigned r) {
+      unsigned arg = (_pgp->portOffset() << 28) | (r & 0xff);
+      return _pgp->IoctlCommand(IOCTL_Evr_RunCode, arg);
+    }
+
+    int PgpCardG3StatusWrap::evrRunDelay(unsigned r) {
+      unsigned arg = (_pgp->portOffset() << 28) | (r & 0xfffffff);
+      return _pgp->IoctlCommand(IOCTL_Evr_RunDelay, arg);
+    }
+
+    int PgpCardG3StatusWrap::evrDaqCode(unsigned r) {
+      unsigned arg = (_pgp->portOffset() << 28) | (r & 0xff);
+      return _pgp->IoctlCommand(IOCTL_Evr_AcceptCode, arg);
+    }
+
+    int PgpCardG3StatusWrap::evrDaqDelay(unsigned r) {
+      unsigned arg = (_pgp->portOffset() << 28) | (r & 0xfffffff);
+      return _pgp->IoctlCommand(IOCTL_Evr_AcceptDelay, arg);
+    }
+
+    int PgpCardG3StatusWrap::evrLaneEnable(bool e) {
+      unsigned mask = 1 << _pgp->portOffset();
+      if (e) {
+        return _pgp->IoctlCommand( IOCTL_Evr_LaneEnable, mask);
+      } else {
+        return _pgp->IoctlCommand( IOCTL_Evr_LaneDisable, mask);
+      }  
+    }
+
+    int PgpCardG3StatusWrap::evrEnableHdrChk(unsigned vc, bool e) {
+      unsigned arg = (_pgp->portOffset()<<28) | (vc<<24) | (e ? 1 : 0);
+      return _pgp->IoctlCommand( IOCTL_Evr_En_Hdr_Check, arg);
+    }
+
     bool PgpCardG3StatusWrap::getLatestLaneStatus() {
       return ((status.EvrLaneStatus >> pgp()->portOffset())&1);
     }
@@ -60,6 +104,83 @@ namespace Pds {
         }
       }
       return enabled;
+    }
+
+    int PgpCardG3StatusWrap::evrEnable(bool e) {
+      int ret = 0;
+      unsigned z = 0;
+      unsigned count = 0;
+      if (e) {
+        while ((evrEnabled(false)==false) && (count++ < 3) && (ret==0)) {
+          printf("Attempting to enable evr %u\n", count);
+          ret |= _pgp->IoctlCommand( IOCTL_Evr_Set_PLL_RST, z);
+          ret |= _pgp->IoctlCommand( IOCTL_Evr_Clr_PLL_RST, z);
+          usleep(40);
+          ret |= _pgp->IoctlCommand( IOCTL_Evr_Set_Reset, z);
+          ret |= _pgp->IoctlCommand( IOCTL_Evr_Clr_Reset, z);
+          usleep(400);
+          ret |= _pgp->IoctlCommand( IOCTL_Evr_Enable, z);
+          usleep(4000);
+        }
+      } else {
+        ret = _pgp->IoctlCommand( IOCTL_Evr_Disable, z);
+      }
+      if (ret || (count >= 3)) {
+        printf("Failed to %sable evr!\n", e ? "en" : "dis");
+      }
+      return ret || (count >= 3);
+    }
+
+    int PgpCardG3StatusWrap::allocateVC(unsigned vcm) {
+      return allocateVC(vcm, 1);
+    }
+
+    int PgpCardG3StatusWrap::allocateVC(unsigned vcm, unsigned lm) {
+      int ret = 0;
+      bool found = false;
+      unsigned arg = (vcm<<8);
+      unsigned mask = (lm << _pgp->portOffset());
+      unsigned extra = 0;
+      // Find the first lane in the mask and find number of additional ports to add
+      for (int i=0; i<NUMBER_OF_LANES; i++) {
+        if (mask & (1<<i)) {
+          if (found) {
+            extra++;
+          } else {
+            arg |= i;
+            found = true;
+          }
+        } else {
+          if (found) break;
+        }
+      }
+      if (extra) {
+        ret |= _pgp->IoctlCommand(IOCTL_Add_More_Ports, extra);
+      }
+      ret |= _pgp->IoctlCommand(IOCTL_Set_VC_Mask, arg);
+      return ret;
+    }
+
+    int PgpCardG3StatusWrap::resetSequenceCount(unsigned mask) {
+      return _pgp->IoctlCommand(IOCTL_ClearFrameCounter, mask);
+    }
+
+    int PgpCardG3StatusWrap::maskRunTrigger(unsigned mask, bool b) {
+      unsigned flag = b ? 1 : 0;
+      return _pgp->IoctlCommand(IOCTL_Evr_RunMask, (unsigned)((mask<<24) | flag));
+    }
+
+    int PgpCardG3StatusWrap::resetPgpLane(unsigned lane) {
+      int ret = 0;
+      ret |= _pgp->IoctlCommand(IOCTL_Set_Tx_Reset, lane);
+      ret |= _pgp->IoctlCommand(IOCTL_Clr_Tx_Reset, lane);
+      ret |= _pgp->IoctlCommand(IOCTL_Set_Rx_Reset, lane);
+      ret |= _pgp->IoctlCommand(IOCTL_Clr_Rx_Reset, lane);
+      return ret;
+    }
+
+    int PgpCardG3StatusWrap::writeScratch(unsigned s) {
+      return _pgp->IoctlCommand(IOCTL_Write_Scratch, s);
     }
 
     void PgpCardG3StatusWrap::print() {

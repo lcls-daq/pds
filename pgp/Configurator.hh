@@ -36,6 +36,7 @@ namespace Pds {
     class Configurator {
       public:
         Configurator(int, unsigned);
+        Configurator(bool, int, unsigned);
         virtual ~Configurator();
 
       public:
@@ -58,12 +59,14 @@ namespace Pds {
         int                       evrDaqCode(unsigned);
         int                       evrDaqDelay(unsigned);
         int                       evrEnable(bool);
+        bool                      evrEnabled(bool pf = false);
         int                       evrLaneEnable(bool);
         int                       evrEnableHdrChk(unsigned, bool);
+        int                       writeScratch(unsigned);
         void                      printRes();
         bool                      G3Flag() { return _G3; }
-        bool                      evrEnabled(bool pf = false);
-        int                       allocateVC(unsigned, unsigned l=0);  // l is the offset relative to the first port, assumption is first port
+        int                       allocateVC(unsigned); // l is the offset relative to the first port or the port mask, assumption is first port
+        int                       allocateVC(unsigned, unsigned);
 
       protected:
         friend class ConfigSynch;
@@ -76,7 +79,12 @@ namespace Pds {
     class ConfigSynch {
       public:
         ConfigSynch(int fd, uint32_t d, Configurator* c, unsigned s) :
-          _depth(d), _length(d), _size(s), _fd(fd), _cfgrt(c), _printFlag(true) {};
+          _depth(d), _length(d), _size(s), _fd(fd), _cfgrt(c), _printFlag(true) {
+          _depthHisto = (unsigned*)calloc(1000, sizeof(unsigned));
+        };
+        ~ConfigSynch() {
+          free(_depthHisto);
+        };
         bool take();
         bool clear();
         unsigned depth() { return _depth; }
@@ -89,6 +97,7 @@ namespace Pds {
         unsigned             _size;
         int                  _fd;
         Configurator*        _cfgrt;
+        unsigned*            _depthHisto;
         bool                 _printFlag;
     };
 

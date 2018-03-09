@@ -49,7 +49,7 @@ class Pds::CspadServer
    int fetch( char* payload, int flags );
    bool more() const;
 
-   void setCspad( int fd );
+   void setCspad( int fd, bool use_aes_driver=false );
 
    unsigned configure(CsPadConfigType*);
    unsigned unconfigure(void);
@@ -102,6 +102,7 @@ class Pds::CspadServer
    unsigned                       _payloadSize;
    unsigned                       _configMask;
    unsigned                       _configureResult;
+   bool                           _use_aes;
    timespec                       _thisTime;
    timespec                       _lastTime;
    timespec                       _readTime1;

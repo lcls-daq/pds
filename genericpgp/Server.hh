@@ -50,7 +50,7 @@ namespace Pds
       bool more() const;
 
       unsigned count() const;
-      void setFd( int fd );
+      void setFd( int fd, bool use_aes_driver=false );
 
       unsigned configure(GenericPgpConfigType*, bool forceConfig = false);
       unsigned unconfigure(void);
@@ -95,6 +95,7 @@ namespace Pds
       unsigned                       _configureResult;
       unsigned                       _debug;
       unsigned                       _offset;
+      bool                           _use_aes;
       Task*                          _task;
       unsigned                       _ioIndex;
       Destination                    _d;

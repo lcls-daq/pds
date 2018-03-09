@@ -25,8 +25,6 @@ namespace Pds {
         ~Epix10kDestination() {}
 
       public:
-        unsigned            lane() { return  0; }
-        unsigned            vc() {return _dest < NumberOf ? _dest & 3 : 0; }
         const char*         name();
     };
   }

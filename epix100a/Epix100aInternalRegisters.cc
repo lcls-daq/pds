@@ -21,7 +21,7 @@ namespace Pds {
     }
 
     void Epix100aStatusRegisters::print() {
-      printf("XAMPS Status Registers: version(0x%x), scratchPad(0x%x)\n",
+      printf("Epix100a Status Registers: version(0x%x), scratchPad(0x%x)\n",
           version, scratchPad);
       for (unsigned i=0; i<NumberOfLanes; i++) {
         printf("\tLane %u:\n", i);

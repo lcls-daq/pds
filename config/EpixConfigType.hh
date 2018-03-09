@@ -10,6 +10,8 @@
 #include "pds/config/Epix100aConfigV1.hh"
 #include "pds/config/Epix100aConfigV2.hh"
 #include "pds/config/Epix100aASICConfigV1.hh"
+#include "pds/config/Epix10kaConfigV1.hh"
+#include "pds/config/Epix10kaASICConfigV1.hh"
 
 #include <string>
 
@@ -34,5 +36,12 @@ typedef Pds::Epix100aConfig::ASIC_ConfigV1 Epix100aASIC_ConfigShadow;
 
 static Pds::TypeId _epix100aConfigType(Pds::TypeId::Id_Epix100aConfig,
                                     Epix100aConfigType::Version);
+
+typedef Pds::Epix::Config10kaV1 Epix10kaConfigType;
+typedef Pds::Epix10kaConfig::ConfigV1 Epix10kaConfigShadow;
+typedef Pds::Epix10kaConfig::ASIC_ConfigV1 Epix10kaASIC_ConfigShadow;
+
+static Pds::TypeId _epix10kaConfigType(Pds::TypeId::Id_Epix10kaConfig,
+                                    Epix10kaConfigType::Version);
 
 #endif

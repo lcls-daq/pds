@@ -61,8 +61,8 @@ namespace Pds {
         0x500000   // version         2 //sizeOfQuadReadOnly in Cspadconfigurator.hh
     };
 
-    CspadConfigurator::CspadConfigurator( CsPadConfigType* c, int f, unsigned d) :
-                   Pds::Pgp::Configurator(f, d),
+    CspadConfigurator::CspadConfigurator( bool use_aes, CsPadConfigType* c, int f, unsigned d) :
+                   Pds::Pgp::Configurator(use_aes, f, d),
                    _config(c), _rhisto(0),
                    _conRegs(new CspadConcentratorRegisters()),
                    _quadRegs(new CspadQuadRegisters()) {
@@ -70,15 +70,13 @@ namespace Pds {
       CspadQuadRegisters::configurator(this);
       _initRanges();
       strcpy(_runTimeConfigFileName, "");
-       printf("CspadConfigurator constructor _config(%p), quadMask(0x%x)\n",
-         _config, (unsigned)_config->quadMask());
-       if (_pgp->G3Flag()) {
-         int ret;
-         if ((ret=_pgp->IoctlCommand(IOCTL_Add_More_Ports, (unsigned) 1)) != SUCCESS) {
-           printf("CspadConfigurator constructor unable to allocate additional port so pulling the plug !!!!!! ret(%d) SUCCESS(%d)\n", ret, SUCCESS);
-           ::exit(-1);
-         }
-       }
+      printf("CspadConfigurator constructor _config(%p), quadMask(0x%x)\n",
+          _config, (unsigned)_config->quadMask());
+      int ret;
+      if ((ret=allocateVC(0xf, 3)) != SUCCESS) {
+        printf("CspadConfigurator constructor unable to allocate additional port so pulling the plug !!!!!! ret(%d) SUCCESS(%d)\n", ret, SUCCESS);
+        ::exit(-1);
+      }
       //    printf("\tlocations _pool(%p), _config(%p)\n", _pool, &_config);
       //    _rhisto = (unsigned*) calloc(1000, 4);
       //    _lhisto = (LoopHisto*) calloc(4*10000, 4);
@@ -145,11 +143,9 @@ namespace Pds {
 
     unsigned CspadConfigurator::configure(CsPadConfigType* config, unsigned mask) {
       _config = config;
-      timespec      start, end, sleepTime, shortSleepTime;
+      timespec      start, end, sleepTime;
       sleepTime.tv_sec = 0;
       sleepTime.tv_nsec = 25000000; // 25ms
-      shortSleepTime.tv_sec = 0;
-      shortSleepTime.tv_nsec = 5000000;  // 5ms (10 ms is shortest sleep on some computers
       bool printFlag = !(mask & 0x2000);
       if (printFlag) printf("Cspad Config");
       printf(" config(%p) quadMask(0x%x) mask(0x%x)\n", &_config, (unsigned)_config->quadMask(), ~mask);

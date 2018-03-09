@@ -34,7 +34,7 @@ namespace Pds {
 
     class CspadConfigurator : public Pds::Pgp::Configurator {
       public:
-        CspadConfigurator( CsPadConfigType*, int, unsigned);
+        CspadConfigurator( bool, CsPadConfigType*, int, unsigned);
         virtual ~CspadConfigurator();
 
         //   evrEnable.setAddr        (0x000100);

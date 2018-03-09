@@ -20,6 +20,7 @@
 #include "pds/pgp/Pgp.hh"
 #include "pdsdata/xtc/DetInfo.hh"
 #include "pgpcard/PgpCardMod.h"
+#include <PgpDriver.h>
 #include <unistd.h>
 #include <sys/uio.h>
 #include <string.h>
@@ -51,6 +52,7 @@ ImpServer::ImpServer( const Pds::Src& client, unsigned configMask )
      _configureResult(0),
      _debug(0),
      _offset(0),
+     _use_aes(false),
      _unconfiguredErrors(0),
      _compensateNoCountReset(1),
      _ignoreCount(0),
@@ -69,7 +71,7 @@ ImpServer::ImpServer( const Pds::Src& client, unsigned configMask )
 
 unsigned ImpServer::configure(ImpConfigType* config) {
   if (_cnfgrtr == 0) {
-    _cnfgrtr = new Imp::ImpConfigurator(fd(), _debug);
+    _cnfgrtr = new Imp::ImpConfigurator(_use_aes, fd(), _debug);
     pgp(_cnfgrtr->pgp());
   } else {
     printf("ImpConfigurator already instantiated\n");
@@ -156,7 +158,10 @@ unsigned Pds::ImpServer::unconfigure(void) {
 
 int Pds::ImpServer::fetch( char* payload, int flags ) {
    int ret = 0;
+   void*           pgpRxBuff = 0;
+   size_t          pgpRxSize = 0;
    PgpCardRx       pgpCardRx;
+   DmaReadData     dmaReadData;
    unsigned        offset = 0;
    enum {Ignore=-1};
 
@@ -193,11 +198,25 @@ int Pds::ImpServer::fetch( char* payload, int flags ) {
      memcpy(&_lastTime, &_thisTime, sizeof(timespec));
    }
 
-   pgpCardRx.model   = sizeof(&pgpCardRx);
-   pgpCardRx.maxSize = _payloadSize / sizeof(__u32);
-   pgpCardRx.data    = (__u32*)(payload + offset);
+   if (_use_aes) {
+     dmaReadData.is32   = sizeof(&dmaReadData) == 4;
+     dmaReadData.size   = _payloadSize;
+     dmaReadData.data   = (uint64_t)(payload + offset);
+     dmaReadData.dest   = 0;
+     dmaReadData.flags  = 0;
+     dmaReadData.index  = 0;
+     dmaReadData.error  = 0;
+     pgpRxBuff = &dmaReadData;
+     pgpRxSize = sizeof(DmaReadData);
+   } else {
+     pgpCardRx.model   = sizeof(&pgpCardRx);
+     pgpCardRx.maxSize = _payloadSize / sizeof(__u32);
+     pgpCardRx.data    = (__u32*)(payload + offset);
+     pgpRxBuff = &pgpCardRx;
+     pgpRxSize = sizeof(PgpCardRx);
+   }
 
-   if ((ret = read(fd(), &pgpCardRx, sizeof(PgpCardRx))) < 0) {
+   if ((ret = read(fd(), pgpRxBuff, pgpRxSize)) < 0) {
      if (errno == ERESTART) {
        disable(false);
        char message[400];
@@ -212,7 +231,9 @@ int Pds::ImpServer::fetch( char* payload, int flags ) {
      }
      perror ("ImpServer::fetch pgpCard read error");
      ret =  Ignore;
-   } else ret *= sizeof(__u32);
+   } else if (!_use_aes) {
+     ret *= sizeof(__u32);
+   }
    ImpDataType* data = (ImpDataType*)(payload + offset);
 
    if ((ret > 0) && (ret < (int)_payloadSize)) {
@@ -227,16 +248,28 @@ int Pds::ImpServer::fetch( char* payload, int flags ) {
    if (ret > (int) _payloadSize) printf("ImpServer::fetch pgp read returned too much _payloadSize(%u) ret(%d)\n", _payloadSize, ret);
 
    unsigned damageMask = 0;
-   if (pgpCardRx.eofe)      damageMask |= 1;
-   if (pgpCardRx.fifoErr)   damageMask |= 2;
-   if (pgpCardRx.lengthErr) damageMask |= 4;
+   if (_use_aes) {
+     if (dmaReadData.error&DMA_ERR_FIFO)  damageMask |= 1;
+     if (dmaReadData.error&DMA_ERR_LEN)   damageMask |= 2;
+     if (dmaReadData.error&DMA_ERR_MAX)   damageMask |= 4;
+     if (dmaReadData.error&DMA_ERR_BUS)   damageMask |= 8;
+   } else {
+     if (pgpCardRx.eofe)      damageMask |= 1;
+     if (pgpCardRx.fifoErr)   damageMask |= 2;
+     if (pgpCardRx.lengthErr) damageMask |= 4;
+   }
    if (damageMask) {
      damageMask |= 0xe0;
      _xtc.damage.increase(Pds::Damage::UserDefined);
      _xtc.damage.userBits(damageMask);
      printf("ImpServer::fetch setting user damage 0x%x", damageMask);
-     if (pgpCardRx.lengthErr) printf(", rxSize(%u), maxSize(%u) ret(%d) offset(%u) (bytes)",
-         (unsigned int)(long unsigned int)(pgpCardRx.rxSize*sizeof(uint32_t)), (unsigned)_payloadSize, ret, offset);
+     if (_use_aes) {
+       if (dmaReadData.error&DMA_ERR_LEN) printf(", rxSize(%u), maxSize(%u) ret(%d) offset(%u) (bytes)",
+           (unsigned int)(long unsigned int)(dmaReadData.size), (unsigned)_payloadSize, ret, offset);
+     } else {
+       if (pgpCardRx.lengthErr) printf(", rxSize(%u), maxSize(%u) ret(%d) offset(%u) (bytes)",
+           (unsigned int)(long unsigned int)(pgpCardRx.rxSize*sizeof(uint32_t)), (unsigned)_payloadSize, ret, offset);
+     }
      printf("\n");
    } else {
      unsigned oldCount = _count;
@@ -247,7 +280,9 @@ int Pds::ImpServer::fetch( char* payload, int flags ) {
      _count = data->frameNumber() - _compensateNoCountReset;  // compensate for no trigger reset !!!!!!!!!!!!!!!!
      if (_debug & 4 || ret < 0) {
 //       printf("\telementId(%u) frameType(0x%x) acqcount(0x%x) _oldCount(%u) _count(%u) lane(%u) vc(%u)\n",
-//           data->elementId(), data->_frameType, data->acqCount(),  oldCount, _count, pgpCardRx.pgpLane, pgpCardRx.pgpVc);
+//           data->elementId(), data->_frameType, data->acqCount(),  oldCount, _count,
+//           _use_aes ? pgpGetLane(dmaReadData.dest)-Pds::Pgp::Pgp::portOffset() : pgpCardRx.pgpLane,
+//           _use_aes ? pgpGetVc(dmaReadData.dest) : pgpCardRx.pgpVc);
        uint16_t* u = (uint16_t*)data;
        printf("\tDataHeader: "); for (int i=0; i<16; i++) printf("%x ", u[i]); printf("\n");
      }
@@ -289,24 +324,48 @@ unsigned ImpServer::flushInputQueue(int f, bool printFlag) {
   timeout.tv_usec = 2500;
   int ret;
   unsigned count = 0;
-  PgpCardRx       pgpCardRx;
-  pgpCardRx.model   = sizeof(&pgpCardRx);
-  pgpCardRx.maxSize = DummySize;
-  pgpCardRx.data    = _dummy;
+  void*         pgpRxBuff = 0;
+  size_t        pgpRxSize = 0;
+  PgpCardRx     pgpCardRx;
+  DmaReadData   dmaReadData;
+  if (_use_aes) {
+    dmaReadData.is32   = sizeof(&dmaReadData) == 4;
+    dmaReadData.size   = DummySize;
+    dmaReadData.data   = (uint64_t)_dummy;
+    dmaReadData.dest   = 0;
+    dmaReadData.flags  = 0;
+    dmaReadData.index  = 0;
+    dmaReadData.error  = 0;
+    pgpRxBuff = &dmaReadData;
+    pgpRxSize = sizeof(DmaReadData);
+  } else {
+    pgpCardRx.model   = sizeof(&pgpCardRx);
+    pgpCardRx.maxSize = DummySize / sizeof(__u32);
+    pgpCardRx.data    = _dummy;
+    pgpRxBuff = &pgpCardRx;
+    pgpRxSize = sizeof(PgpCardRx);
+  }
   do {
     FD_ZERO(&fds);
     FD_SET(f,&fds);
     ret = select( f+1, &fds, NULL, NULL, &timeout);
     if (ret>0) {
       count += 1;
-      ::read(f, &pgpCardRx, sizeof(PgpCardRx));
+      ::read(f, pgpRxBuff, pgpRxSize);
     }
   } while ((ret > 0) && (count < 100));
   if (count) {
     if (count == 100 && (count < 100)) {
-      printf("\tImpServer::flushInputQueue: pgpCardRx lane(%u) vc(%u) rxSize(%u) eofe(%s) lengthErr(%s)\n",
-          pgpCardRx.pgpLane, pgpCardRx.pgpVc, pgpCardRx.rxSize, pgpCardRx.eofe ? "true" : "false",
-                                                                pgpCardRx.lengthErr ? "true" : "false");
+      if (_use_aes) {
+        printf("\tImpServer::flushInputQueue: pgpCardRx lane(%u) vc(%u) rxSize(%u) fifo(%s) lengthErr(%s)\n",
+            pgpGetLane(dmaReadData.dest)-Pds::Pgp::Pgp::portOffset(), pgpGetVc(dmaReadData.dest),
+            dmaReadData.size, dmaReadData.error&DMA_ERR_FIFO ? "true" : "false",
+            dmaReadData.error&DMA_ERR_LEN ? "true" : "false");
+      } else {
+        printf("\tImpServer::flushInputQueue: pgpCardRx lane(%u) vc(%u) rxSize(%u) eofe(%s) lengthErr(%s)\n",
+            pgpCardRx.pgpLane, pgpCardRx.pgpVc, pgpCardRx.rxSize, pgpCardRx.eofe ? "true" : "false",
+                                                                  pgpCardRx.lengthErr ? "true" : "false");
+      }
       printf("\t\t"); for (ret=0; ret<8; ret++) printf("%u ", _dummy[ret]);  printf("/n");
     }
   }
@@ -314,7 +373,8 @@ unsigned ImpServer::flushInputQueue(int f, bool printFlag) {
 }
 
 
-void ImpServer::setImp( int f ) {
+void ImpServer::setImp( int f, bool use_aes_driver ) {
+  _use_aes=use_aes_driver;
   fd( f );
 }
 

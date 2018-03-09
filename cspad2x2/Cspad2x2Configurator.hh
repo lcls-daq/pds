@@ -33,7 +33,7 @@ namespace Pds {
 
     class Cspad2x2Configurator : public Pds::Pgp::Configurator {
       public:
-        Cspad2x2Configurator( CsPad2x2ConfigType*, int, unsigned);
+        Cspad2x2Configurator( bool, CsPad2x2ConfigType*, int, unsigned);
         virtual ~Cspad2x2Configurator();
 
         //   evrEnable.setAddr        (0x000100);

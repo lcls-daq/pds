@@ -34,10 +34,11 @@ static uint32_t configAddrs[FexampConfigType::NumberOfValues] = {
     0x015
 };
 
-FexampConfigurator::FexampConfigurator(int f, unsigned d) :
-                           Pds::Pgp::Configurator(f, d),
+FexampConfigurator::FexampConfigurator(bool, use_aes, int f, unsigned d) :
+                           Pds::Pgp::Configurator(use_aes, f, d),
                            _testModeState(0), _runControl(0), _rhisto(0) {
   _statRegs.pgp = pgp();
+  allocateVC(0xf);
   printf("FexampConfigurator constructor\n");
   //    printf("\tlocations _pool(%p), _config(%p)\n", _pool, &_config);
   //    _rhisto = (unsigned*) calloc(1000, 4);

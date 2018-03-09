@@ -107,9 +107,10 @@ static uint32_t AconfigAddrs[EpixASIC_ConfigShadow::NumberOfValues][2] = {
 };
 
 
-EpixConfigurator::EpixConfigurator(int f, unsigned d) :
-                           Pds::Pgp::Configurator(f, d),
+EpixConfigurator::EpixConfigurator(bool use_aes, int f, unsigned d) :
+                           Pds::Pgp::Configurator(use_aes, f, d),
                            _testModeState(0), _config(0), _s(0), _rhisto(0) {
+  allocateVC(7);
   printf("EpixConfigurator constructor\n");
   //    printf("\tlocations _pool(%p), _config(%p)\n", _pool, &_config);
   //    _rhisto = (unsigned*) calloc(1000, 4);
@@ -201,11 +202,7 @@ bool EpixConfigurator::_flush(unsigned index) {
 unsigned EpixConfigurator::configure( EpixConfigType* c, unsigned first) {
   _config = c;
   _s = (EpixConfigShadow*) c;
-  timespec      start, end, sleepTime, shortSleepTime;
-  sleepTime.tv_sec = 0;
-  sleepTime.tv_nsec = 25000000; // 25ms
-  shortSleepTime.tv_sec = 0;
-  shortSleepTime.tv_nsec = 5000000;  // 5ms (10 ms is shortest sleep on some computers
+  timespec      start, end;
   bool printFlag = true;
   if (printFlag) printf("Epix Config size(%u)", c->_sizeof());
   printf(" config(%p) first(%u)\n", _config, first);

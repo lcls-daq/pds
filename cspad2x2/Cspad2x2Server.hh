@@ -50,7 +50,7 @@ class Pds::Cspad2x2Server
    bool more() const;
 
    unsigned count() const;
-   void setCspad2x2( int fd );
+   void setCspad2x2( int fd, bool use_aes_driver=false );
 
    unsigned configure(CsPad2x2ConfigType*);
    unsigned unconfigure(void);
@@ -76,6 +76,7 @@ class Pds::Cspad2x2Server
    unsigned runTrigFactor() { return _runTrigFactor; }
    void     manager(Cspad2x2Manager* m) { _mgr = m; }
    Cspad2x2Manager* manager() { return _mgr; }
+   void     pgp(Pds::Pgp::Pgp* p) { _pgp = p; }
 
  public:
    static Cspad2x2Server* instance() { return _instance; }
@@ -94,6 +95,7 @@ class Pds::Cspad2x2Server
    unsigned                       _configureResult;
    unsigned                       _debug;
    unsigned                       _offset;
+   bool                           _use_aes;
    timespec                       _thisTime;
    timespec                       _lastTime;
    unsigned*                      _histo;

@@ -47,7 +47,7 @@ class Pds::FexampServer
    bool more() const;
 
    unsigned count() const;
-   void setFexamp( int fd );
+   void setFexamp( int fd, bool use_aes_driver=false );
 
    unsigned configure(FexampConfigType*);
    unsigned unconfigure(void);
@@ -89,6 +89,7 @@ class Pds::FexampServer
    unsigned                       _configureResult;
    unsigned                       _debug;
    unsigned                       _offset;
+   bool                           _use_aes;
    timespec                       _thisTime;
    timespec                       _lastTime;
    unsigned*                      _histo;

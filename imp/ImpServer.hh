@@ -50,7 +50,7 @@ class Pds::ImpServer
    bool more() const;
 
    unsigned count() const;
-   void setImp( int fd );
+   void setImp( int fd, bool use_aes_driver=false );
 
    unsigned configure(ImpConfigType*);
    unsigned unconfigure(void);
@@ -94,12 +94,13 @@ class Pds::ImpServer
    unsigned                       _configureResult;
    unsigned                       _debug;
    unsigned                       _offset;
+   bool                           _use_aes;
    timespec                       _thisTime;
    timespec                       _lastTime;
    unsigned*                      _histo;
    Pds::Task*                     _task;
    unsigned                       _ioIndex;
-   Pds::Imp::ImpDestination   _d;
+   Pds::Imp::ImpDestination       _d;
    Pds::Pgp::Pgp*                 _pgp;
    unsigned*                      _dummy;
    char                           _runTimeConfigName[256];

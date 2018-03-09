@@ -19,14 +19,12 @@ namespace Pds {
 
     class EpixSamplerDestination : public Pds::Pgp::Destination {
       public:
-        enum FEdest {Data, Registers, NumberOf};
+        enum FEdest {Data=0, Registers=1, NumberOf=2};
 
         EpixSamplerDestination() {}
         ~EpixSamplerDestination() {}
 
       public:
-        unsigned            lane() { return  0; }
-        unsigned            vc() {return _dest & 1; }
         const char*         name();
     };
   }

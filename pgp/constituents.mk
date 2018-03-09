@@ -31,6 +31,6 @@ libnames := pgp
 
 libsrcs_pgp := $(wildcard *.cc)
 #libsinc_pgp := 
-libincs_pgp := pgpcard
+libincs_pgp := pgpcard aesdriver/include
 CPPFLAGS += -fno-strict-aliasing
 

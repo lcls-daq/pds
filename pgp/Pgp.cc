@@ -12,83 +12,142 @@
 #include "pds/pgp/PgpStatus.hh"
 #include "pds/pgp/PgpCardStatusWrap.hh"
 #include "pds/pgp/PgpCardG3StatusWrap.hh"
+#include "pds/pgp/AesDriverG3StatusWrap.hh"
 #include "pgpcard/PgpCardMod.h"
+#include <PgpDriver.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
 #include <new>
 
+#define DMA_ERR_FIFO 0x01
+#define DMA_ERR_LEN  0x02
+#define DMA_ERR_MAX  0x04
+#define DMA_ERR_BUS  0x08
+#define PGP_ERR_EOFE 0x10
+
 using namespace Pds::Pgp;
 
 unsigned Pds::Pgp::Pgp::_portOffset = 0;
 
-Pgp::Pgp(int f, bool pf) : _fd(f) {
-	if (pf) printf("Pgp::Pgp(fd(%d)), offset(%u)\n", f, _portOffset);
-	_pt.model = sizeof(&_pt);
-	_pt.size = sizeof(PgpCardTx); _pt.pgpLane = 0;  _pt.pgpVc = 0;
-	for (unsigned i=0;i<4;i++) {_maskedHWerrorCount[i]= 0;}
-	_maskHWerror = false;
-	Pds::Pgp::RegisterSlaveExportFrame::FileDescr(f);
-	for (int i=0; i<BufferWords; i++) _readBuffer[i] = i;
-	_status = 0;
-	// See if we can determine the type of card
-	_myG3Flag = false;
-	unsigned* ptr = (unsigned*)malloc(sizeof(PgpCardG3Status)); // the larger one
-	int r = this->IoctlCommand(IOCTL_Read_Status, (long long unsigned)ptr);
-	if (r<0) {
-		perror("Unable to read the card status!\n");
-	} else {
-		_myG3Flag = ((ptr[0]>>12) & 0xf) == 3;
-		printf("Pgp::Pgp found card version 0x%x which I see is %sa G3 card\n", ptr[0], _myG3Flag ? "" : "NOT ");
-	}
-	free(ptr);
-	if (_myG3Flag) {
-		_status = new PgpCardG3StatusWrap(_fd, 0, this);
-	} else {
-		_status = new PgpCardStatusWrap(_fd, 0, this);
-	}
+Pgp::Pgp(bool use_aes, int f, bool pf) : _fd(f), _useAesDriver(use_aes) {
+  unsigned version = 0;
+  if (pf) printf("Pgp::Pgp(fd(%d)), offset(%u)\n", f, _portOffset);
+  if (!_useAesDriver) {
+    _pt.model = sizeof(&_pt);
+    _pt.size = sizeof(PgpCardTx);
+    _pt.pgpLane = 0;
+    _pt.pgpVc = 0;
+  }
+  for (unsigned i=0;i<4;i++) {_maskedHWerrorCount[i]= 0;}
+  _maskHWerror = false;
+  Pds::Pgp::RegisterSlaveExportFrame::FileDescr(f, use_aes);
+  for (int i=0; i<BufferWords; i++) _readBuffer[i] = i;
+  _status = 0;
+  // See if we can determine the type of card
+  if (_useAesDriver) {
+    _myG3Flag = true;
+    dmaReadRegister(_fd, 0, (unsigned*)&(version) );
+  } else {
+    _myG3Flag = false;
+    unsigned* ptr = (unsigned*)malloc(sizeof(PgpCardG3Status)); // the larger one
+    int r = this->IoctlCommand(IOCTL_Read_Status, (long long unsigned)ptr);
+    if (r<0) {
+      perror("Unable to read the card status!\n");
+    } else {
+      version = ptr[0];
+    }
+    free(ptr);
+  }
+  _myG3Flag = ((version>>12) & 0xf) == 3;
+    printf("Pgp::Pgp found card version 0x%x which I see is %sa G3 card\n", version, _myG3Flag ? "" : "NOT ");
+  if (_myG3Flag) {
+    if (use_aes) {
+       _status = new AesDriverG3StatusWrap(_fd, 0, this);
+    } else {
+      _status = new PgpCardG3StatusWrap(_fd, 0, this);
+    }
+  } else {
+    if (use_aes) {
+      //_status = new AesDriverStatusWrap(_fd, 0, this);
+    } else {
+      _status = new PgpCardStatusWrap(_fd, 0, this);
+    }
+  }
 }
 
 Pgp::~Pgp() {}
 
 bool Pgp::evrEnabled(bool pf) {
-	bool ret = true;
-	if (_myG3Flag) {
-		ret = _status->evrEnabled(pf);
-	}
-	return ret;
+  return _status->evrEnabled(pf);
 }
-
-unsigned      Pgp::Pgp::checkPciNegotiatedBandwidth() {
+int Pgp::evrEnable(bool e) {
+  return _status->evrEnable(e);
+}
+unsigned Pgp::Pgp::checkPciNegotiatedBandwidth() {
   return _status->checkPciNegotiatedBandwidth();
 }
-unsigned      Pgp::Pgp::getCurrentFiducial() {
+unsigned Pgp::Pgp::getCurrentFiducial() {
   return _status->getCurrentFiducial();
 }
-bool          Pgp::Pgp::getLatestLaneStatus() {
+int      Pgp::Pgp::allocateVC(unsigned vcm) {
+  return _status->allocateVC(vcm);
+}
+int      Pgp::Pgp::allocateVC(unsigned vcm, unsigned lm) {
+  return _status->allocateVC(vcm, lm);
+}
+int      Pgp::Pgp::setFiducialTarget(unsigned t) {
+  return _status->setFiducialTarget(t);
+}
+int      Pgp::Pgp:: waitForFiducialMode(bool t) {
+  return _status->waitForFiducialMode(t);
+};
+int      Pgp::Pgp::evrRunCode(unsigned t) {
+  return _status->evrRunCode(t);
+};
+int      Pgp::Pgp::Pgp::Pgp::evrRunDelay(unsigned d) {
+  return _status->evrRunDelay(d);
+};
+int      Pgp::Pgp::Pgp::Pgp::evrDaqCode(unsigned c) {
+  return _status->evrDaqCode(c);
+};
+int      Pgp::Pgp::Pgp::Pgp::evrDaqDelay(unsigned d) {
+  return _status->evrDaqDelay(d);
+};
+int      Pgp::Pgp::Pgp::Pgp::evrLaneEnable(bool e) {
+  return _status->evrLaneEnable(e);
+};
+int      Pgp::Pgp::Pgp::Pgp::evrEnableHdrChk(unsigned vc, bool e) {
+  return _status->evrEnableHdrChk(vc, e);
+}
+bool     Pgp::Pgp::getLatestLaneStatus() {
   return _status->getLatestLaneStatus();
 }
 int      Pgp::Pgp::resetSequenceCount() {
-  return Pgp::IoctlCommand(IOCTL_ClearFrameCounter, (unsigned)(1<<portOffset()));
+  return _status->resetSequenceCount(1<<Pds::Pgp::Pgp::portOffset());
 }
 int      Pgp::Pgp::maskRunTrigger(unsigned mask, bool b) {
-  unsigned flag = b ? 0 : 1;
-  printf("Pgp::maskRunTrigger(0x%x, %s)\n", mask, flag == 0 ? "False" : "True");
-  return Pgp::IoctlCommand(IOCTL_Evr_RunMask, (unsigned)((mask<<24) | flag));
+  printf("Pgp::maskRunTrigger(0x%x, %s)\n", mask, b  ? "true" : "false");
+  return _status->maskRunTrigger(mask, b);
 }
-char*         Pgp::Pgp::errorString() {
+int      Pgp::Pgp::resetPgpLane() {
+  return _status->resetPgpLane(Pds::Pgp::Pgp::portOffset());
+}
+char*    Pgp::Pgp::errorString() {
   return _status->errorString();
 }
-void          Pgp::Pgp::errorStringAppend(char* s) {
+void     Pgp::Pgp::errorStringAppend(char* s) {
   _status->errorStringAppend(s);
 }
-void          Pgp::Pgp::clearErrorString() {
+void     Pgp::Pgp::clearErrorString() {
   _status->clearErrorString();
 }
+int      Pgp::Pgp::writeScratch(unsigned s) {
+  return _status->writeScratch(s);
+}
 
-
-void Pgp::Pgp::printStatus() {
+void     Pgp::Pgp::printStatus() {
 	_status->print();
 	for(unsigned u=0; u<4; u++) {
 		if (_maskedHWerrorCount[u]) {
@@ -113,67 +172,150 @@ Pds::Pgp::RegisterSlaveImportFrame* Pgp::Pgp::read(unsigned size) {
 	FD_SET(Pds::Pgp::Pgp::_fd,&fds);
 	int readRet = 0;
 	bool   found  = false;
-	while (found == false) {
-		if ((sret = select(Pds::Pgp::Pgp::_fd+1,&fds,NULL,NULL,&timeout)) > 0) {
-			if ((readRet = ::read(Pds::Pgp::Pgp::_fd, &pgpCardRx, sizeof(PgpCardRx))) >= 0) {
-				if ((ret->waiting() == Pds::Pgp::PgpRSBits::Waiting) || (ret->opcode() == Pds::Pgp::PgpRSBits::read)) {
-					found = true;
-					if (pgpCardRx.eofe || pgpCardRx.fifoErr || pgpCardRx.lengthErr) {
-						printf("Pgp::read error eofe(%u), fifoErr(%u), lengthErr(%u)\n",
-								pgpCardRx.eofe, pgpCardRx.fifoErr, pgpCardRx.lengthErr);
-						printf("\tpgpLane(%u), pgpVc(%u)\n", pgpCardRx.pgpLane, pgpCardRx.pgpVc);
-						ret = 0;
-					} else {
-						if (readRet != (int)size) {
-							printf("Pgp::read read returned %u, we were looking for %u\n", readRet, size);
-							ret->print(readRet);
-							ret = 0;
-						} else {
-							bool hardwareFailure = false;
-							uint32_t* u = (uint32_t*)ret;
-							if (ret->failed((Pds::Pgp::LastBits*)(u+size-1))) {
-								if (_maskHWerror == false) {
-									printf("Pgp::read received HW failure\n");
-									ret->print();
-									hardwareFailure = true;
-								} else {
+  if (_useAesDriver) {
+    struct DmaReadData       pgpCardRx;
+    pgpCardRx.flags   = 0;
+    pgpCardRx.is32    = 0;
+    pgpCardRx.dest    = 0;
+    pgpCardRx.size = Pds::Pgp::Pgp::BufferWords*sizeof(uint32_t);
+    pgpCardRx.data    = (uint64_t)(&(Pds::Pgp::Pgp::_readBuffer));
+    pgpCardRx.is32    = sizeof(&pgpCardRx)==4;
+    while (found == false) {
+      if ((sret = select(Pds::Pgp::Pgp::_fd+1,&fds,NULL,NULL,&timeout)) > 0) {
+        if ((readRet = ::read(Pds::Pgp::Pgp::_fd, &pgpCardRx, sizeof(struct DmaReadData))) >= 0) {
+          if ((ret->waiting() == Pds::Pgp::PgpRSBits::Waiting) || (ret->opcode() == Pds::Pgp::PgpRSBits::read)) {
+//          printf("DMA Read Data\n");
+//          printf(" \tpgpCardRx.data\t0x%llx\n", (uint64_t)pgpCardRx.data);
+//          printf(" \tpgpCardRx.dest\t0x%x\n", pgpCardRx.dest);
+//          printf(" \tpgpCardRx.flags\t0x%x\n", pgpCardRx.flags);
+//          printf(" \tpgpCardRx.index\t0x%x\n", pgpCardRx.index);
+//          printf(" \tpgpCardRx.error\t0x%x\n", pgpCardRx.error);
+//          printf(" \tpgpCardRx.size\t0x%x\n", pgpCardRx.size);
+//          printf(" \tpgpCardRx.is32\t0x%x\n", pgpCardRx.is32);
+//          uint32_t* u = (uint32_t*)pgpCardRx.data;
+//          printf("data->0x%x 0x%x 0x%x\n", u[0], u[1], u[2]);
+            found = true;
+            if (pgpCardRx.error) {
+              printf("Pgp::read error eofe(%s), fifo(%s), len(%s), bus%s\n",
+                  pgpCardRx.error & PGP_ERR_EOFE ? "true" : "false",
+                  pgpCardRx.error & DMA_ERR_FIFO ? "true" : "false",
+                  pgpCardRx.error & DMA_ERR_LEN ? "true" : "false",
+                  pgpCardRx.error & DMA_ERR_BUS ? "true" : "false");
+              printf("\tpgpLane(%u), pgpVc(%u)\n", pgpGetLane(pgpCardRx.dest), pgpGetVc(pgpCardRx.dest));
+              ret = 0;
+            } else {
+              if (readRet != (size*(int)sizeof(uint32_t))) {
+                printf("Pgp::read read returned %u, we were looking for %u uint32s\n", (unsigned)(readRet/sizeof(uint32_t)), size);
+                ret->print(readRet/sizeof(uint32_t));
+                ret = 0;
+              } else {
+                bool hardwareFailure = false;
+                uint32_t* u = (uint32_t*)ret;
+                if (ret->failed((Pds::Pgp::LastBits*)(u+size-1))) {
+                  if (_maskHWerror == false) {
+                    printf("Pgp::read received HW failure\n");
+                    ret->print();
+                    hardwareFailure = true;
+                  } else {
+                    _maskedHWerrorCount[pgpCardRx.dest&3] += 1;
+                  }
+                }
+                if (ret->timeout((Pds::Pgp::LastBits*)(u+size-1))) {
+                  printf("Pgp::read received HW timed out\n");
+                  ret->print();
+                  hardwareFailure = true;
+                }
+                if (hardwareFailure) ret = 0;
+              }
+            }
+          }
+        } else {
+          perror("Pgp::read() ERROR ! ");
+          ret = 0;
+          found = true;
+        }
+      } else {
+        found = true;  // we might as well give up!
+        ret = 0;
+        if (sret < 0) {
+          perror("Pgp::read select error: ");
+          printf("\tpgpLane(%u), pgpVc(%u)\n", pgpCardRx.dest>>2, pgpCardRx.dest&3);
+        } else {
+          printf("Pgp::read select timed out!\n");
+        }
+      }
+    }
+  } else {
+    PgpCardRx       pgpCardRx;
+    pgpCardRx.model   = sizeof(&pgpCardRx);
+    pgpCardRx.maxSize = Pds::Pgp::Pgp::BufferWords;
+    pgpCardRx.data    = (__u32*)Pds::Pgp::Pgp::_readBuffer;
+	  while (found == false) {
+		  if ((sret = select(Pds::Pgp::Pgp::_fd+1,&fds,NULL,NULL,&timeout)) > 0) {
+			  if ((readRet = ::read(Pds::Pgp::Pgp::_fd, &pgpCardRx, sizeof(PgpCardRx))) >= 0) {
+				  if ((ret->waiting() == Pds::Pgp::PgpRSBits::Waiting) || (ret->opcode() == Pds::Pgp::PgpRSBits::read)) {
+					  found = true;
+					  if (pgpCardRx.eofe || pgpCardRx.fifoErr || pgpCardRx.lengthErr) {
+						  printf("Pgp::read error eofe(%u), fifoErr(%u), lengthErr(%u)\n",
+								  pgpCardRx.eofe, pgpCardRx.fifoErr, pgpCardRx.lengthErr);
+						  printf("\tpgpLane(%u), pgpVc(%u)\n", pgpCardRx.pgpLane, pgpCardRx.pgpVc);
+						  ret = 0;
+					  } else {
+						  if (readRet != (int)size) {
+							  printf("Pgp::read read returned %u, we were looking for %u\n", readRet, size);
+							  ret->print(readRet);
+							  ret = 0;
+						  } else {
+							  bool hardwareFailure = false;
+							  uint32_t* u = (uint32_t*)ret;
+							  if (ret->failed((Pds::Pgp::LastBits*)(u+size-1))) {
+								  if (_maskHWerror == false) {
+									  printf("Pgp::read received HW failure\n");
+									  ret->print();
+									  hardwareFailure = true;
+								  } else {
 									_maskedHWerrorCount[pgpCardRx.pgpVc] += 1;
-								}
-							}
-							if (ret->timeout((Pds::Pgp::LastBits*)(u+size-1))) {
-								printf("Pgp::read received HW timed out\n");
-								ret->print();
-								hardwareFailure = true;
-							}
-							if (hardwareFailure) ret = 0;
-						}
-					}
-				}
-			} else {
-				perror("Pgp::read() ERROR ! ");
-				ret = 0;
-				found = true;
-			}
-		} else {
-			found = true;  // we might as well give up!
-			ret = 0;
-			if (sret < 0) {
-				perror("Pgp::read select error: ");
-				printf("\tpgpLane(%u), pgpVc(%u)\n", pgpCardRx.pgpLane, pgpCardRx.pgpVc);
-			} else {
-				printf("Pgp::read select timed out!\n");
-			}
-		}
-	}
+								  }
+							  }
+							  if (ret->timeout((Pds::Pgp::LastBits*)(u+size-1))) {
+								  printf("Pgp::read received HW timed out\n");
+								  ret->print();
+								  hardwareFailure = true;
+							  }
+							  if (hardwareFailure) ret = 0;
+						  }
+					  }
+				  }
+			  } else {
+				  perror("Pgp::read() ERROR ! ");
+				  ret = 0;
+				  found = true;
+			  }
+		  } else {
+			  found = true;  // we might as well give up!
+			  ret = 0;
+			  if (sret < 0) {
+				  perror("Pgp::read select error: ");
+				  printf("\tpgpLane(%u), pgpVc(%u)\n", pgpCardRx.pgpLane, pgpCardRx.pgpVc);
+			  } else {
+				  printf("Pgp::read select timed out!\n");
+			  }
+		  }
+	  }
+  }
 	return ret;
 }
 
 unsigned Pgp::Pgp::stopPolling() {
-	PgpCardTx* p = &_pt;
+  if (!_useAesDriver) {
+	  PgpCardTx* p = &_pt;
 
-	p->cmd   = IOCTL_Clear_Polling;
-	p->data  = 0;
-	return(write(_fd, &p, sizeof(PgpCardTx)));
+	  p->cmd   = IOCTL_Clear_Polling;
+	  p->data  = 0;
+	  return(write(_fd, &p, sizeof(PgpCardTx)));
+  } else {
+    return 0;
+  }
 }
 
 unsigned Pgp::Pgp::writeRegister(
@@ -197,7 +339,7 @@ unsigned Pgp::Pgp::writeRegisterBlock(
 		Destination* dest,
 		unsigned addr,
 		uint32_t* data,
-		unsigned inSize,  // the size of the block to be exported
+		unsigned inSize,  // the size of the block to be exported in uint32 units
 		Pds::Pgp::PgpRSBits::waitState w,
 		bool pf) {
 	// the size of the export block plus the size of block to be exported minus the one that's already counted
@@ -222,7 +364,7 @@ unsigned Pgp::Pgp::readRegister(
 		unsigned addr,
 		unsigned tid,
 		uint32_t* retp,
-		unsigned size,
+		unsigned size,  // in uint32s
 		bool pf) {
 	Pds::Pgp::RegisterSlaveImportFrame* rsif;
 	Pds::Pgp::RegisterSlaveExportFrame  rsef = Pds::Pgp::RegisterSlaveExportFrame(
@@ -251,7 +393,7 @@ unsigned Pgp::Pgp::readRegister(
 		}
 		if (pf) rsif->print(size + 3);
 		if (addr != rsif->addr()) {
-			printf("Pds::Pgp::readRegister out of order response lane=%u, vc=%u, addr=0x%x, tid=%u, errorCount=%u\n",
+			printf("Pds::Pgp::readRegister out of order response lane=%u, vc=%u, addr=0x%x, tid=0x%x, errorCount=%u\n",
 					dest->lane(), dest->vc(), addr, tid, ++errorCount);
 			rsif->print(size + 3);
 			if (errorCount > 5) return Failure;
@@ -263,27 +405,25 @@ unsigned Pgp::Pgp::readRegister(
 }
 
 int Pgp::Pgp::IoctlCommand(unsigned c, unsigned a) {
-	PgpCardTx* p = &_pt;
-	p->cmd   = c;
-	p->data  = (__u32*) a;
-	printf("IoctlCommand %u writing unsigned 0x%x\n", c, a);
-	return(write(_fd, &_pt, sizeof(PgpCardTx)));
+  if (!_useAesDriver) {
+	  PgpCardTx* p = &_pt;
+	  p->cmd   = c;
+	  p->data  = (__u32*) a;
+	  printf("IoctlCommand %u writing unsigned 0x%x\n", c, a);
+	  return(write(_fd, &_pt, sizeof(PgpCardTx)));
+  } else {
+    return -1;
+  }
 }
 
 int Pgp::Pgp::IoctlCommand(unsigned c, long long unsigned a) {
-	PgpCardTx* p = &_pt;
-	p->cmd   = c;
-	p->data  = (__u32*) a;
+  if (!_useAesDriver) {
+	  PgpCardTx* p = &_pt;
+	  p->cmd   = c;
+	  p->data  = (__u32*) a;
 //	printf("IoctlCommand %u writing long long 0x%llx\n", c, a);
-	return(write(_fd, &_pt, sizeof(PgpCardTx)));
-}
-
-int Pgp::Pgp::resetPgpLane() {
-  unsigned l = _portOffset;
-  int ret = 0;
-  ret |= IoctlCommand(IOCTL_Set_Tx_Reset, l);
-  ret |= IoctlCommand(IOCTL_Clr_Tx_Reset, l);
-  ret |= IoctlCommand(IOCTL_Set_Rx_Reset, l);
-  ret |= IoctlCommand(IOCTL_Clr_Rx_Reset, l);
-  return ret;
+	  return(write(_fd, &_pt, sizeof(PgpCardTx)));
+  } else {
+    return -1;
+  }
 }

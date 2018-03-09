@@ -19,7 +19,7 @@ namespace Pds {
   namespace GenericPgp {
     class Configurator : public Pds::Pgp::Configurator {
       public:
-        Configurator(int, unsigned);
+        Configurator(bool, int, unsigned);
         virtual ~Configurator();
 
         enum resultReturn {Success=0, Failure=1, Terminate=2};

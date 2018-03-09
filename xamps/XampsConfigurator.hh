@@ -29,7 +29,7 @@ namespace Pds {
 
     class XampsConfigurator : public Pds::Pgp::Configurator {
       public:
-        XampsConfigurator( XampsConfigType*, int, unsigned);
+        XampsConfigurator( bool, XampsConfigType*, int, unsigned);
         virtual ~XampsConfigurator();
 
         enum resultReturn {Success=0, Failure=1, Terminate=2};

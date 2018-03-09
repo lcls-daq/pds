@@ -68,28 +68,18 @@ bool pnCCDConfigurator::_flush(unsigned index=0) {
 }
 
 unsigned pnCCDConfigurator::configure( pnCCDConfigType* c, unsigned mask) {
-  int writeReturn = 0;
   _config = c;
-  timespec      start, end, sleepTime, shortSleepTime;
-  sleepTime.tv_sec = 0;
-  sleepTime.tv_nsec = 25000000; // 25ms
-  shortSleepTime.tv_sec = 0;
-  shortSleepTime.tv_nsec = 5000000;  // 5ms (10 ms is shortest sleep on some computers
+  timespec      start, end;
   bool printFlag = !(mask & 0x2000);
   mask = ~mask;
   unsigned ret = 0;
   clock_gettime(CLOCK_REALTIME, &start);
-  PgpCardTx           p;
-  p.model = sizeof(&p);
-  p.cmd   = IOCTL_Write_Scratch;
-  //  payload  divided by bytes per qwords  - 1 as per Ryan
-  p.data  = (unsigned*)(((c->payloadSizePerLink())/4) - 1);
-  if (printFlag) printf("pnCCD Config fd(%d) addr(%p) model(%u) data(%p)\n", fd(), &p, p.model, p.data);
-  writeReturn = write(fd(), &p, sizeof(p));
+  allocateVC(0xf, 0xf);
+  writeScratch((unsigned)((c->payloadSizePerLink())/4) - 1);
   if (printFlag) {
     clock_gettime(CLOCK_REALTIME, &end);
     uint64_t diff = timeDiff(&end, &start) + 50000LL;
-    printf("\tret(%u) size(%zu) - done, %s \n", ret, sizeof(p), ret ? "FAILED" : "SUCCEEDED");
+    printf("\tret(%u) - done, %s \n", ret, ret ? "FAILED" : "SUCCEEDED");
     printf(" it took %lld.%lld milliseconds with mask 0x%x\n", diff/1000000LL, diff%1000000LL, mask&0x1f);
   }
   dumpFrontEnd();

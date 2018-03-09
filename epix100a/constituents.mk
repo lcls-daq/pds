@@ -6,7 +6,7 @@ libsrcs_epix100a := \
 		 Epix100aServer.cc \
 		 Epix100aManager.cc
 #libsinc_epix100a :=
-libincs_epix100a := pgpcard pgp pdsdata/include ndarray/include boost/include
+libincs_epix100a := pgpcard aesdriver/include pgp pdsdata/include ndarray/include boost/include
 CPPFLAGS += -fno-strict-aliasing
 CPPFLAGS += -fopenmp
 LXFlAGS += -fopenmp

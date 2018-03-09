@@ -44,9 +44,9 @@ namespace Pds {
       private:
         typedef unsigned     LoopHisto[4][10000];
         enum {MicroSecondsSleepTime=50};
-        pnCCDConfigType*           _config;
-        char                     _runTimeConfigFileName[256];
-        unsigned*                _rhisto;
+        pnCCDConfigType*          _config;
+        char                      _runTimeConfigFileName[256];
+        unsigned*                 _rhisto;
         //      LoopHisto*                _lhisto;
     };
 

@@ -24,6 +24,7 @@
 #include "pds/epix100a/Epix100aDestination.hh"
 #include "pdsdata/xtc/DetInfo.hh"
 #include "pgpcard/PgpCardMod.h"
+#include <PgpDriver.h>
 #include <unistd.h>
 #include <sys/uio.h>
 #include <string.h>
@@ -123,6 +124,7 @@ Epix100aServer::Epix100aServer( const Pds::Src& client, unsigned configMask )
      _configureResult(0),
      _debug(0),
      _offset(0),
+     _use_aes(false),
      _unconfiguredErrors(0),
      _timeSinceLastException(0),
      _fetchesSinceLastException(0),
@@ -153,10 +155,10 @@ Epix100aServer::Epix100aServer( const Pds::Src& client, unsigned configMask )
   _dummy = (unsigned*)malloc(DummySize);
 }
 
-void  Pds::Epix100aServer::setEpix100a( int f ) {
-  _myfd = f;
+void  Pds::Epix100aServer::setEpix100a( int f, bool use_aes_driver ) {
+  _use_aes = use_aes_driver;
   fd(f);
-  _cnfgrtr = new Pds::Epix100a::Epix100aConfigurator(fd(), _debug);
+  _cnfgrtr = new Pds::Epix100a::Epix100aConfigurator(_use_aes, fd(), _debug);
 }
 
 unsigned Pds::Epix100aServer::configure(Epix100aConfigType* config, bool forceConfig) {
@@ -241,7 +243,10 @@ unsigned Pds::Epix100aServer::configure(Epix100aConfigType* config, bool forceCo
     _countBase = 0;
   }
   _configured = _configureResult == 0;
-  c = flushInputQueue(fd());
+  c += flushInputQueue(fd());
+  if (c>0) {
+    printf("Epix100aServer::configure flushed %d buffers from input queue\n", c);
+  }
   clearHisto();
 
   return _configureResult;
@@ -303,7 +308,7 @@ void Pds::Epix100aServer::disable() {
   _ignoreFetch = true;
   if (_cnfgrtr) {
     _cnfgrtr->enableExternalTrigger(false);
-    flushInputQueue(fd());
+    flushInputQueue(fd(), false);
     if (usleep(10000)<0) perror("Epix100aServer::disable ulseep 1 failed\n");
     if (_debug & 0x20) printf("Epix100aServer::disable\n");
     dumpFrontEnd();
@@ -326,7 +331,10 @@ unsigned Pds::Epix100aServer::unconfigure(void) {
 
 int Pds::Epix100aServer::fetch( char* payload, int flags ) {
    int ret = 0;
+   void*           pgpRxBuff = 0;
+   size_t          pgpRxSize = 0;
    PgpCardRx       pgpCardRx;
+   DmaReadData     dmaReadData;
    unsigned        offset = 0;
    enum {Ignore=-1};
 
@@ -346,14 +354,26 @@ int Pds::Epix100aServer::fetch( char* payload, int flags ) {
    _elementsThisCount = 0;
 
    if (_debug & 3) printf("Epix100aServer::fetch called\n");
-   if (!_elementsThisCount) {
+
+   if (_use_aes) {
+     dmaReadData.is32   = sizeof(&dmaReadData) == 4;
+     dmaReadData.size   = _payloadSize;
+     dmaReadData.data   = (uint64_t)_processorBuffer;
+     dmaReadData.dest   = 0;
+     dmaReadData.flags  = 0;
+     dmaReadData.index  = 0;
+     dmaReadData.error  = 0;
+     pgpRxBuff = &dmaReadData;
+     pgpRxSize = sizeof(DmaReadData);
+   } else {
+     pgpCardRx.model   = sizeof(&pgpCardRx);
+     pgpCardRx.maxSize = _payloadSize / sizeof(__u32);
+     pgpCardRx.data   = (__u32*)_processorBuffer;
+     pgpRxBuff = &pgpCardRx;
+     pgpRxSize = sizeof(PgpCardRx);
    }
 
-   pgpCardRx.model   = sizeof(&pgpCardRx);
-   pgpCardRx.maxSize = _payloadSize / sizeof(__u32);
-   pgpCardRx.data   = (__u32*)_processorBuffer;
-
-   if ((ret = read(fd(), &pgpCardRx, sizeof(PgpCardRx))) < 0) {
+   if ((ret = read(fd(), pgpRxBuff, pgpRxSize)) < 0) {
      if (errno == ERESTART) {
        disable();
        _ignoreFetch = true;
@@ -362,14 +382,23 @@ int Pds::Epix100aServer::fetch( char* payload, int flags ) {
      }
      perror ("Epix100aServer::fetch pgpCard read error");
      ret =  Ignore;
-   } else ret *= sizeof(__u32);
+   } else if (!_use_aes) {
+     ret *= sizeof(__u32);
+   }
 
    unsigned damageMask = 0;
-   if (pgpCardRx.eofe)      damageMask |= 1;
-   if (pgpCardRx.fifoErr)   damageMask |= 2;
-   if (pgpCardRx.lengthErr) damageMask |= 4;
+   if (_use_aes) {
+     if (dmaReadData.error&DMA_ERR_FIFO)  damageMask |= 1;
+     if (dmaReadData.error&DMA_ERR_LEN)   damageMask |= 2;
+     if (dmaReadData.error&DMA_ERR_MAX)   damageMask |= 4;
+     if (dmaReadData.error&DMA_ERR_BUS)   damageMask |= 8;
+   } else {
+     if (pgpCardRx.eofe)      damageMask |= 1;
+     if (pgpCardRx.fifoErr)   damageMask |= 2;
+     if (pgpCardRx.lengthErr) damageMask |= 4;
+   }
 
-   if (pgpCardRx.pgpVc == Epix100a::Epix100aDestination::Oscilloscope) {
+   if ((_use_aes ? pgpGetVc(dmaReadData.dest) : pgpCardRx.pgpVc) == Epix100a::Epix100aDestination::Oscilloscope) {
      if (damageMask) {
        _xtcSamplr.damage.increase(Pds::Damage::UserDefined);
        _xtcSamplr.damage.userBits(damageMask | 0xe0);
@@ -388,14 +417,16 @@ int Pds::Epix100aServer::fetch( char* payload, int flags ) {
    }
 
 
-   if (pgpCardRx.pgpVc == Epix100a::Epix100aDestination::Data) {
+   if ((_use_aes ? pgpGetVc(dmaReadData.dest) : pgpCardRx.pgpVc) == Epix100a::Epix100aDestination::Data) {
 
      Pds::Pgp::DataImportFrame* data = (Pds::Pgp::DataImportFrame*)(_processorBuffer);
 
      if ((ret > 0) && (ret < (int)_payloadSize)) {
        printf("Epix100aServer::fetch() returning Ignore, ret was %d, looking for %u\n", ret, _payloadSize);
        if ((_debug & 4) || ret < 0) printf("\telementId(%u) frameType(0x%x) acqcount(0x%x) raw_count(%u) _elementsThisCount(%u) lane(%u) vc(%u)\n",
-           data->elementId(), data->_frameType, data->acqCount(), data->frameNumber(), _elementsThisCount, pgpCardRx.pgpLane, pgpCardRx.pgpVc);
+           data->elementId(), data->_frameType, data->acqCount(), data->frameNumber(), _elementsThisCount,
+           _use_aes ? pgpGetLane(dmaReadData.dest)-Pds::Pgp::Pgp::portOffset() : pgpCardRx.pgpLane,
+           _use_aes ? pgpGetVc(dmaReadData.dest) : pgpCardRx.pgpVc);
        uint32_t* u = (uint32_t*)data;
        printf("\tDataHeader: "); for (int i=0; i<16; i++) printf("0x%x ", u[i]); printf("\n");
        ret = Ignore;
@@ -408,8 +439,13 @@ int Pds::Epix100aServer::fetch( char* payload, int flags ) {
        _xtcEpix.damage.increase(Pds::Damage::UserDefined);
        _xtcEpix.damage.userBits(damageMask);
        printf("Epix100aServer::fetch setting user damage 0x%x", damageMask);
-       if (pgpCardRx.lengthErr) printf(", rxSize(%zu), payloadSize(%u) ret(%d) offset(%u) (bytes)",
-           (unsigned)pgpCardRx.rxSize*sizeof(uint32_t), _payloadSize, ret, offset);
+       if (_use_aes) {
+         if (dmaReadData.error&DMA_ERR_LEN) printf(", rxSize(%u), payloadSize(%u) ret(%d) offset(%u) (bytes)",
+             (unsigned)dmaReadData.size, _payloadSize, ret, offset);
+       } else {
+         if (pgpCardRx.lengthErr) printf(", rxSize(%zu), payloadSize(%u) ret(%d) offset(%u) (bytes)",
+             (unsigned)pgpCardRx.rxSize*sizeof(uint32_t), _payloadSize, ret, offset);
+       }
        printf("\n");
      } else {
        unsigned oldCount = _count;
@@ -418,7 +454,9 @@ int Pds::Epix100aServer::fetch( char* payload, int flags ) {
 //       printf("Epix100a fetch frame number %u 0x%x\n", _count, _count);
        if ((_debug & 5) || ret < 0) {
          printf("\telementId(%u) frameType(0x%x) acqcount(0x%x) _oldCount(%u) _count(%u) _elementsThisCount(%u) lane(%u) vc(%u)\n",
-             data->elementId(), data->_frameType, data->acqCount(),  oldCount, _count, _elementsThisCount, pgpCardRx.pgpLane, pgpCardRx.pgpVc);
+             data->elementId(), data->_frameType, data->acqCount(),  oldCount, _count, _elementsThisCount,
+             _use_aes ? pgpGetLane(dmaReadData.dest)-Pds::Pgp::Pgp::portOffset() : pgpCardRx.pgpLane,
+             _use_aes ? pgpGetVc(dmaReadData.dest) : pgpCardRx.pgpVc);
          uint32_t* u = (uint32_t*)data;
          printf("\tDataHeader: "); for (int i=0; i<16; i++) printf("0x%x ", u[i]); printf("\n");
        }
@@ -520,17 +558,34 @@ unsigned Epix100aServer::flushInputQueue(int f, bool flag) {
   int ret;
   unsigned count = 0;
   unsigned scopeCount = 0;
+  void*           pgpRxBuff = 0;
+  size_t          pgpRxSize = 0;
   PgpCardRx       pgpCardRx;
-  pgpCardRx.model   = sizeof(&pgpCardRx);
-  pgpCardRx.maxSize = DummySize;
-  pgpCardRx.data    = _dummy;
+  DmaReadData   dmaReadData;
+  if (_use_aes) {
+    dmaReadData.is32   = sizeof(&dmaReadData) == 4;
+    dmaReadData.size   = DummySize;
+    dmaReadData.data   = (uint64_t)_dummy;
+    dmaReadData.dest   = 0;
+    dmaReadData.flags  = 0;
+    dmaReadData.index  = 0;
+    dmaReadData.error  = 0;
+    pgpRxBuff = &dmaReadData;
+    pgpRxSize = sizeof(DmaReadData);
+  } else {
+    pgpCardRx.model   = sizeof(&pgpCardRx);
+    pgpCardRx.maxSize = DummySize / sizeof(__u32);
+    pgpCardRx.data    = _dummy;
+    pgpRxBuff = &pgpCardRx;
+    pgpRxSize = sizeof(PgpCardRx);
+  }
   do {
     FD_ZERO(&fds);
     FD_SET(f,&fds);
     ret = select( f+1, &fds, NULL, NULL, &timeout);
     if (ret>0) {
-      ::read(f, &pgpCardRx, sizeof(PgpCardRx));
-      if (pgpCardRx.pgpVc == Epix100a::Epix100aDestination::Oscilloscope) {
+      ::read(f, pgpRxBuff, pgpRxSize);
+      if ((_use_aes ? pgpGetVc(dmaReadData.dest) : pgpCardRx.pgpVc) == Epix100a::Epix100aDestination::Oscilloscope) {
         scopeCount += 1;
       }
       count += 1;

@@ -25,8 +25,6 @@ namespace Pds {
         ~XampsDestination() {}
 
       public:
-        unsigned            lane() { return  0; }
-        unsigned            vc() {return _dest ? 2 : 1; }
         const char*         name();
     };
   }

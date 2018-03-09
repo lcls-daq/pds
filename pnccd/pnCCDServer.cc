@@ -326,7 +326,6 @@ void pnCCDServer::setpnCCD( int f ) {
   if (unsigned c = this->flushInputQueue(f)) {
     printf("pnCCDServer::setpnCCD read %u time%s after opening pgpcard driver\n", c, c==1 ? "" : "s");
   }
-  Pds::Pgp::RegisterSlaveExportFrame::FileDescr(f);
   if (_cnfgrtr == 0) {
     _cnfgrtr = new Pds::pnCCD::pnCCDConfigurator(fd(), _debug);
   }

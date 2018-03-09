@@ -29,8 +29,23 @@ namespace Pds {
         void              read(); 
         unsigned          checkPciNegotiatedBandwidth();
         unsigned          getCurrentFiducial();
+        int               setFiducialTarget(unsigned);
+        int               waitForFiducialMode(bool);
+        int               evrRunCode(unsigned);
+        int               evrRunDelay(unsigned);
+        int               evrDaqCode(unsigned);
+        int               evrDaqDelay(unsigned);
+        int               evrLaneEnable(bool);
+        int               evrEnableHdrChk(unsigned, bool);
         bool              getLatestLaneStatus();
         bool              evrEnabled(bool);
+        int               evrEnable(bool);
+        int               allocateVC(unsigned vcm);
+        int               allocateVC(unsigned vcm, unsigned l);
+        int               resetSequenceCount(unsigned mask);
+        int               maskRunTrigger(unsigned mask, bool b);
+        int               resetPgpLane(unsigned);
+        int               writeScratch(unsigned);
 
       protected:
       PgpCardG3Status     status;

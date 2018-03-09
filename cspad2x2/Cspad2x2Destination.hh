@@ -26,8 +26,6 @@ namespace Pds {
         enum {concentratorMask=1};
 
       public:
-        unsigned            lane() {return 0;}
-        unsigned            vc() {return (_dest  ? 0 : 1); }
         const char*         name();
 //        Cspad2x2Destination::FEdest getDest(Pds::Pgp::RegisterSlaveImportFrame*);
     };

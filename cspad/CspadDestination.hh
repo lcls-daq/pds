@@ -22,12 +22,9 @@ namespace Pds {
         CspadDestination() {}
         ~CspadDestination() {}
 
-        enum FEdest {Q0=0, Q1=1, Q2=2, Q3=3, CR=4, NumberOf=5};
-        enum {laneMask=2, concentratorMask=4};
+        enum FEdest {CR=0, Q0=1, Q1=2, Q2=5, Q3=6, NumberOf=5};
 
       public:
-        unsigned            lane() {return ((_dest & laneMask) ? 1 : 0);}
-        unsigned            vc() {return (_dest & concentratorMask ? 0 : (_dest & 1) + 1); }
         const char*         name();
 //        CspadDestination::FEdest getDest(Pds::Pgp::RegisterSlaveImportFrame*);
     };

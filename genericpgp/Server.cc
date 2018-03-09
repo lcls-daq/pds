@@ -22,6 +22,7 @@
 #include "pds/xtc/XtcType.hh"
 #include "pdsdata/xtc/DetInfo.hh"
 #include "pgpcard/PgpCardMod.h"
+#include <PgpDriver.h>
 #include <unistd.h>
 #include <sys/uio.h>
 #include <string.h>
@@ -43,6 +44,7 @@ GenericPgp::Server::Server( const Pds::Src& client, unsigned configMask )
     _configureResult(0),
     _debug(0),
     _offset(0),
+    _use_aes(false),
     _unconfiguredErrors(0),
     _configured(false),
     _ignoreFetch(true),
@@ -59,7 +61,7 @@ unsigned GenericPgp::Server::configure(GenericPgpConfigType* config, bool forceC
   unsigned firstConfig = _resetOnEveryConfig || forceConfig;
   if (_cnfgrtr == 0) {
     firstConfig = 1;
-    _cnfgrtr = new GenericPgp::Configurator(fd(), _debug);
+    _cnfgrtr = new GenericPgp::Configurator(_use_aes, fd(), _debug);
     _cnfgrtr->runTimeConfigName(_runTimeConfigName);
     printf("Server::configure making new configurator %p, firstConfig %u\n", _cnfgrtr, firstConfig);
   }
@@ -196,7 +198,10 @@ unsigned GenericPgp::Server::unconfigure(void) {
 
 int GenericPgp::Server::fetch( char* payload, int flags ) {
    int ret = 0;
+   void*           pgpRxBuff = 0;
+   size_t          pgpRxSize = 0;
    PgpCardRx       pgpCardRx;
+   DmaReadData     dmaReadData;
    enum {Ignore=-1};
 
    if (_configured == false)  {
@@ -210,11 +215,25 @@ int GenericPgp::Server::fetch( char* payload, int flags ) {
 
    _xtc.damage = 0;
 
-   pgpCardRx.model   = sizeof(&pgpCardRx);
-   pgpCardRx.maxSize = _payloadSize / sizeof(__u32);
-   pgpCardRx.data    = (__u32*)_payload_buffer[0];
+   if (_use_aes) {
+     dmaReadData.is32   = sizeof(&dmaReadData) == 4;
+     dmaReadData.size   = _payloadSize;
+     dmaReadData.data   = (uint64_t)(_payload_buffer[0]);
+     dmaReadData.dest   = 0;
+     dmaReadData.flags  = 0;
+     dmaReadData.index  = 0;
+     dmaReadData.error  = 0;
+     pgpRxBuff = &dmaReadData;
+     pgpRxSize = sizeof(DmaReadData);
+   } else {
+     pgpCardRx.model   = sizeof(&pgpCardRx);
+     pgpCardRx.maxSize = _payloadSize / sizeof(__u32);
+     pgpCardRx.data    = (__u32*)_payload_buffer[0];
+     pgpRxBuff = &pgpCardRx;
+     pgpRxSize = sizeof(PgpCardRx);
+   }
 
-   if ((ret = read(fd(), &pgpCardRx, sizeof(PgpCardRx))) < 0) {
+   if ((ret = read(fd(), pgpRxBuff, pgpRxSize)) < 0) {
      if (errno == ERESTART) {
        disable();
        char message[400];
@@ -230,72 +249,90 @@ int GenericPgp::Server::fetch( char* payload, int flags ) {
      }
      perror ("Server::fetch pgpCard read error");
      ret =  Ignore;
-   } else ret *= sizeof(__u32);
+   } else if (!_use_aes) {
+     ret *= sizeof(__u32);
+   }
 
    if (_ignoreFetch) return Ignore;
 
    unsigned damageMask = 0;
-   if (pgpCardRx.eofe)      damageMask |= 1;
-   if (pgpCardRx.fifoErr)   damageMask |= 2;
-   if (pgpCardRx.lengthErr) damageMask |= 4;
+   if (_use_aes) {
+     if (dmaReadData.error&DMA_ERR_FIFO)  damageMask |= 1;
+     if (dmaReadData.error&DMA_ERR_LEN)   damageMask |= 2;
+     if (dmaReadData.error&DMA_ERR_MAX)   damageMask |= 4;
+     if (dmaReadData.error&DMA_ERR_BUS)   damageMask |= 8;
+   } else {
+     if (pgpCardRx.eofe)      damageMask |= 1;
+     if (pgpCardRx.fifoErr)   damageMask |= 2;
+     if (pgpCardRx.lengthErr) damageMask |= 4;
+   }
 
    const GenericPgpConfigType& c = _cnfgrtr->configuration();
    for(unsigned i=0; i<c.number_of_streams(); i++) {
-     if (pgpCardRx.pgpVc == c.stream()[i].pgp_channel()) {
+     if ((_use_aes ? pgpGetVc(dmaReadData.dest) : pgpCardRx.pgpVc) == c.stream()[i].pgp_channel()) {
 
        _payload_mask |= 1<<i;
 
        _payload_xtc[i].damage = 0;
        if (damageMask) {
-	 _payload_xtc[i].damage.increase(Pds::Damage::UserDefined);
-	 _payload_xtc[i].damage.userBits(damageMask | 0xe0);
+         _payload_xtc[i].damage.increase(Pds::Damage::UserDefined);
+         _payload_xtc[i].damage.userBits(damageMask | 0xe0);
        }
 
        if (i==0) {
-	 Pds::Pgp::DataImportFrame* data = reinterpret_cast<Pds::Pgp::DataImportFrame*>(pgpCardRx.data);
-	 if ((ret > 0) && (ret < (int)_payloadSize)) {
-	   printf("Server::fetch() returning Ignore, ret was %d, looking for %u\n", ret, _payloadSize);
-	   if ((_debug & 4) || ret < 0) printf("\telementId(%u) frameType(0x%x) acqcount(0x%x) raw_count(%u) _elementsThisCount(%u) lane(%u) vc(%u)\n",
-					       data->elementId(), data->_frameType, data->acqCount(), data->frameNumber(), _elementsThisCount, pgpCardRx.pgpLane, pgpCardRx.pgpVc);
-	   uint32_t* u = (uint32_t*)data;
-	   printf("\tDataHeader: "); for (int i=0; i<16; i++) printf("0x%x ", u[i]); printf("\n");
-	   ret = Ignore;
-	 }
-	 if (ret > (int) _payloadSize) printf("Server::fetch pgp read returned too much _payloadSize(%u) ret(%d)\n", _payloadSize, ret);
+         Pds::Pgp::DataImportFrame* data;
+         if (_use_aes) {
+           data = reinterpret_cast<Pds::Pgp::DataImportFrame*>(dmaReadData.data);
+         } else {
+           data = reinterpret_cast<Pds::Pgp::DataImportFrame*>(pgpCardRx.data);
+         }
+         if ((ret > 0) && (ret < (int)_payloadSize)) {
+           printf("Server::fetch() returning Ignore, ret was %d, looking for %u\n", ret, _payloadSize);
+           if ((_debug & 4) || ret < 0) printf("\telementId(%u) frameType(0x%x) acqcount(0x%x) raw_count(%u) _elementsThisCount(%u) lane(%u) vc(%u)\n",
+                                               data->elementId(), data->_frameType, data->acqCount(), data->frameNumber(), _elementsThisCount,
+                                               _use_aes ? pgpGetLane(dmaReadData.dest)-Pds::Pgp::Pgp::portOffset() : pgpCardRx.pgpLane,
+                                               _use_aes ? pgpGetVc(dmaReadData.dest) : pgpCardRx.pgpVc);
+           uint32_t* u = (uint32_t*)data;
+           printf("\tDataHeader: "); for (int i=0; i<16; i++) printf("0x%x ", u[i]); printf("\n");
+           ret = Ignore;
+         }
+         if (ret > (int) _payloadSize) printf("Server::fetch pgp read returned too much _payloadSize(%u) ret(%d)\n", _payloadSize, ret);
 
-	 if (!damageMask) {
-	   unsigned oldCount = _count;
-	   _count = data->frameNumber() - 1;  // starts counting at 1, not zero
-	   if ((_debug & 5) || ret < 0) {
-	     printf("\telementId(%u) frameType(0x%x) acqcount(0x%x) _oldCount(%u) _count(%u) _elementsThisCount(%u) lane(%u) vc(%u)\n",
-		    data->elementId(), data->_frameType, data->acqCount(),  oldCount, _count, _elementsThisCount, pgpCardRx.pgpLane, pgpCardRx.pgpVc);
-	     uint32_t* u = (uint32_t*)data;
-	     printf("\tDataHeader: "); for (int i=0; i<16; i++) printf("0x%x ", u[i]); printf("\n");
-	   }
-	 }
-	 
-	 _monitor.event(_count);
+         if (!damageMask) {
+           unsigned oldCount = _count;
+           _count = data->frameNumber() - 1;  // starts counting at 1, not zero
+           if ((_debug & 5) || ret < 0) {
+             printf("\telementId(%u) frameType(0x%x) acqcount(0x%x) _oldCount(%u) _count(%u) _elementsThisCount(%u) lane(%u) vc(%u)\n",
+                    data->elementId(), data->_frameType, data->acqCount(),  oldCount, _count, _elementsThisCount,
+                    _use_aes ? pgpGetLane(dmaReadData.dest)-Pds::Pgp::Pgp::portOffset() : pgpCardRx.pgpLane,
+                    _use_aes ? pgpGetVc(dmaReadData.dest) : pgpCardRx.pgpVc);
+             uint32_t* u = (uint32_t*)data;
+             printf("\tDataHeader: "); for (int i=0; i<16; i++) printf("0x%x ", u[i]); printf("\n");
+           }
+         }
 
-	 //  Assume this is the last contribution to be fetched
-	 Xtc& xtc = *new(payload) Xtc(_xtc.contains, _xtc.src);
-	 for(unsigned j=0; j<c.number_of_streams(); j++) {
-	   if (_payload_mask & (1<<j)) {
-	     Xtc& pxtc = *new(&xtc) Xtc(_payload_xtc[j]);
-	     pxtc.extent = _payload_xtc[j].extent;
-	     if (j==0)
-	       process((char*)xtc.alloc(pxtc.sizeofPayload()));
-	     else
-	       memcpy(xtc.alloc(pxtc.sizeofPayload()),
-		      _payload_buffer[j], pxtc.sizeofPayload());
-	     _payload_mask ^= (1<<j);
-	   }
-	 }
-	 _xtc = xtc;
-	 return xtc.extent;
+         _monitor.event(_count);
+
+         //  Assume this is the last contribution to be fetched
+         Xtc& xtc = *new(payload) Xtc(_xtc.contains, _xtc.src);
+         for(unsigned j=0; j<c.number_of_streams(); j++) {
+         if (_payload_mask & (1<<j)) {
+             Xtc& pxtc = *new(&xtc) Xtc(_payload_xtc[j]);
+             pxtc.extent = _payload_xtc[j].extent;
+             if (j==0)
+               process((char*)xtc.alloc(pxtc.sizeofPayload()));
+             else
+               memcpy(xtc.alloc(pxtc.sizeofPayload()),
+                      _payload_buffer[j], pxtc.sizeofPayload());
+             _payload_mask ^= (1<<j);
+           }
+         }
+         _xtc = xtc;
+         return xtc.extent;
        }
        else {
-	 memcpy(_payload_buffer[i],_payload_buffer[0], 
-		_payload_xtc[i].sizeofPayload());
+         memcpy(_payload_buffer[i],_payload_buffer[0], 
+                _payload_xtc[i].sizeofPayload());
        }
      }
    }
@@ -328,31 +365,42 @@ unsigned GenericPgp::Server::flushInputQueue(int f) {
   int ret;
   unsigned dummy[2048];
   unsigned count = 0;
+  void*         pgpRxBuff = 0;
+  size_t        pgpRxSize = 0;
   PgpCardRx       pgpCardRx;
-  pgpCardRx.model   = sizeof(&pgpCardRx);
-  pgpCardRx.maxSize = 2048;
-  pgpCardRx.data    = dummy;
+  DmaReadData     dmaReadData;
+  if (_use_aes) {
+    dmaReadData.is32   = sizeof(&dmaReadData) == 4;
+    dmaReadData.size   = sizeof(dummy);
+    dmaReadData.data   = (uint64_t)dummy;
+    dmaReadData.dest   = 0;
+    dmaReadData.flags  = 0;
+    dmaReadData.index  = 0;
+    dmaReadData.error  = 0;
+    pgpRxBuff = &dmaReadData;
+    pgpRxSize = sizeof(DmaReadData);
+  } else {
+    pgpCardRx.model   = sizeof(&pgpCardRx);
+    pgpCardRx.maxSize = 2048;
+    pgpCardRx.data    = dummy;
+    pgpRxBuff = &pgpCardRx;
+    pgpRxSize = sizeof(PgpCardRx);
+  }
   do {
     FD_ZERO(&fds);
     FD_SET(f,&fds);
     ret = select( f+1, &fds, NULL, NULL, &timeout);
     if (ret>0) {
       count += 1;
-      ::read(f, &pgpCardRx, sizeof(PgpCardRx));
+      ::read(f, pgpRxBuff, pgpRxSize);
     }
   } while (ret > 0);
   return count;
 }
 
-void GenericPgp::Server::setFd( int f ) {
+void GenericPgp::Server::setFd( int f, bool use_aes_driver ) {
+  _use_aes = use_aes_driver;
   fd( f );
-  Pds::Pgp::RegisterSlaveExportFrame::FileDescr(f);
-  if (unsigned c = this->flushInputQueue(f)) {
-    printf("Server::setEpix read %u time%s after opening pgpcard driver\n", c, c==1 ? "" : "s");
-  }
-//  if (_cnfgrtr == 0) {
-//    _cnfgrtr = new Pds::Epix::EpixConfigurator::EpixConfigurator(fd(), _debug);
-//  }
 }
 
 void GenericPgp::Server::printHisto(bool c) {

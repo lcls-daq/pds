@@ -49,7 +49,7 @@ namespace Pds {
 
     class ImpConfigurator : public Pds::Pgp::Configurator {
       public:
-        ImpConfigurator(int, unsigned);
+        ImpConfigurator(bool, int, unsigned);
         virtual ~ImpConfigurator();
 
         enum resultReturn {Success=0, Failure=1, Terminate=2};

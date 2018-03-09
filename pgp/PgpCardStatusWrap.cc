@@ -38,6 +38,36 @@ namespace Pds {
           }
           return  val;
       }
+
+      int PgpCardStatusWrap::allocateVC(unsigned vcm) {
+        return allocateVC(vcm, 1);
+      }
+
+      int PgpCardStatusWrap::allocateVC(unsigned vcm, unsigned lm) {
+        unsigned arg = (vcm<<8);
+        unsigned mask = (lm << _pgp->portOffset());
+        // Find the first lane in the mask
+        for (int i=0; i<3; i++) {
+          if (mask & (1<<i)) {
+            arg |= i;
+            break;
+          }
+        }
+        return _pgp->IoctlCommand( IOCTL_Set_VC_Mask, arg);
+      }
+
+      int PgpCardStatusWrap::resetPgpLane(unsigned lane) {
+        int ret = 0;
+        ret |= _pgp->IoctlCommand(IOCTL_Set_Tx_Reset, lane);
+        ret |= _pgp->IoctlCommand(IOCTL_Clr_Tx_Reset, lane);
+        ret |= _pgp->IoctlCommand(IOCTL_Set_Rx_Reset, lane);
+        ret |= _pgp->IoctlCommand(IOCTL_Clr_Rx_Reset, lane);
+        return ret;
+      }
+
+      int PgpCardStatusWrap::writeScratch(unsigned s) {
+        return _pgp->IoctlCommand(IOCTL_Write_Scratch, s);
+      }
       
       void PgpCardStatusWrap::print() {
     	  int           i;

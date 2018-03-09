@@ -55,7 +55,7 @@ class Pds::EpixServer
    bool more() const;
 
    unsigned count() const;
-   void setEpix( int fd );
+   void setEpix( int fd, bool use_aes_driver=false );
 
    unsigned configure(EpixConfigType*, bool forceConfig = false);
    unsigned unconfigure(void);
@@ -102,6 +102,7 @@ class Pds::EpixServer
    unsigned                       _configureResult;
    unsigned                       _debug;
    unsigned                       _offset;
+   bool                           _use_aes;
    timespec                       _thisTime;
    timespec                       _lastTime;
    unsigned*                      _histo;

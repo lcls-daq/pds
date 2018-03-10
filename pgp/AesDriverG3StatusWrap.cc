@@ -23,22 +23,13 @@ namespace Pds {
   namespace Pgp {
 
     void AesDriverG3StatusWrap::read() {
-      unsigned tmp;
-      struct DmaRegisterData reg;
-      reg.data = 0;
-      memset(&status,0,sizeof(PgpCardG3Status));
-      dmaReadRegister(_pgp->fd(), (unsigned)offsetof(PgpCardG3Regs, Version), (unsigned*)&(status.Version) );
-      dmaReadRegister(_pgp->fd(), (unsigned)offsetof(PgpCardG3Regs, SerialNumber[0]), (unsigned*)&(status.SerialNumber[0]) );
-      dmaReadRegister(_pgp->fd(), (unsigned)offsetof(PgpCardG3Regs, SerialNumber[1]), (unsigned*)&(status.SerialNumber[1]) );
-      for(unsigned i=0; i<64; i++) {
-        reg.address = (unsigned)offsetof(PgpCardG3Regs, BuildStamp[0]) + (i*sizeof(unsigned));
-        ioctl(_pgp->fd(),DMA_Read_Register,&reg);
-        status.BuildStamp[i] = reg.data;
+      pgpGetInfo(_pgp->fd(),&info);
+      pgpGetPci(_pgp->fd(),&pciStatus);
+      for (int x=0; x < NUMBER_OF_LANES; x++) {
+        pgpGetStatus(_pgp->fd(),x,&status[x]);
+        pgpGetEvrStatus(_pgp->fd(),x,&evrStatus[x]);
+        pgpGetEvrControl(_pgp->fd(),x,&evrControl[x]);
       }
-      dmaReadRegister(_pgp->fd(), (unsigned)offsetof(PgpCardG3Regs, cardRstStat), &tmp );
-      status.CountReset = tmp & 1;
-      status.CardReset = (tmp>>1) & 1;
-
     }
 
     unsigned AesDriverG3StatusWrap::checkPciNegotiatedBandwidth() {
@@ -276,86 +267,74 @@ namespace Pds {
     }
 
     void AesDriverG3StatusWrap::print() {
-//  	  int           x;
-//  	  int           y;
-//      this->read();
-//      printf("\nPGP Card Status:\n");
-//      PgpInfo        info;
-//      struct PgpStatus      status;
-//      PciStatus      pciStatus;
-//      PgpEvrStatus   evrStatus;
-//      PgpEvrControl  evrControl;
-//      int            x;
-//
+      int           x;
+      this->read();
+      printf("\nPGP Card Status:\n");
 //      pgpGetInfo(_pgp->fd(),&info);
 //      pgpGetPci(_pgp->fd(),&pciStatus);
 //      unsigned low = (unsigned) (info.serial & 0xffffffff);
 //      unsigned high = (unsigned) ((info.serial>>32) & 0xffffffff);
 //      info.serial = (long long unsigned)high | ((long long unsigned)low<<32);
-//
-//      printf("-------------- Card Info ------------------\n");
-//      printf("                 Type : 0x%.2x\n",info.type);
-//      printf("              Version : 0x%.8x\n",info.version);
-//      printf("               Serial : 0x%.16llx\n",(long long unsigned)(info.serial));
-//      printf("           BuildStamp : %s\n",info.buildStamp);
-//      printf("             LaneMask : 0x%.4x\n",info.laneMask);
-//      printf("            VcPerMask : 0x%.2x\n",info.vcPerMask);
-//      printf("              PgpRate : %i\n",info.pgpRate);
-//      printf("            PromPrgEn : %i\n",info.promPrgEn);
-//
-//      printf("\n");
-//      printf("-------------- PCI Info -------------------\n");
-//      printf("           PciCommand : 0x%.4x\n",pciStatus.pciCommand);
-//      printf("            PciStatus : 0x%.4x\n",pciStatus.pciStatus);
-//      printf("          PciDCommand : 0x%.4x\n",pciStatus.pciDCommand);
-//      printf("           PciDStatus : 0x%.4x\n",pciStatus.pciDStatus);
-//      printf("          PciLCommand : 0x%.4x\n",pciStatus.pciLCommand);
-//      printf("           PciLStatus : 0x%.4x\n",pciStatus.pciLStatus);
-//      printf("         PciLinkState : 0x%x\n",pciStatus.pciLinkState);
-//      printf("          PciFunction : 0x%x\n",pciStatus.pciFunction);
-//      printf("            PciDevice : 0x%x\n",pciStatus.pciDevice);
-//      printf("               PciBus : 0x%.2x\n",pciStatus.pciBus);
-//      printf("             PciLanes : %i\n",pciStatus.pciLanes);
-//
-//      for (x=0; x < 8; x++) {
-//         if ( ((1 << x) & info.laneMask) == 0 ) continue;
-//
-//         pgpGetStatus(_pgp->fd(),x,&status);
-//         pgpGetEvrStatus(_pgp->fd(),x,&evrStatus);
-//         pgpGetEvrControl(_pgp->fd(),x,&evrControl);
-//
-//         printf("\n");
-//         printf("-------------- Lane %i --------------------\n",x);
-//         printf("             LoopBack : %i\n",status.loopBack);
-//         printf("         LocLinkReady : %i\n",status.locLinkReady);
-//         printf("         RemLinkReady : %i\n",status.remLinkReady);
-//         printf("              RxReady : %i\n",status.rxReady);
-//         printf("              TxReady : %i\n",status.txReady);
-//         printf("              RxCount : %i\n",status.rxCount);
-//         printf("           CellErrCnt : %i\n",status.cellErrCnt);
-//         printf("          LinkDownCnt : %i\n",status.linkDownCnt);
-//         printf("           LinkErrCnt : %i\n",status.linkErrCnt);
-//         printf("              FifoErr : %i\n",status.fifoErr);
-//         printf("              RemData : 0x%.2x\n",status.remData);
-//         printf("        RemBuffStatus : 0x%.2x\n",status.remBuffStatus);
-//         printf("           LinkErrors : %i\n",evrStatus.linkErrors);
-//         printf("               LinkUp : %i\n",evrStatus.linkUp);
-//         printf("            RunStatus : %i 1 = Running, 0 = Stopped\n",evrStatus.runStatus);    // 1 = Running, 0 = Stopped
-//         printf("          EvrFiducial : 0x%x\n",evrStatus.evrSeconds);
-//         printf("           RunCounter : 0x%x\n",evrStatus.runCounter);
-//         printf("        AcceptCounter : %i\n",evrStatus.acceptCounter);
-//         printf("            EvrEnable : %i Global flag\n",evrControl.evrEnable);     // Global flag
-//         printf("          LaneRunMask : %i 0 = Run trigger enable\n",evrControl.laneRunMask);   // 1 = Run trigger enable
-//         printf("            EvrLaneEn : %i 1 = Start, 0 = Stop\n",evrControl.evrSyncEn);     // 1 = Start, 0 = Stop
-//         printf("           EvrSyncSel : %i 0 = async, 1 = sync for start/stop\n",evrControl.evrSyncSel);    // 0 = async, 1 = sync for start/stop
-//         printf("           HeaderMask : 0x%x 1 = Enable header data checking, one bit per VC (4 bits)\n",evrControl.headerMask);    // 1 = Enable header data checking, one bit per VC (4 bits)
-//         printf("          EvrSyncWord : 0x%x fiducial to transition start stop\n",evrControl.evrSyncWord);   // fiducial to transition start stop
-//         printf("              RunCode : %i Run code\n",evrControl.runCode);       // Run code
-//         printf("             RunDelay : %i Run delay\n",evrControl.runDelay);      // Run delay
-//         printf("           AcceptCode : %i DAQ code\n",evrControl.acceptCode);    // Accept code
-//         printf("          AcceptDelay : %i DAQ delay\n",evrControl.acceptDelay);   // Accept delay
-//      }
-//
+
+      printf("-------------- Card Info ------------------\n");
+      printf("                 Type : 0x%.2x\n",info.type);
+      printf("              Version : 0x%.8x\n",info.version);
+      printf("               Serial : 0x%.16llx\n",(long long unsigned)(info.serial));
+      printf("           BuildStamp : %s\n",info.buildStamp);
+      printf("             LaneMask : 0x%.4x\n",info.laneMask);
+      printf("            VcPerMask : 0x%.2x\n",info.vcPerMask);
+      printf("              PgpRate : %i\n",info.pgpRate);
+      printf("            PromPrgEn : %i\n",info.promPrgEn);
+
+      printf("\n");
+      printf("-------------- PCI Info -------------------\n");
+      printf("           PciCommand : 0x%.4x\n",pciStatus.pciCommand);
+      printf("            PciStatus : 0x%.4x\n",pciStatus.pciStatus);
+      printf("          PciDCommand : 0x%.4x\n",pciStatus.pciDCommand);
+      printf("           PciDStatus : 0x%.4x\n",pciStatus.pciDStatus);
+      printf("          PciLCommand : 0x%.4x\n",pciStatus.pciLCommand);
+      printf("           PciLStatus : 0x%.4x\n",pciStatus.pciLStatus);
+      printf("         PciLinkState : 0x%x\n",pciStatus.pciLinkState);
+      printf("          PciFunction : 0x%x\n",pciStatus.pciFunction);
+      printf("            PciDevice : 0x%x\n",pciStatus.pciDevice);
+      printf("               PciBus : 0x%.2x\n",pciStatus.pciBus);
+      printf("             PciLanes : %i\n",pciStatus.pciLanes);
+
+      for (x=0; x < NUMBER_OF_LANES; x++) {
+         if ( ((1 << x) & info.laneMask) == 0 ) continue;
+
+         printf("\n");
+         printf("-------------- Lane %i --------------------\n",x);
+         printf("             LoopBack : %i\n",status[x].loopBack);
+         printf("         LocLinkReady : %i\n",status[x].locLinkReady);
+         printf("         RemLinkReady : %i\n",status[x].remLinkReady);
+         printf("              RxReady : %i\n",status[x].rxReady);
+         printf("              TxReady : %i\n",status[x].txReady);
+         printf("              RxCount : %i\n",status[x].rxCount);
+         printf("           CellErrCnt : %i\n",status[x].cellErrCnt);
+         printf("          LinkDownCnt : %i\n",status[x].linkDownCnt);
+         printf("           LinkErrCnt : %i\n",status[x].linkErrCnt);
+         printf("              FifoErr : %i\n",status[x].fifoErr);
+         printf("              RemData : 0x%.2x\n",status[x].remData);
+         printf("        RemBuffStatus : 0x%.2x\n",status[x].remBuffStatus);
+         printf("           LinkErrors : %i\n",evrStatus[x].linkErrors);
+         printf("               LinkUp : %i\n",evrStatus[x].linkUp);
+         printf("            RunStatus : %i 1 = Running, 0 = Stopped\n",evrStatus[x].runStatus);    // 1 = Running, 0 = Stopped
+         printf("          EvrFiducial : 0x%x\n",evrStatus[x].evrSeconds);
+         printf("           RunCounter : 0x%x\n",evrStatus[x].runCounter);
+         printf("        AcceptCounter : %i\n",evrStatus[x].acceptCounter);
+         printf("            EvrEnable : %i Global flag\n",evrControl[x].evrEnable);     // Global flag
+         printf("          LaneRunMask : %i 0 = Run trigger enable\n",evrControl[x].laneRunMask);   // 1 = Run trigger enable
+         printf("            EvrLaneEn : %i 1 = Start, 0 = Stop\n",evrControl[x].evrSyncEn);     // 1 = Start, 0 = Stop
+         printf("           EvrSyncSel : %i 0 = async, 1 = sync for start/stop\n",evrControl[x].evrSyncSel);    // 0 = async, 1 = sync for start/stop
+         printf("           HeaderMask : 0x%x 1 = Enable header data checking, one bit per VC (4 bits)\n",evrControl[x].headerMask);    // 1 = Enable header data checking, one bit per VC (4 bits)
+         printf("          EvrSyncWord : 0x%x fiducial to transition start stop\n",evrControl[x].evrSyncWord);   // fiducial to transition start stop
+         printf("              RunCode : %i Run code\n",evrControl[x].runCode);       // Run code
+         printf("             RunDelay : %i Run delay\n",evrControl[x].runDelay);      // Run delay
+         printf("           AcceptCode : %i DAQ code\n",evrControl[x].acceptCode);    // Accept code
+         printf("          AcceptDelay : %i DAQ delay\n",evrControl[x].acceptDelay);   // Accept delay
+      }
+
 //      __u64 SerialNumber = status.SerialNumber[0];
 //      SerialNumber = SerialNumber << 32;
 //      SerialNumber |= status.SerialNumber[1];

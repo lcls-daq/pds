@@ -33,7 +33,7 @@ namespace Pds {
         void              print();
 
       protected:
-        PgpCardStatus     status;
+        PgpCardStatus         status;
     };
 
   }

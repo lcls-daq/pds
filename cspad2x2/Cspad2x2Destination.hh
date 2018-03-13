@@ -22,7 +22,7 @@ namespace Pds {
         Cspad2x2Destination() {}
         ~Cspad2x2Destination() {}
 
-        enum FEdest {Q0=0, CR=1, NumberOf=2};
+        enum FEdest {CR=0, Q0=1, NumberOf=2};
         enum {concentratorMask=1};
 
       public:

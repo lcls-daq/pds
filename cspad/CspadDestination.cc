@@ -20,5 +20,24 @@ using namespace Pds::CsPad;
          "Concentrator",
          "--INVALID--"
        };
-       return (_dest < NumberOf ? _names[_dest] : _names[NumberOf]);
+       switch (_dest) {
+         case Q0:
+           return _names[0];
+           break;
+         case Q1:
+           return _names[1];
+           break;
+         case Q2:
+           return _names[2];
+           break;
+         case Q3:
+           return _names[3];
+           break;
+         case CR:
+           return _names[4];
+           break;
+         default:
+           return _names[5];
+           break;
+       }
      }

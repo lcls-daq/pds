@@ -16,5 +16,14 @@ const char* Pds::CsPad2x2::Cspad2x2Destination::name()
       "Concentrator",
       "--INVALID--"
   };
-  return (_dest < NumberOf ? _names[_dest] : _names[NumberOf]);
+  switch (_dest) {
+    case Q0:
+      return _names[0];
+      break;
+    case CR:
+      return _names[1];
+      break;
+    default:
+      return _names[2];
+  }
 }

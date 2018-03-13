@@ -18,5 +18,17 @@ const char* Epix100aDestination::name()
       "Oscilloscope",
       "--INVALID--"
   };
-  return (_dest < NumberOf ? _names[_dest] : _names[NumberOf]);
+  switch (_dest) {
+    case Data:
+      return _names[0];
+      break;
+    case Registers:
+      return _names[1];
+      break;
+    case Oscilloscope:
+      return _names[2];
+      break;
+    default:
+      return _names[3];
+  }
 }

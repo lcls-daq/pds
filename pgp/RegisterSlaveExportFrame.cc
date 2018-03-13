@@ -45,7 +45,7 @@ namespace Pds {
       bits._tid     = transID & ((1<<23)-1);
       bits._waiting = w;
 //      printf("RegisterSlaveExportFrame::RegisterSlaveExportFrame() lane %u offset %u\n", dest->lane(), Pgp::portOffset());
-      bits._lane   = (dest->lane() & 7) + _use_aes ? 0 : Pgp::portOffset();
+      bits._lane   = (dest->lane() & 7);
       bits.mbz     = 0;
       bits._vc     = dest->vc() & 3;
       bits.oc      = o;
@@ -93,7 +93,7 @@ namespace Pds {
         pgpCardTx.model   = (sizeof(&pgpCardTx));
         pgpCardTx.cmd     = IOCTL_Normal_Write;
         pgpCardTx.pgpVc   = bits._vc;
-        pgpCardTx.pgpLane = bits._lane;
+        pgpCardTx.pgpLane = bits._lane + Pgp::portOffset();
         pgpCardTx.size    = size;
         pgpCardTx.data    = (__u32 *)this;
 

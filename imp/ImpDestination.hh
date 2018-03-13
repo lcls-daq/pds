@@ -19,7 +19,7 @@ namespace Pds {
 
     class ImpDestination : public Pds::Pgp::Destination {
       public:
-        enum FEdest {InvalidDataVC, InvalidVC1, InvalidVC2, CommandVC, NumberOf};
+        enum FEdest {InvalidDataVC=0, InvalidVC1=1, InvalidVC2=2, CommandVC=3, NumberOf=4};
 
         ImpDestination() {}
         ~ImpDestination() {}

@@ -49,9 +49,9 @@ namespace Pds {
       protected:
         PgpInfo           info;
         PciStatus         pciStatus;
-        ::PgpStatus       status[NUMBER_OF_LANES];
-        PgpEvrStatus      evrStatus[NUMBER_OF_LANES];
-        PgpEvrControl     evrControl[NUMBER_OF_LANES];
+        ::PgpStatus       status[G3_NUMBER_OF_LANES];
+        PgpEvrStatus      evrStatus[G3_NUMBER_OF_LANES];
+        PgpEvrControl     evrControl[G3_NUMBER_OF_LANES];
     };
 
   }

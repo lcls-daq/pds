@@ -25,7 +25,7 @@ namespace Pds {
     void AesDriverG3StatusWrap::read() {
       pgpGetInfo(_pgp->fd(),&info);
       pgpGetPci(_pgp->fd(),&pciStatus);
-      for (int x=0; x < NUMBER_OF_LANES; x++) {
+      for (int x=0; x < G3_NUMBER_OF_LANES; x++) {
         pgpGetStatus(_pgp->fd(),x,&status[x]);
         pgpGetEvrStatus(_pgp->fd(),x,&evrStatus[x]);
         pgpGetEvrControl(_pgp->fd(),x,&evrControl[x]);
@@ -300,7 +300,7 @@ namespace Pds {
       printf("               PciBus : 0x%.2x\n",pciStatus.pciBus);
       printf("             PciLanes : %i\n",pciStatus.pciLanes);
 
-      for (x=0; x < NUMBER_OF_LANES; x++) {
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
          if ( ((1 << x) & info.laneMask) == 0 ) continue;
 
          printf("\n");

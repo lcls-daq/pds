@@ -17,22 +17,11 @@ namespace Pds {
   namespace Pgp {
 
     void AesDriverG2StatusWrap::read() {
-      //unsigned tmp;
-      //struct DmaRegisterData reg;
-      //reg.data = 0;
-      memset(&status,0,sizeof(PgpCardStatus));
-      dmaReadRegister(_pgp->fd(), (unsigned)offsetof(PgpCardG2Regs, version), (unsigned*)&(status.Version) );
-      dmaReadRegister(_pgp->fd(), (unsigned)offsetof(PgpCardG2Regs, scratch), (unsigned*)&(status.ScratchPad) );
-      //dmaReadRegister(_pgp->fd(), (unsigned)offsetof(PgpCardG3Regs, SerialNumber[1]), (unsigned*)&(status.SerialNumber[1]) );
-      //for(unsigned i=0; i<64; i++) {
-      //  reg.address = (unsigned)offsetof(PgpCardG3Regs, BuildStamp[0]) + (i*sizeof(unsigned));
-      //  ioctl(_pgp->fd(),DMA_Read_Register,&reg);
-      //  status.BuildStamp[i] = reg.data;
-      //}
-      //dmaReadRegister(_pgp->fd(), (unsigned)offsetof(PgpCardG3Regs, cardRstStat), &tmp );
-      //status.CountReset = tmp & 1;
-      //status.CardReset = (tmp>>1) & 1;
-
+      pgpGetInfo(_pgp->fd(),&info);
+      pgpGetPci(_pgp->fd(),&pciStatus);
+      for (int x=0; x < G2_NUMBER_OF_LANES; x++) {
+        pgpGetStatus(_pgp->fd(),x,&status[x]);
+      }
     }
 
     unsigned AesDriverG2StatusWrap::checkPciNegotiatedBandwidth() {
@@ -93,7 +82,52 @@ namespace Pds {
     }
 
     void AesDriverG2StatusWrap::print() {
+      int           x;
+      this->read();
+      printf("\nPGP Card Status:\n");
 
+      printf("-------------- Card Info ------------------\n");
+      printf("                 Type : 0x%.2x\n",info.type);
+      printf("              Version : 0x%.8x\n",info.version);
+      printf("               Serial : 0x%.16llx\n",(long long unsigned)(info.serial));
+      printf("           BuildStamp : %s\n",info.buildStamp);
+      printf("             LaneMask : 0x%.4x\n",info.laneMask);
+      printf("            VcPerMask : 0x%.2x\n",info.vcPerMask);
+      printf("              PgpRate : %i\n",info.pgpRate);
+      printf("            PromPrgEn : %i\n",info.promPrgEn);
+
+      printf("\n");
+      printf("-------------- PCI Info -------------------\n");
+      printf("           PciCommand : 0x%.4x\n",pciStatus.pciCommand);
+      printf("            PciStatus : 0x%.4x\n",pciStatus.pciStatus);
+      printf("          PciDCommand : 0x%.4x\n",pciStatus.pciDCommand);
+      printf("           PciDStatus : 0x%.4x\n",pciStatus.pciDStatus);
+      printf("          PciLCommand : 0x%.4x\n",pciStatus.pciLCommand);
+      printf("           PciLStatus : 0x%.4x\n",pciStatus.pciLStatus);
+      printf("         PciLinkState : 0x%x\n",pciStatus.pciLinkState);
+      printf("          PciFunction : 0x%x\n",pciStatus.pciFunction);
+      printf("            PciDevice : 0x%x\n",pciStatus.pciDevice);
+      printf("               PciBus : 0x%.2x\n",pciStatus.pciBus);
+      printf("             PciLanes : %i\n",pciStatus.pciLanes);
+
+      for (x=0; x < G2_NUMBER_OF_LANES; x++) {
+         if ( ((1 << x) & info.laneMask) == 0 ) continue;
+
+         printf("\n");
+         printf("-------------- Lane %i --------------------\n",x);
+         printf("             LoopBack : %i\n",status[x].loopBack);
+         printf("         LocLinkReady : %i\n",status[x].locLinkReady);
+         printf("         RemLinkReady : %i\n",status[x].remLinkReady);
+         printf("              RxReady : %i\n",status[x].rxReady);
+         printf("              TxReady : %i\n",status[x].txReady);
+         printf("              RxCount : %i\n",status[x].rxCount);
+         printf("           CellErrCnt : %i\n",status[x].cellErrCnt);
+         printf("          LinkDownCnt : %i\n",status[x].linkDownCnt);
+         printf("           LinkErrCnt : %i\n",status[x].linkErrCnt);
+         printf("              FifoErr : %i\n",status[x].fifoErr);
+         printf("              RemData : 0x%.2x\n",status[x].remData);
+         printf("        RemBuffStatus : 0x%.2x\n",status[x].remBuffStatus);
+      }
     }
   }
 }

@@ -10,7 +10,7 @@
 
 #include "pds/pgp/Destination.hh"
 #include "pds/pgp/Pgp.hh"
-#include "pgpcard/PgpCardStatus.h"
+#include <PgpDriver.h>
 #include <time.h>
 
 namespace Pds {
@@ -33,7 +33,9 @@ namespace Pds {
         void              print();
 
       protected:
-        PgpCardStatus         status;
+        PgpInfo           info;
+        PciStatus         pciStatus;
+        ::PgpStatus       status[G2_NUMBER_OF_LANES];
     };
 
   }

@@ -142,7 +142,7 @@ namespace Pds {
       unsigned mask = (lm << _pgp->portOffset());
       unsigned extra = 0;
       // Find the first lane in the mask and find number of additional ports to add
-      for (int i=0; i<NUMBER_OF_LANES; i++) {
+      for (int i=0; i<G3_NUMBER_OF_LANES; i++) {
         if (mask & (1<<i)) {
           if (found) {
             extra++;

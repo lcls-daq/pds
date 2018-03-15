@@ -221,7 +221,7 @@ void Epix10kaConfigurator::enableRunTrigger(bool f) {
   unsigned mask = 1<<(_pgp->portOffset());
   _d.dest(Epix10kaDestination::Registers);
   _pgp->writeRegister(&_d, RunTriggerEnable, f ? Enable : Disable);
-  _pgp->maskRunTrigger(mask, f ? false : true);
+  _pgp->maskRunTrigger(f ? false : true);
   printf("Epix10kaConfigurator::enableRunTrigger(%s), mask 0x%x\n", f ? "true" : "false", mask);
 }
 
@@ -350,7 +350,7 @@ unsigned Epix10kaConfigurator::G3config(Epix10kaConfigType* c) {
         ret |= evrRunCode((unsigned)c->evrRunCode());
         ret |= evrRunDelay((unsigned)c->evrRunTrigDelay());
         ret |= evrDaqCode((unsigned)c->evrDaqCode());
-        ret |= evrDaqDelay((unsigned)c->evrRunTrigDelay() + 11);
+        ret |= evrDaqDelay((unsigned)c->evrRunTrigDelay() + 1250);
         ret |=  waitForFiducialMode(false);
         microSpin(10);
         ret |= evrLaneEnable(false);

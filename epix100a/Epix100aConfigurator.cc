@@ -219,7 +219,7 @@ void Epix100aConfigurator::enableRunTrigger(bool f) {
   unsigned mask = 1<<(_pgp->portOffset());
   _d.dest(Epix100aDestination::Registers);
   _pgp->writeRegister(&_d, RunTriggerEnable, f ? Enable : Disable);
-  _pgp->maskRunTrigger(mask, !f);
+  _pgp->maskRunTrigger(!f);
   printf("Epix100aConfigurator::enableRunTrigger(%s), mask 0x%x\n", f ? "true" : "false", mask);
 }
 
@@ -346,7 +346,7 @@ unsigned Epix100aConfigurator::G3config(Epix100aConfigType* c) {
         ret |= evrRunCode((unsigned)c->evrRunCode());
         ret |= evrRunDelay((unsigned)c->evrRunTrigDelay());
         ret |= evrDaqCode((unsigned)c->evrDaqCode());
-        ret |= evrDaqDelay((unsigned)c->evrRunTrigDelay() + 11905);
+        ret |= evrDaqDelay((unsigned)c->evrRunTrigDelay() + 1250);
         ret |=  waitForFiducialMode(false);
         microSpin(10);
         ret |= evrLaneEnable(false);

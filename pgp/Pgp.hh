@@ -66,7 +66,7 @@ namespace Pds {
         int           evrEnableHdrChk(unsigned, bool);
 				bool          getLatestLaneStatus();
 				int           resetPgpLane();
-				int           maskRunTrigger(unsigned m, bool b);
+				int           maskRunTrigger(bool b);
 				int           resetSequenceCount();
 				void          printStatus();
 				unsigned      stopPolling();

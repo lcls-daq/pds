@@ -37,7 +37,8 @@ namespace Pds {
       return  tmp2;
     }
 
-    int AesDriverG2StatusWrap::resetPgpLane(unsigned lane) {
+    int AesDriverG2StatusWrap::resetPgpLane() {
+      unsigned lane = _pgp->portOffset();
       unsigned tmp;
       ssize_t res = 0;
       res |= dmaReadRegister(_pgp->fd(), (unsigned)offsetof(PgpCardG2Regs, control), (unsigned*)&(tmp));
@@ -66,7 +67,7 @@ namespace Pds {
 
     int AesDriverG2StatusWrap::allocateVC(unsigned vcm, unsigned lm) {
       unsigned char maskBytes[32];
-      unsigned lane = pgp()->portOffset();
+      unsigned lane = _pgp->portOffset();
       dmaInitMaskBytes(maskBytes);
       for(unsigned i=0; i<4; i++) {
         if ((1<<i) & (lm<<lane)) {

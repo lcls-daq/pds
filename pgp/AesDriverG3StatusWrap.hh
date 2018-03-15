@@ -34,16 +34,18 @@ namespace Pds {
         int               evrRunDelay(unsigned);
         int               evrDaqCode(unsigned);
         int               evrDaqDelay(unsigned);
+        int               evrSetPulses(unsigned, unsigned, unsigned, unsigned);
         int               evrLaneEnable(bool);
         int               evrEnableHdrChk(unsigned, bool);
+        int               evrEnableHdrChkMask(unsigned, bool);
         bool              getLatestLaneStatus();
         bool              evrEnabled(bool);
         int               evrEnable(bool);
         int               allocateVC(unsigned vcm);
         int               allocateVC(unsigned vcm, unsigned lm);
-        int               resetSequenceCount(unsigned mask);
-        int               maskRunTrigger(unsigned mask, bool b);
-        int               resetPgpLane(unsigned);
+        int               resetSequenceCount();
+        int               maskRunTrigger(bool b);
+        int               resetPgpLane();
         int               writeScratch(unsigned);
 
       protected:

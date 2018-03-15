@@ -126,14 +126,13 @@ bool     Pgp::Pgp::getLatestLaneStatus() {
   return _status->getLatestLaneStatus();
 }
 int      Pgp::Pgp::resetSequenceCount() {
-  return _status->resetSequenceCount(1<<Pds::Pgp::Pgp::portOffset());
+  return _status->resetSequenceCount();
 }
-int      Pgp::Pgp::maskRunTrigger(unsigned mask, bool b) {
-  printf("Pgp::maskRunTrigger(0x%x, %s)\n", mask, b  ? "true" : "false");
-  return _status->maskRunTrigger(mask, b);
+int      Pgp::Pgp::maskRunTrigger(bool b) {
+  return _status->maskRunTrigger(b);
 }
 int      Pgp::Pgp::resetPgpLane() {
-  return _status->resetPgpLane(Pds::Pgp::Pgp::portOffset());
+  return _status->resetPgpLane();
 }
 char*    Pgp::Pgp::errorString() {
   return _status->errorString();

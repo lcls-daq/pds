@@ -57,16 +57,18 @@ namespace Pds {
         virtual int               evrRunDelay(unsigned) {return 0;}
         virtual int               evrDaqCode(unsigned) {return 0;}
         virtual int               evrDaqDelay(unsigned) {return 0;}
+        virtual int               evrSetPulses(unsigned, unsigned, unsigned, unsigned) {return 0;}
         virtual int               evrLaneEnable(bool) {return 0;}
         virtual int               evrEnableHdrChk(unsigned, bool) {return 0;}
+        virtual int               evrEnableHdrChkMask(unsigned, bool) {return 0;}
         virtual bool              getLatestLaneStatus() {return true;}
         virtual bool              evrEnabled(bool) {return true;}
         virtual int               evrEnable(bool) {return 0;}
         virtual int               allocateVC(unsigned vcm) {return 0;}
         virtual int               allocateVC(unsigned vcm, unsigned l) { return 0;}
-        virtual int               resetSequenceCount(unsigned mask) { return 0;}
-        virtual int               maskRunTrigger(unsigned mask, bool b) { return 0;}
-        virtual int               resetPgpLane(unsigned) {return 0;}
+        virtual int               resetSequenceCount() { return 0;}
+        virtual int               maskRunTrigger(bool b) { return 0;}
+        virtual int               resetPgpLane() {return 0;}
         virtual int               writeScratch(unsigned) = 0;
         char*                     errorString() {return es;}
         void                      errorStringAppend(char*);

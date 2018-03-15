@@ -73,6 +73,15 @@ namespace Pds {
       return _pgp->IoctlCommand(IOCTL_Evr_AcceptDelay, arg);
     }
 
+    int PgpCardG3StatusWrap::evrSetPulses(unsigned runcode, unsigned rundelay, unsigned daqcode, unsigned daqdelay) {
+      int ret = 0;
+      ret |= evrRunCode(runcode);
+      ret |= evrRunDelay(rundelay);
+      ret |= evrDaqCode(daqcode);
+      ret |= evrDaqDelay(daqdelay);
+      return ret;
+    }
+
     int PgpCardG3StatusWrap::evrLaneEnable(bool e) {
       unsigned mask = 1 << _pgp->portOffset();
       if (e) {
@@ -85,6 +94,16 @@ namespace Pds {
     int PgpCardG3StatusWrap::evrEnableHdrChk(unsigned vc, bool e) {
       unsigned arg = (_pgp->portOffset()<<28) | (vc<<24) | (e ? 1 : 0);
       return _pgp->IoctlCommand( IOCTL_Evr_En_Hdr_Check, arg);
+    }
+
+    int PgpCardG3StatusWrap::evrEnableHdrChkMask(unsigned vcm, bool e) {
+      int ret = 0;
+      for (int i=0; i<4; i++) {
+        if (vcm>>i & 0x1) {
+          ret |= evrEnableHdrChk(i, e);
+        }
+      }
+      return ret;
     }
 
     bool PgpCardG3StatusWrap::getLatestLaneStatus() {
@@ -161,16 +180,19 @@ namespace Pds {
       return ret;
     }
 
-    int PgpCardG3StatusWrap::resetSequenceCount(unsigned mask) {
+    int PgpCardG3StatusWrap::resetSequenceCount() {
+      unsigned mask = 1 << _pgp->portOffset();
       return _pgp->IoctlCommand(IOCTL_ClearFrameCounter, mask);
     }
 
-    int PgpCardG3StatusWrap::maskRunTrigger(unsigned mask, bool b) {
+    int PgpCardG3StatusWrap::maskRunTrigger(bool b) {
+      unsigned mask = 1 << _pgp->portOffset();
       unsigned flag = b ? 1 : 0;
       return _pgp->IoctlCommand(IOCTL_Evr_RunMask, (unsigned)((mask<<24) | flag));
     }
 
-    int PgpCardG3StatusWrap::resetPgpLane(unsigned lane) {
+    int PgpCardG3StatusWrap::resetPgpLane() {
+      unsigned lane = _pgp->portOffset();
       int ret = 0;
       ret |= _pgp->IoctlCommand(IOCTL_Set_Tx_Reset, lane);
       ret |= _pgp->IoctlCommand(IOCTL_Clr_Tx_Reset, lane);

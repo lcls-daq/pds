@@ -30,7 +30,7 @@ namespace Pds {
         unsigned          checkPciNegotiatedBandwidth();
         int               allocateVC(unsigned vcm);
         int               allocateVC(unsigned vcm, unsigned l);
-        int               resetPgpLane(unsigned);
+        int               resetPgpLane();
         int               writeScratch(unsigned);
         void              print();
 

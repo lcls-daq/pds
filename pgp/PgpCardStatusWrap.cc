@@ -56,7 +56,8 @@ namespace Pds {
         return _pgp->IoctlCommand( IOCTL_Set_VC_Mask, arg);
       }
 
-      int PgpCardStatusWrap::resetPgpLane(unsigned lane) {
+      int PgpCardStatusWrap::resetPgpLane() {
+        unsigned lane = _pgp->portOffset();
         int ret = 0;
         ret |= _pgp->IoctlCommand(IOCTL_Set_Tx_Reset, lane);
         ret |= _pgp->IoctlCommand(IOCTL_Clr_Tx_Reset, lane);

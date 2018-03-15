@@ -143,7 +143,7 @@ void Epix10kConfigurator::enableRunTrigger(bool f) {
   unsigned mask = 1<<(_pgp->portOffset());
   _d.dest(Epix10kDestination::Registers);
   _pgp->writeRegister(&_d, RunTriggerEnable, f ? Enable : Disable);
-  _pgp->maskRunTrigger(mask, !f);
+  _pgp->maskRunTrigger(!f);
   printf("Epix10kConfigurator::enableRunTrigger(%s), mask 0x%x\n", f ? "true" : "false", mask);
 }
 

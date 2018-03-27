@@ -154,7 +154,7 @@ bool Driver::set_cooling(bool enable, ZylaConfigType::CoolingSetpoint setpoint, 
   return true;
 }
 
-bool Driver::set_trigger(ZylaConfigType::TriggerMode trigger, double trigger_delay, double exposure_time, bool overlap)
+bool Driver::set_trigger(ZylaConfigType::TriggerMode trigger, double trigger_delay, bool overlap)
 {
   // Set the trigger mode
   switch(trigger) {
@@ -177,6 +177,12 @@ bool Driver::set_trigger(ZylaConfigType::TriggerMode trigger, double trigger_del
   if (at_check_write(AT3_EXTERN_TRIGGER_DELAY)) {
     set_config_float(AT3_EXTERN_TRIGGER_DELAY, trigger_delay);
   }
+
+  return true;
+}
+
+bool Driver::set_exposure(double exposure_time)
+{
   // Set the camera exposure time
   if (at_check_write(AT3_EXPOSURE_TIME)) {
     set_config_float(AT3_EXPOSURE_TIME, exposure_time);
@@ -495,6 +501,16 @@ double Driver::exposure() const
   return at_get_float(AT3_EXPOSURE_TIME);
 }
 
+double Driver::exposure_min() const
+{
+  return at_get_float_min(AT3_EXPOSURE_TIME);
+}
+
+double Driver::exposure_max() const
+{
+  return at_get_float_max(AT3_EXPOSURE_TIME);
+}
+
 bool Driver::overlap_mode() const
 {
   AT_BOOL overlap;
@@ -672,11 +688,43 @@ AT_64 Driver::at_get_int(const AT_WC* feature) const
   return value;
 }
 
+AT_64 Driver::at_get_int_min(const AT_WC* feature) const
+{
+  AT_64 value = 0;
+  if (AT_GetIntMin(_cam, feature, &value) != AT_SUCCESS)
+    fprintf(stderr, "Failed to retrieve minimum of %ls from camera!\n", feature);
+  return value;
+}
+
+AT_64 Driver::at_get_int_max(const AT_WC* feature) const
+{
+  AT_64 value = 0;
+  if (AT_GetIntMax(_cam, feature, &value) != AT_SUCCESS)
+    fprintf(stderr, "Failed to retrieve maximum of %ls from camera!\n", feature);
+  return value;
+}
+
 double Driver::at_get_float(const AT_WC* feature) const
 {
   double value = NAN;
   if (AT_GetFloat(_cam, feature, &value) != AT_SUCCESS)
     fprintf(stderr, "Failed to retrieve %ls from camera!\n", feature);
+  return value;
+}
+
+double Driver::at_get_float_min(const AT_WC* feature) const
+{
+  double value = NAN;
+  if (AT_GetFloatMin(_cam, feature, &value) != AT_SUCCESS)
+    fprintf(stderr, "Failed to retrieve minimum of %ls from camera!\n", feature);
+  return value;
+}
+
+double Driver::at_get_float_max(const AT_WC* feature) const
+{
+  double value = NAN;
+  if (AT_GetFloatMax(_cam, feature, &value) != AT_SUCCESS)
+    fprintf(stderr, "Failed to retrieve maximum of %ls from camera!\n", feature);
   return value;
 }
 

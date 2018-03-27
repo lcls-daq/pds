@@ -132,6 +132,7 @@ namespace Pds {
 
     class ConfigAction : public Action {
     public:
+      enum { MaxErrMsgLength=256 };
       ConfigAction(Manager& mgr, Driver& driver, Server& server, FrameReader& reader, CfgClientNfs& cfg) :
         _mgr(mgr),
         _driver(driver),
@@ -206,13 +207,20 @@ namespace Pds {
             return tr;
           }
 
-          if (!_driver.set_trigger(_config.triggerMode(), _config.triggerDelay(), _config.exposureTime(), _config.overlap())) {
+          if (!_driver.set_trigger(_config.triggerMode(), _config.triggerDelay(), _config.overlap())) {
             _error = true;
             fprintf(stderr, "ConfigAction: failed to apply trigger configuration.\n");
             UserMessage* msg = new (&_occPool) UserMessage("Zyla Config: failed to apply trigger configuration.");
             _mgr.appliance().post(msg);
 
             return tr;
+          }
+
+          if (!_driver.set_exposure(_config.exposureTime())) {
+            _error = true;
+            fprintf(stderr, "ConfigAction: failed to apply exposure time configuration.\n");
+            UserMessage* msg = new (&_occPool) UserMessage();
+            _mgr.appliance().post(msg);
           }
 
           if (!_driver.set_cooling(_config.cooling(),

@@ -70,7 +70,7 @@ namespace Pds {
       if (_use_aes) {
         struct DmaWriteData  pgpCardTx;
         
-        pgpCardTx.is32   = 0;
+        pgpCardTx.is32   = (sizeof(&pgpCardTx) == 4);
         pgpCardTx.flags  = 0;
         pgpCardTx.dest   = this->bits._vc | ((this->bits._lane + Pgp::portOffset())<<2);
         pgpCardTx.index  = 0;

@@ -15,7 +15,8 @@ namespace Pds {
       public:
         bool set_image(AT_64 width, AT_64 height, AT_64 orgX, AT_64 orgY, AT_64 binX, AT_64 binY, bool noise_filter, bool blemish_correction, bool fast_frame=true);
         bool set_cooling(bool enable, ZylaConfigType::CoolingSetpoint setpoint, ZylaConfigType::FanSpeed fan_speed);
-        bool set_trigger(ZylaConfigType::TriggerMode trigger, double trigger_delay, double exposure_time, bool overlap);
+        bool set_trigger(ZylaConfigType::TriggerMode trigger, double trigger_delay, bool overlap);
+        bool set_exposure(double exposure_time);
         bool set_readout(ZylaConfigType::ShutteringMode shutter, ZylaConfigType::ReadoutRate readout_rate, ZylaConfigType::GainMode gain);
         bool configure(const AT_64 nframes=0);
         bool start();
@@ -44,6 +45,8 @@ namespace Pds {
         double pixel_width() const;
         double temperature() const;
         double exposure() const;
+        double exposure_min() const;
+        double exposure_max() const;
         bool overlap_mode() const;
         bool cooling_on() const;
         bool check_cooling(bool is_stable=true) const;
@@ -66,7 +69,11 @@ namespace Pds {
         bool at_check_write(const AT_WC* feature) const;
         bool at_get_string(const AT_WC* feature, AT_WC* buffer, int buffer_size) const;
         AT_64 at_get_int(const AT_WC* feature) const;
+        AT_64 at_get_int_min(const AT_WC* feature) const;
+        AT_64 at_get_int_max(const AT_WC* feature) const;
         double at_get_float(const AT_WC* feature) const;
+        double at_get_float_min(const AT_WC* feature) const;
+        double at_get_float_max(const AT_WC* feature) const;
         bool at_get_enum(const AT_WC* feature, AT_WC* buffer, int buffer_size) const;
         bool at_set_int(const AT_WC* feature, const AT_64 value);
         bool at_set_float(const AT_WC* feature, const double value);

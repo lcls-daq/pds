@@ -11,6 +11,7 @@
 #include "pds/service/GenericPool.hh"
 #include "pds/service/Task.hh"
 #include "pdsdata/xtc/XtcIterator.hh"
+#include "pdsdata/xtc/DetInfo.hh"
 
 #include <errno.h>
 
@@ -163,7 +164,11 @@ namespace Pds {
 
           fprintf(stderr, "ConfigAction: failed to retrieve configuration: (%d) %s.\n", errno, strerror(errno));
 
-          UserMessage* msg = new (&_occPool) UserMessage("Zyla Config Error: failed to retrieve configuration.\n");
+          snprintf(_err_buffer,
+                   MaxErrMsgLength,
+                   "Zyla Config: failed to retrieve configuration for %s !",
+                   DetInfo::name(static_cast<const DetInfo&>(_cfgtc.src)));
+          UserMessage* msg = new (&_occPool) UserMessage(_err_buffer);
           _mgr.appliance().post(msg);
         } else {
           _cfgtc.extent = sizeof(Xtc) + sizeof(ZylaConfigType);
@@ -182,7 +187,12 @@ namespace Pds {
                                  _config.blemishCorrection())) {
             _error = true;
             fprintf(stderr, "ConfigAction: failed to apply image/ROI configuration.\n");
-            UserMessage* msg = new (&_occPool) UserMessage("Zyla Config: failed to apply image/ROI configuration.");
+
+            snprintf(_err_buffer,
+                     MaxErrMsgLength,
+                     "Zyla Config: failed to apply image/ROI configuration for %s !",
+                     DetInfo::name(static_cast<const DetInfo&>(_cfgtc.src)));
+            UserMessage* msg = new (&_occPool) UserMessage(_err_buffer);
             _mgr.appliance().post(msg);
 
             return tr;
@@ -191,7 +201,11 @@ namespace Pds {
           if (!_driver.set_readout(_config.shutter(), _config.readoutRate(), _config.gainMode())) {
             _error = true;
             fprintf(stderr, "ConfigAction: failed to apply readout configuration.\n");
-            UserMessage* msg = new (&_occPool) UserMessage("Zyla Config: failed to apply readout configuration.");
+            snprintf(_err_buffer,
+                     MaxErrMsgLength,
+                     "Zyla Config: failed to apply readout configuration for %s !",
+                     DetInfo::name(static_cast<const DetInfo&>(_cfgtc.src)));
+            UserMessage* msg = new (&_occPool) UserMessage(_err_buffer);
             _mgr.appliance().post(msg);
 
             return tr;
@@ -201,7 +215,11 @@ namespace Pds {
           if (_config.triggerMode() != ZylaConfigType::ExternalExposure && _config.triggerMode() != ZylaConfigType::External) {
             _error = true;
             fprintf(stderr, "ConfigAction: unsupported trigger configuration mode: %d.\n", _config.triggerMode());
-            UserMessage* msg = new (&_occPool) UserMessage("Zyla Config: unsupported trigger configuration mode.");
+            snprintf(_err_buffer,
+                     MaxErrMsgLength,
+                     "Zyla Config: unsupported trigger configuration mode for %s !",
+                     DetInfo::name(static_cast<const DetInfo&>(_cfgtc.src)));
+            UserMessage* msg = new (&_occPool) UserMessage(_err_buffer);
             _mgr.appliance().post(msg);
 
             return tr;
@@ -210,7 +228,11 @@ namespace Pds {
           if (!_driver.set_trigger(_config.triggerMode(), _config.triggerDelay(), _config.overlap())) {
             _error = true;
             fprintf(stderr, "ConfigAction: failed to apply trigger configuration.\n");
-            UserMessage* msg = new (&_occPool) UserMessage("Zyla Config: failed to apply trigger configuration.");
+            snprintf(_err_buffer,
+                     MaxErrMsgLength,
+                     "Zyla Config: failed to apply trigger configuration for %s !",
+                     DetInfo::name(static_cast<const DetInfo&>(_cfgtc.src)));
+            UserMessage* msg = new (&_occPool) UserMessage(_err_buffer);
             _mgr.appliance().post(msg);
 
             return tr;
@@ -219,8 +241,26 @@ namespace Pds {
           if (!_driver.set_exposure(_config.exposureTime())) {
             _error = true;
             fprintf(stderr, "ConfigAction: failed to apply exposure time configuration.\n");
-            UserMessage* msg = new (&_occPool) UserMessage();
+            fprintf(stderr, "ConfigAction: Requested exposure of %.5f s is outside the allowed range of %.5f to %.5f s.\n",
+                    _config.exposureTime(), _driver.exposure_min(), _driver.exposure_max());
+            snprintf(_err_buffer,
+                     MaxErrMsgLength,
+                     "Zyla Config: failure setting exposure time for %s !\n"
+                     "\nRequested exposure of %.5f s is outside the range of %.5f to %.5f s allowed by the current camera settings.",
+                     DetInfo::name(static_cast<const DetInfo&>(_cfgtc.src)),
+                     _config.exposureTime(),
+                     _driver.exposure_min(),
+                     _driver.exposure_max());
+            UserMessage* msg = new (&_occPool) UserMessage(_err_buffer);
+            if (_driver.overlap_mode()) {
+              snprintf(_err_buffer, MaxErrMsgLength,
+                       "\n\nCamera is in overlap readout mode!\n"
+                       "Exposure time must be greater than the frame readout time of %.5f s + a bit extra in this mode.", _driver.readout_time());
+              msg->append(_err_buffer);
+            }
             _mgr.appliance().post(msg);
+
+            return tr;
           }
 
           if (!_driver.set_cooling(_config.cooling(),
@@ -228,7 +268,11 @@ namespace Pds {
                                    _config.fanSpeed())) {
             _error = true;
             fprintf(stderr, "ConfigAction: failed to apply cooling configuration.\n");
-            UserMessage* msg = new (&_occPool) UserMessage("Zyla Config: failed to apply cooling configuration.");
+            snprintf(_err_buffer,
+                     MaxErrMsgLength,
+                     "Zyla Config: failed to apply cooling configuration for %s !",
+                     DetInfo::name(static_cast<const DetInfo&>(_cfgtc.src)));
+            UserMessage* msg = new (&_occPool) UserMessage(_err_buffer);
             _mgr.appliance().post(msg);
 
             return tr;
@@ -237,7 +281,11 @@ namespace Pds {
           if (!_driver.configure()) {
             _error = true;
             fprintf(stderr, "ConfigAction: failed to apply configuration.\n");
-            UserMessage* msg = new (&_occPool) UserMessage("Zyla Config: failed to apply configuration.");
+            snprintf(_err_buffer,
+                     MaxErrMsgLength,
+                     "Zyla Config: failed to apply configuration for %s !",
+                     DetInfo::name(static_cast<const DetInfo&>(_cfgtc.src)));
+            UserMessage* msg = new (&_occPool) UserMessage(_err_buffer);
             _mgr.appliance().post(msg);
 
             return tr;
@@ -290,6 +338,7 @@ namespace Pds {
       Xtc                 _cfgtc;
       GenericPool         _occPool;
       bool                _error;
+      char                _err_buffer[MaxErrMsgLength];
       AT_WC               _wc_buffer[AT_MAX_MSG_LEN];
 #ifdef TIMING_DEBUG
       timespec            _time_start;

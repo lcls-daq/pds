@@ -23,8 +23,10 @@ namespace Pds {
         ~CspadDestination() {}
 
         enum FEdest {CR=0, Q0=1, Q1=2, Q2=5, Q3=6, NumberOf=5};
+        enum {vcMask=1, laneMask=2};
 
       public:
+        void                quad(unsigned q) { _dest = ((q&laneMask)<<1) + (q&vcMask) + 1; }
         const char*         name();
 //        CspadDestination::FEdest getDest(Pds::Pgp::RegisterSlaveImportFrame*);
     };

@@ -71,7 +71,7 @@ namespace Pds {
   public:
     void start        () {} // { _task->call(this); }
     void queue_enable () { _task->call(_enable ); _enable ->block(); }
-    void queue_disable() { _task->call(_disable); edt_do_timeout(_base->dev()); _disable->block(); }
+    void queue_disable() { _task->call(_disable); _disable->block(); }
     void enable       (bool v)
     {
       nPrint=0;

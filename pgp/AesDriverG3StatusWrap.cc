@@ -33,8 +33,8 @@ namespace Pds {
     }
 
     unsigned AesDriverG3StatusWrap::checkPciNegotiatedBandwidth() {
-      unsigned val = pciStatus.pciLanes;
       this->read();
+      unsigned val = pciStatus.pciLanes;
       if (val != 4) {
         sprintf(esp, "Negotiated bandwidth too low, %u\n Try reinstalling or replacing PGP G3 card\n", val);
         esp = es + strlen(es);
@@ -247,7 +247,7 @@ namespace Pds {
       unsigned char maskBytes[32];
       unsigned lane = _pgp->portOffset();
       dmaInitMaskBytes(maskBytes);
-      for(unsigned i=0; i<8; i++) {
+      for(unsigned i=0; i<G3_NUMBER_OF_LANES; i++) {
         if ((1<<i) & (lm<<lane)) {
           for(unsigned j=0; j<4; j++) {
             if ((1<<j) & vcm) {
@@ -258,6 +258,25 @@ namespace Pds {
         }
       }
       return dmaSetMaskBytes(_pgp->fd(), maskBytes);
+    }
+
+    int AesDriverG3StatusWrap::cleanupEvr(unsigned vcm) {
+      return cleanupEvr(vcm, 1);
+    }
+
+    int AesDriverG3StatusWrap::cleanupEvr(unsigned vcm, unsigned lm) {
+      unsigned offset = _pgp->portOffset();
+      ssize_t res = 0;
+      PgpEvrControl cntl;
+      for(unsigned lane=0; lane<G3_NUMBER_OF_LANES; lane++) {
+        if ((1<<lane) & (lm<<offset)) {
+          res |= pgpGetEvrControl(_pgp->fd(), lane, &cntl);
+          cntl.headerMask &= ~vcm;
+          cntl.laneRunMask = 1;
+          res |= pgpSetEvrControl(_pgp->fd(), lane, &cntl);
+        }
+      }
+      return res;
     }
 
     void AesDriverG3StatusWrap::print() {

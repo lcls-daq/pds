@@ -62,11 +62,14 @@ namespace Pds {
         bool                      evrEnabled(bool pf = false);
         int                       evrLaneEnable(bool);
         int                       evrEnableHdrChk(unsigned, bool);
+        int                       evrEnableHdrChkMask(unsigned, bool);
         int                       writeScratch(unsigned);
         void                      printRes();
         bool                      G3Flag() { return _G3; }
         int                       allocateVC(unsigned); // l is the offset relative to the first port or the port mask, assumption is first port
         int                       allocateVC(unsigned, unsigned);
+        int                       cleanupEvr(unsigned);
+        int                       cleanupEvr(unsigned, unsigned);
 
       protected:
         friend class ConfigSynch;

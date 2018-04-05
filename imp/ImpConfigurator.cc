@@ -45,6 +45,7 @@ ImpConfigurator::ImpConfigurator(bool use_aes, int f, unsigned d) :
   new(&_statRegs) ImpStatusRegisters();
   _statRegs.pgp = pgp();
   allocateVC(0xf);
+  cleanupEvr(0xf);
 
   //    printf("\tlocations _pool(%p), _config(%p)\n", _pool, &_config);
   //    _rhisto = (unsigned*) calloc(1000, 4);

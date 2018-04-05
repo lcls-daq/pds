@@ -77,6 +77,7 @@ namespace Pds {
         printf("CspadConfigurator constructor unable to allocate additional port so pulling the plug !!!!!! ret(%d) SUCCESS(%d)\n", ret, SUCCESS);
         ::exit(-1);
       }
+      cleanupEvr(0xf, 3);
       //    printf("\tlocations _pool(%p), _config(%p)\n", _pool, &_config);
       //    _rhisto = (unsigned*) calloc(1000, 4);
       //    _lhisto = (LoopHisto*) calloc(4*10000, 4);

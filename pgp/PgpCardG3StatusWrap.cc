@@ -180,6 +180,27 @@ namespace Pds {
       return ret;
     }
 
+    int PgpCardG3StatusWrap::cleanupEvr(unsigned vcm) {
+      return cleanupEvr(vcm, 1);
+    }
+
+    int PgpCardG3StatusWrap::cleanupEvr(unsigned vcm, unsigned lm) {
+      unsigned offset = _pgp->portOffset();
+      unsigned arg = ((lm<<offset)<<24) | 1;
+      int ret = _pgp->IoctlCommand(IOCTL_Evr_RunMask, arg);
+      for(unsigned lane=0; lane<G3_NUMBER_OF_LANES; lane++) {
+        if ((1<<lane) & (lm<<offset)) {
+          for (int vc=0; vc<4; vc++) {
+            if (vcm>>vc & 0x1) {
+              arg = (lane<<28) | (vc<<24);
+              ret |= _pgp->IoctlCommand( IOCTL_Evr_En_Hdr_Check, arg);
+            }
+          }
+        }
+      }
+      return ret;
+    }
+
     int PgpCardG3StatusWrap::resetSequenceCount() {
       unsigned mask = 1 << _pgp->portOffset();
       return _pgp->IoctlCommand(IOCTL_ClearFrameCounter, mask);

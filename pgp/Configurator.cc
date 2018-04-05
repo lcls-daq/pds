@@ -163,12 +163,19 @@ namespace Pds {
       return ret;
     }
 
-
     int Configurator::evrEnableHdrChk(unsigned vc, bool e) {
       int ret;
       ret = _pgp->evrEnableHdrChk(vc, e);
       printf("Configurator::evrEnableHdrChk offset %d, vc %d, %s\n",
           _pgp->portOffset(), vc, e ? "true" : "false");
+      return ret;
+    }
+
+    int Configurator::evrEnableHdrChkMask(unsigned vcm, bool e) {
+      int ret;
+      ret = _pgp->evrEnableHdrChkMask(vcm, e);
+      printf("Configurator::evrEnableHdrChkMask offset %d, vcm %d, %s\n",
+          _pgp->portOffset(), vcm, e ? "true" : "false");
       return ret;
     }
 
@@ -178,6 +185,14 @@ namespace Pds {
 
     int Configurator::allocateVC(unsigned vcm, unsigned lm) {
       return _pgp->allocateVC(vcm, lm);
+    }
+
+    int Configurator::cleanupEvr(unsigned vcm) {
+      return _pgp->cleanupEvr(vcm);
+    }
+
+    int Configurator::cleanupEvr(unsigned vcm, unsigned lm) {
+      return _pgp->cleanupEvr(vcm, lm);
     }
 
     int Configurator::writeScratch(unsigned s) {

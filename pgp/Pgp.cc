@@ -98,6 +98,12 @@ int      Pgp::Pgp::allocateVC(unsigned vcm) {
 int      Pgp::Pgp::allocateVC(unsigned vcm, unsigned lm) {
   return _status->allocateVC(vcm, lm);
 }
+int      Pgp::Pgp::cleanupEvr(unsigned vcm) {
+  return _status->cleanupEvr(vcm);
+}
+int      Pgp::Pgp::cleanupEvr(unsigned vcm, unsigned lm) {
+  return _status->cleanupEvr(vcm, lm);
+}
 int      Pgp::Pgp::setFiducialTarget(unsigned t) {
   return _status->setFiducialTarget(t);
 }
@@ -107,20 +113,23 @@ int      Pgp::Pgp:: waitForFiducialMode(bool t) {
 int      Pgp::Pgp::evrRunCode(unsigned t) {
   return _status->evrRunCode(t);
 };
-int      Pgp::Pgp::Pgp::Pgp::evrRunDelay(unsigned d) {
+int      Pgp::Pgp::evrRunDelay(unsigned d) {
   return _status->evrRunDelay(d);
 };
-int      Pgp::Pgp::Pgp::Pgp::evrDaqCode(unsigned c) {
+int      Pgp::Pgp::evrDaqCode(unsigned c) {
   return _status->evrDaqCode(c);
 };
-int      Pgp::Pgp::Pgp::Pgp::evrDaqDelay(unsigned d) {
+int      Pgp::Pgp::evrDaqDelay(unsigned d) {
   return _status->evrDaqDelay(d);
 };
-int      Pgp::Pgp::Pgp::Pgp::evrLaneEnable(bool e) {
+int      Pgp::Pgp::evrLaneEnable(bool e) {
   return _status->evrLaneEnable(e);
 };
-int      Pgp::Pgp::Pgp::Pgp::evrEnableHdrChk(unsigned vc, bool e) {
+int      Pgp::Pgp::evrEnableHdrChk(unsigned vc, bool e) {
   return _status->evrEnableHdrChk(vc, e);
+}
+int      Pgp::Pgp::evrEnableHdrChkMask(unsigned vcm, bool e) {
+  return _status->evrEnableHdrChkMask(vcm, e);
 }
 bool     Pgp::Pgp::getLatestLaneStatus() {
   return _status->getLatestLaneStatus();

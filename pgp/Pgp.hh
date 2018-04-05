@@ -56,6 +56,8 @@ namespace Pds {
         unsigned      getCurrentFiducial();
         int           allocateVC(unsigned);
         int           allocateVC(unsigned, unsigned);
+        int           cleanupEvr(unsigned);
+        int           cleanupEvr(unsigned, unsigned);
         int           setFiducialTarget(unsigned);
         int           waitForFiducialMode(bool);
         int           evrRunCode(unsigned);
@@ -64,6 +66,7 @@ namespace Pds {
         int           evrDaqDelay(unsigned);
         int           evrLaneEnable(bool);
         int           evrEnableHdrChk(unsigned, bool);
+        int           evrEnableHdrChkMask(unsigned, bool);
         bool          getLatestLaneStatus();
         int           resetPgpLane();
         int           maskRunTrigger(bool b);

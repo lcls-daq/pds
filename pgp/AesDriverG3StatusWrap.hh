@@ -43,6 +43,8 @@ namespace Pds {
         int               evrEnable(bool);
         int               allocateVC(unsigned vcm);
         int               allocateVC(unsigned vcm, unsigned lm);
+        int               cleanupEvr(unsigned vcm);
+        int               cleanupEvr(unsigned vcm, unsigned lm);
         int               resetSequenceCount();
         int               maskRunTrigger(bool b);
         int               resetPgpLane();

@@ -63,6 +63,7 @@ namespace Pds {
                    _testModeState(0), _config(c), _rhisto(0) {
        printf("XampsConfigurator constructor _config(%p)\n", _config);
        allocateVC(0xf);
+       cleanupEvr(0xf);
       //    printf("\tlocations _pool(%p), _config(%p)\n", _pool, &_config);
       //    _rhisto = (unsigned*) calloc(1000, 4);
       //    _lhisto = (LoopHisto*) calloc(4*10000, 4);

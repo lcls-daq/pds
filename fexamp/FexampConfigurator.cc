@@ -39,6 +39,7 @@ FexampConfigurator::FexampConfigurator(bool, use_aes, int f, unsigned d) :
                            _testModeState(0), _runControl(0), _rhisto(0) {
   _statRegs.pgp = pgp();
   allocateVC(0xf);
+  cleanupEvr(0xf);
   printf("FexampConfigurator constructor\n");
   //    printf("\tlocations _pool(%p), _config(%p)\n", _pool, &_config);
   //    _rhisto = (unsigned*) calloc(1000, 4);

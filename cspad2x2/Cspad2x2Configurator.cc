@@ -85,6 +85,7 @@ namespace Pds {
       _initRanges();
       strcpy(_runTimeConfigFileName, "");
       allocateVC(0xf);
+      cleanupEvr(0xf);
       printf("Cspad2x2Configurator constructor _config(%p)\n", _config);
       //    printf("\tlocations _pool(%p), _config(%p)\n", _pool, &_config);
       //    _rhisto = (unsigned*) calloc(1000, 4);

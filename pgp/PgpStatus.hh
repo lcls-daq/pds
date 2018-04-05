@@ -66,6 +66,8 @@ namespace Pds {
         virtual int               evrEnable(bool) {return 0;}
         virtual int               allocateVC(unsigned vcm) {return 0;}
         virtual int               allocateVC(unsigned vcm, unsigned l) { return 0;}
+        virtual int               cleanupEvr(unsigned vcm) {return 0;}
+        virtual int               cleanupEvr(unsigned vcm, unsigned lm) {return 0;}
         virtual int               resetSequenceCount() { return 0;}
         virtual int               maskRunTrigger(bool b) { return 0;}
         virtual int               resetPgpLane() {return 0;}

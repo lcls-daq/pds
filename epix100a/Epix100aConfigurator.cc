@@ -19,7 +19,7 @@
 #include "pds/epix100a/Epix100aConfigurator.hh"
 #include "pds/epix100a/Epix100aDestination.hh"
 #include "pds/epix100a/Epix100aStatusRegisters.hh"
-#include "pdsapp/config/EventcodeTiming.hh"
+#include "pds/config/EventcodeTiming.hh"
 #include "ndarray/ndarray.h"
 
 using namespace Pds::Epix100a;

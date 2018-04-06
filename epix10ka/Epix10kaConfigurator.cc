@@ -14,12 +14,12 @@
 #include <mqueue.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include "pds/config/EventcodeTiming.hh"
 #include "pds/config/EpixConfigType.hh"
 #include "pds/pgp/Configurator.hh"
 #include "pds/epix10ka/Epix10kaConfigurator.hh"
 #include "pds/epix10ka/Epix10kaDestination.hh"
 #include "pds/epix10ka/Epix10kaStatusRegisters.hh"
-#include "pdsapp/config/EventcodeTiming.hh"
 #include "ndarray/ndarray.h"
 
 using namespace Pds::Epix10ka;
@@ -268,9 +268,7 @@ unsigned Epix10kaConfigurator::configure( Epix10kaConfigType* c, unsigned first)
   _config = c;
   _s = (Epix10kaConfigShadow*) c;
   _s->set(Epix10kaConfigShadow::UsePgpEvr, _fiberTriggering ? 1 : 0);
-  unsigned debugSaved = _debug;
   char* str = (char*) calloc( 256, sizeof(char));
-  _debug = 0;
   timespec      start, end;
   bool printFlag = true;
   if (printFlag) printf("Epix10ka Config size(%u)", _config->_sizeof());
@@ -334,7 +332,6 @@ unsigned Epix10kaConfigurator::configure( Epix10kaConfigType* c, unsigned first)
     printf(" it took %lld.%lld milliseconds with first %u\n", diff/1000000LL, diff%1000000LL, first);
     if (ret) dumpFrontEnd();
   }
-  _debug = debugSaved;
   return ret;
 }
 

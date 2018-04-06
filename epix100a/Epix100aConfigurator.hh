@@ -149,7 +149,7 @@ namespace Pds {
 //                                        //0x7735940 //  1 Hz
       EnableAutomaticDaqTriggerAddr     = 0x13,  // do not add to config
       DaqTrigggerDelayAddr              = 0x4,
-      RunToDaqTriggerDelay              = 1250,
+      RunToDaqTriggerDelay              = 15,
       PgpTriggerEnable                  = 0x3d,
       MonitorEnableAddr                 = 0x3e
     };

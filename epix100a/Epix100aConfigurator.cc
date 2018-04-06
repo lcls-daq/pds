@@ -19,6 +19,7 @@
 #include "pds/epix100a/Epix100aConfigurator.hh"
 #include "pds/epix100a/Epix100aDestination.hh"
 #include "pds/epix100a/Epix100aStatusRegisters.hh"
+#include "pdsapp/config/EventcodeTiming.hh"
 #include "ndarray/ndarray.h"
 
 using namespace Pds::Epix100a;
@@ -335,6 +336,21 @@ unsigned Epix100aConfigurator::configure( Epix100aConfigType* c, unsigned first)
 
 unsigned Epix100aConfigurator::G3config(Epix100aConfigType* c) {
   unsigned ret = 0;
+  unsigned runTick = Pds_ConfigDb::EventcodeTiming::timeslot((unsigned)c->evrRunCode());
+  unsigned daqTick = Pds_ConfigDb::EventcodeTiming::timeslot((unsigned)c->evrDaqCode());
+  unsigned daqDelay = 0;
+  if (runTick == daqTick) {
+    daqDelay = (unsigned)c->evrRunTrigDelay() + 15;
+  } else if (runTick > daqTick) {
+    daqDelay = (runTick - daqTick) + (unsigned)c->evrRunTrigDelay() + 15;
+  } else if (daqTick > runTick) {
+    if ((daqTick - runTick) < ((unsigned)c->evrRunTrigDelay() + 64)) {
+      daqDelay = ((unsigned)c->evrRunTrigDelay() + 64) + runTick - daqTick;
+    } else {
+      printf("Epix100aConfigurator::G3config Timing error!!!!!\n");
+      return 1;
+    }
+  }
   _d.dest(Epix100aDestination::Registers);
   if (_pgp->G3Flag()) {
     if (fiberTriggering()) {
@@ -346,7 +362,7 @@ unsigned Epix100aConfigurator::G3config(Epix100aConfigType* c) {
         ret |= evrRunCode((unsigned)c->evrRunCode());
         ret |= evrRunDelay((unsigned)c->evrRunTrigDelay());
         ret |= evrDaqCode((unsigned)c->evrDaqCode());
-        ret |= evrDaqDelay((unsigned)c->evrRunTrigDelay() + 1250);
+        ret |= evrDaqDelay(daqDelay);
         ret |=  waitForFiducialMode(false);
         microSpin(10);
         ret |= evrLaneEnable(false);

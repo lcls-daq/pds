@@ -19,6 +19,7 @@
 #include "pds/epix10ka/Epix10kaConfigurator.hh"
 #include "pds/epix10ka/Epix10kaDestination.hh"
 #include "pds/epix10ka/Epix10kaStatusRegisters.hh"
+#include "pdsapp/config/EventcodeTiming.hh"
 #include "ndarray/ndarray.h"
 
 using namespace Pds::Epix10ka;
@@ -339,6 +340,22 @@ unsigned Epix10kaConfigurator::configure( Epix10kaConfigType* c, unsigned first)
 
 unsigned Epix10kaConfigurator::G3config(Epix10kaConfigType* c) {
   unsigned ret = 0;
+  unsigned runTick = Pds_ConfigDb::EventcodeTiming::timeslot((unsigned)c->evrRunCode());
+  unsigned daqTick = Pds_ConfigDb::EventcodeTiming::timeslot((unsigned)c->evrDaqCode());
+  unsigned daqDelay = 0;
+  if (runTick == daqTick) {
+    daqDelay = (unsigned)c->evrRunTrigDelay() + 15;
+  } else if (runTick > daqTick) {
+    daqDelay = (runTick - daqTick) + (unsigned)c->evrRunTrigDelay() + 15;
+  } else if (daqTick > runTick) {
+    if ((daqTick - runTick) < ((unsigned)c->evrRunTrigDelay() + 64)) {
+      daqDelay = ((unsigned)c->evrRunTrigDelay() + 64) + runTick - daqTick;
+    } else {
+      printf("Epix10kaConfigurator::G3config Timing error!!!!!\n");
+      return 1;
+    }
+  }
+
   _d.dest(Epix10kaDestination::Registers);
   if (_pgp->G3Flag()) {
     if ((fiberTriggering() != 0)) {
@@ -350,7 +367,7 @@ unsigned Epix10kaConfigurator::G3config(Epix10kaConfigType* c) {
         ret |= evrRunCode((unsigned)c->evrRunCode());
         ret |= evrRunDelay((unsigned)c->evrRunTrigDelay());
         ret |= evrDaqCode((unsigned)c->evrDaqCode());
-        ret |= evrDaqDelay((unsigned)c->evrRunTrigDelay() + 1250);
+        ret |= evrDaqDelay(daqDelay);
         ret |=  waitForFiducialMode(false);
         microSpin(10);
         ret |= evrLaneEnable(false);
@@ -737,7 +754,7 @@ unsigned Epix10kaConfigurator::writePixelBits() {
       }
       if (m&(1<<offset)) {
 //        if (0) {
-        bank = (col % (PixelsPerBank<<2)) / PixelsPerBank;
+        bank = (myCol % (PixelsPerBank<<2)) / PixelsPerBank;
         bankOffset = banks[bank];
         if (mySynch.take() == false) {
           printf("Epix10kaConfigurator::writePixelBits synchronization failed on write of calib row %u column %u\n",

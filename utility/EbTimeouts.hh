@@ -8,6 +8,7 @@
 namespace Pds {
 class EbTimeouts {
 public:
+  enum Flags { SlowReadout=1, SlowConfig=2, SlowReadoutAndConfig=3 };
   EbTimeouts(const EbTimeouts& ebtimeouts, int iSlowEb);
   EbTimeouts(int stream,
        Level::Type level, int iSlowEb);
@@ -34,6 +35,7 @@ private:
 
   unsigned _duration;
   short _tmos;
+  short _tmos_config;
 };
 }
 #endif

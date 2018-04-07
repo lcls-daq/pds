@@ -24,8 +24,23 @@ EbTimeouts::EbTimeouts(const EbTimeouts& ebtimeouts, int iSlowEb)
 //#else
 //    _tmos(2)
 //#endif
-    _tmos(iSlowEb > 0 ? EB_TIMEOUT_SLOW : EB_TIMEOUT)
+    _tmos((iSlowEb & SlowReadout) ? EB_TIMEOUT_SLOW : EB_TIMEOUT)
 {
+  switch(iSlowEb & SlowReadoutAndConfig) {
+    case SlowReadout:
+      _tmos_config = EB_TIMEOUT_SLOW;
+      break;
+    case SlowConfig:
+      _tmos_config = EB_TIMEOUT_SLOW_CONFIG;
+      break;
+    case SlowReadoutAndConfig:
+      // pick the longer of EB_TIMEOUT_SLOW and EB_TIMEOUT_SLOW_CONFIG
+      _tmos_config = EB_TIMEOUT_SLOW > EB_TIMEOUT_SLOW_CONFIG ? EB_TIMEOUT_SLOW : EB_TIMEOUT_SLOW_CONFIG;
+      break;
+    default:
+      _tmos_config = EB_TIMEOUT;
+      break;
+  }
 }
 
 EbTimeouts::EbTimeouts(int stream,
@@ -38,12 +53,34 @@ EbTimeouts::EbTimeouts(int stream,
     _duration = occurence_tmo;
   }
 
+  short extra;
   switch(level) {
-   case Level::Source : _tmos = (iSlowEb > 0? EB_TIMEOUT_SLOW:EB_TIMEOUT+2); break;
-   case Level::Segment: _tmos = (iSlowEb > 0? EB_TIMEOUT_SLOW+2:EB_TIMEOUT+3); break;
-   case Level::Event  : _tmos = (iSlowEb > 0? EB_TIMEOUT_SLOW+4:EB_TIMEOUT+4); break;
-   case Level::Control: _tmos = (iSlowEb > 0? EB_TIMEOUT_SLOW+6:EB_TIMEOUT+5); break;
-   default            : _tmos = (iSlowEb > 0? EB_TIMEOUT_SLOW+6:EB_TIMEOUT+5); break;
+   case Level::Source : extra = ((iSlowEb & SlowReadout) ? 0 : 2); break;
+   case Level::Segment: extra = ((iSlowEb & SlowReadout) ? 2 : 3); break;
+   case Level::Event  : extra = ((iSlowEb & SlowReadout) ? 4 : 4); break;
+   case Level::Control: extra = ((iSlowEb & SlowReadout) ? 6 : 5); break;
+   default            : extra = ((iSlowEb & SlowReadout) ? 6 : 5); break;
+  }
+
+
+  switch(iSlowEb & SlowReadoutAndConfig) {
+    case SlowReadout:
+      _tmos        = extra + EB_TIMEOUT_SLOW;
+      _tmos_config = extra + EB_TIMEOUT_SLOW;
+      break;
+    case SlowConfig:
+      _tmos        = extra + EB_TIMEOUT;
+      _tmos_config = extra + EB_TIMEOUT_SLOW_CONFIG;
+      break;
+    case SlowReadoutAndConfig:
+      // pick the longer of EB_TIMEOUT_SLOW and EB_TIMEOUT_SLOW_CONFIG
+      _tmos        = extra + EB_TIMEOUT_SLOW;
+      _tmos_config = extra + (EB_TIMEOUT_SLOW > EB_TIMEOUT_SLOW_CONFIG ? EB_TIMEOUT_SLOW : EB_TIMEOUT_SLOW_CONFIG);
+      break;
+    default:
+      _tmos        = extra + EB_TIMEOUT;
+      _tmos_config = extra + EB_TIMEOUT;
+      break;
   }
 
 //  switch(level) {
@@ -84,8 +121,10 @@ unsigned EbTimeouts::duration(int s) {
 int EbTimeouts::timeouts(const Sequence* sequence) const {
 
   //printf("EbTimeouts::timeouts() tmo = %d\n", _tmos);//!!!debug
-
-  return _tmos;
+  if (sequence && sequence->service()==TransitionId::Configure)
+    return _tmos_config;
+  else
+    return _tmos;
 //#if defined(BUILD_PRINCETON) || defined(BUILD_READOUT_GROUP)
 //  // No quick timeout for L1Accept
 //#else

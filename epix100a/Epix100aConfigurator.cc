@@ -836,7 +836,7 @@ void Epix100aConfigurator::dumpFrontEnd() {
   clock_gettime(CLOCK_REALTIME, &start);
   int ret = Success;
   if (_debug & 0x100) {
-    dumpPgpCard();
+    pgp()->printStatus();
     uint32_t count = 0x1111;
     uint32_t acount = 0x1112;
     count = sequenceCount();

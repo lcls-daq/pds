@@ -283,11 +283,11 @@ namespace Pds {
       int           x;
       this->read();
       printf("\nPGP Card Status:\n");
-//      pgpGetInfo(_pgp->fd(),&info);
-//      pgpGetPci(_pgp->fd(),&pciStatus);
-//      unsigned low = (unsigned) (info.serial & 0xffffffff);
-//      unsigned high = (unsigned) ((info.serial>>32) & 0xffffffff);
-//      info.serial = (long long unsigned)high | ((long long unsigned)low<<32);
+      //      pgpGetInfo(_pgp->fd(),&info);
+      //      pgpGetPci(_pgp->fd(),&pciStatus);
+      //      unsigned low = (unsigned) (info.serial & 0xffffffff);
+      //      unsigned high = (unsigned) ((info.serial>>32) & 0xffffffff);
+      //      info.serial = (long long unsigned)high | ((long long unsigned)low<<32);
 
       printf("-------------- Card Info ------------------\n");
       printf("                 Type : 0x%.2x\n",info.type);
@@ -313,50 +313,86 @@ namespace Pds {
       printf("               PciBus : 0x%.2x\n",pciStatus.pciBus);
       printf("             PciLanes : %i\n",pciStatus.pciLanes);
 
+      printf("\n");
+      printf("-------------- Lane Info --------------------\n             LoopBack : ");
       for (x=0; x < G3_NUMBER_OF_LANES; x++) {
-         if ( ((1 << x) & info.laneMask) == 0 ) continue;
-
-         printf("\n");
-         printf("-------------- Lane %i --------------------\n",x);
-         printf("             LoopBack : %i\n",status[x].loopBack);
-         printf("         LocLinkReady : %i\n",status[x].locLinkReady);
-         printf("         RemLinkReady : %i\n",status[x].remLinkReady);
-         printf("              RxReady : %i\n",status[x].rxReady);
-         printf("              TxReady : %i\n",status[x].txReady);
-         printf("              RxCount : %i\n",status[x].rxCount);
-         printf("           CellErrCnt : %i\n",status[x].cellErrCnt);
-         printf("          LinkDownCnt : %i\n",status[x].linkDownCnt);
-         printf("           LinkErrCnt : %i\n",status[x].linkErrCnt);
-         printf("              FifoErr : %i\n",status[x].fifoErr);
-         printf("              RemData : 0x%.2x\n",status[x].remData);
-         printf("        RemBuffStatus : 0x%.2x\n",status[x].remBuffStatus);
-         printf("           LinkErrors : %i\n",evrStatus[x].linkErrors);
-         printf("               LinkUp : %i\n",evrStatus[x].linkUp);
-         printf("            RunStatus : %i 1 = Running, 0 = Stopped\n",evrStatus[x].runStatus);    // 1 = Running, 0 = Stopped
-         printf("          EvrFiducial : 0x%x\n",evrStatus[x].evrSeconds);
-         printf("           RunCounter : 0x%x\n",evrStatus[x].runCounter);
-         printf("        AcceptCounter : %i\n",evrStatus[x].acceptCounter);
-         printf("            EvrEnable : %i Global flag\n",evrControl[x].evrEnable);     // Global flag
-         printf("          LaneRunMask : %i 0 = Run trigger enable\n",evrControl[x].laneRunMask);   // 1 = Run trigger enable
-         printf("            EvrLaneEn : %i 1 = Start, 0 = Stop\n",evrControl[x].evrSyncEn);     // 1 = Start, 0 = Stop
-         printf("           EvrSyncSel : %i 0 = async, 1 = sync for start/stop\n",evrControl[x].evrSyncSel);    // 0 = async, 1 = sync for start/stop
-         printf("           HeaderMask : 0x%x 1 = Enable header data checking, one bit per VC (4 bits)\n",evrControl[x].headerMask);    // 1 = Enable header data checking, one bit per VC (4 bits)
-         printf("          EvrSyncWord : 0x%x fiducial to transition start stop\n",evrControl[x].evrSyncWord);   // fiducial to transition start stop
-         printf("              RunCode : %i Run code\n",evrControl[x].runCode);       // Run code
-         printf("             RunDelay : %i Run delay\n",evrControl[x].runDelay);      // Run delay
-         printf("           AcceptCode : %i DAQ code\n",evrControl[x].acceptCode);    // Accept code
-         printf("          AcceptDelay : %i DAQ delay\n",evrControl[x].acceptDelay);   // Accept delay
+        printf("%i%s",status[x].loopBack, x==7?"\n         LocLinkReady : ":" ");
       }
-
-//      __u64 SerialNumber = status.SerialNumber[0];
-//      SerialNumber = SerialNumber << 32;
-//      SerialNumber |= status.SerialNumber[1];
-//
-//      printf("           Version: 0x%x\n", status.Version);
-//      printf("      SerialNumber: 0x%llx\n", SerialNumber);
-//      printf("        BuildStamp: %s\n",(char *) (status.BuildStamp) );
-//      printf("        CountReset: 0x%x\n", status.CountReset);
-//      printf("         CardReset: 0x%x\n", status.CardReset);
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("%i%s",status[x].locLinkReady, x==7?"\n         RemLinkReady : ":" ");
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("%i%s",status[x].remLinkReady, x==7?"\n              RxReady : ":" ");
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("%i%s",status[x].rxReady, x==7?"\n              TxReady : ":" ");
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("%i%s",status[x].txReady, x==7?"\n              RxCount : ":" ");
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("%i%s",status[x].rxCount, x==7?"\n           CellErrCnt : ":" ");
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("%i%s",status[x].cellErrCnt, x==7?"\n          LinkDownCnt : ":" ");
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("%i%s",status[x].linkDownCnt, x==7?"\n           LinkErrCnt : ":" ");
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("%i%s",status[x].linkErrCnt, x==7?"\n              FifoErr : ":" ");
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("%i%s",status[x].fifoErr, x==7?"\n              RemData : ":" ");
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("0x%.2x%s",status[x].remData, x==7?"\n        RemBuffStatus : ":" ");
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("0x%.2x%s",status[x].remBuffStatus, x==7?"\n":" ");
+      }
+      printf("           LinkErrors : %i : MCC fiber errors, six bits\n",evrStatus[0].linkErrors);
+      printf("               LinkUp : %i : MCC fiber status\n",evrStatus[0].linkUp);
+      printf("            EvrEnable : %i : Global enable for the EVR firmware\n           RunStatus  : ",evrControl[0].evrEnable);     // Global flag
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("%i%s",evrStatus[x].runStatus, x==7?" : 1 = Running, 0 = Stopped\n          EvrFiducial : ":" ");    // 1 = Running, 0 = Stopped
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("0x%x%s", evrStatus[x].evrSeconds, x==7?"\n           RunCounter : ":" ");
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("0x%x%s",evrStatus[x].runCounter, x==7?"\n        AcceptCounter : ":" ");
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("%i%s",evrStatus[x].acceptCounter, x==7?"\n          LaneRunMask : ":" ");
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("%i%s", evrControl[x].laneRunMask, x==7?" : 0 = Run trigger enable\n            EvrLaneEn : ":" ");   // 0 = Run trigger enable
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("%i%s",evrControl[x].evrSyncEn, x==7?" : 1 = Start, 0 = Stop\n           EvrSyncSel : ":" ");     // 1 = Start, 0 = Stop
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("%i%s",evrControl[x].evrSyncSel, x==7?" : 0 = async, 1 = sync for start/stop\n           HeaderMask : ":" ");    // 0 = async, 1 = sync for start/stop
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("0x%x%s",evrControl[x].headerMask, x==7?" : 1 = Enbl hdr checking, 1 bit per VC (4 bits)\n          EvrSyncWord : ":" ");    // 1 = Enable header data checking, one bit per VC (4 bits)
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("0x%x%s",evrControl[x].evrSyncWord, x==7?" : fiducial to transition start stop\n              RunCode : ":" ");   // fiducial to transition start stop
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("%i%s",evrControl[x].runCode, x==7?" : Run code\n             RunDelay : ":" ");       // Run code
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("%i%s",evrControl[x].runDelay, x==7?" : Run delay\n           AcceptCode : ":" ");      // Run delay
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("%i%s",evrControl[x].acceptCode, x==7?" : DAQ code\n          AcceptDelay : ":" ");    // Accept code
+      }
+      for (x=0; x < G3_NUMBER_OF_LANES; x++) {
+        printf("%i%s",evrControl[x].acceptDelay, x==7?" : DAQ delay\n":" ");   // Accept delay
+      }
     }
   }
 }

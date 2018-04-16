@@ -21,6 +21,7 @@ packages += monreq
 packages += archon
 packages += gsc16ai
 packages += quadadc
+packages += epicstools
 
 ifneq ($(findstring x86_64,$(tgt_arch)),)
   packages += firewire jungfrau

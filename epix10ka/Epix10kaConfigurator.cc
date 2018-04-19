@@ -299,28 +299,28 @@ unsigned Epix10kaConfigurator::configure( Epix10kaConfigType* c, unsigned first)
     if (printFlag) {
       clock_gettime(CLOCK_REALTIME, &end);
       uint64_t diff = timeDiff(&end, &start) + 50000LL;
-      printf("- 0x%x - so far %lld.%lld milliseconds\t", ret, diff/1000000LL, diff%1000000LL);
+      printf("- 0x%x - so far %lld.%lld milliseconds\n", ret, diff/1000000LL, diff%1000000LL);
     }
-    if (printFlag) printf("\n\twriting top level config");
     ret <<= 1;
     enableRunTrigger(false);
+    if (printFlag) printf("\n\twriting top level config\n");
     ret |= writeConfig();
     enableRunTrigger(true);
     if (printFlag) {
       clock_gettime(CLOCK_REALTIME, &end);
       uint64_t diff = timeDiff(&end, &start) + 50000LL;
-      printf("- 0x%x - so far %lld.%lld milliseconds\t", ret, diff/1000000LL, diff%1000000LL);
+      printf("- 0x%x - so far %lld.%lld milliseconds\n", ret, diff/1000000LL, diff%1000000LL);
     }
     ret <<= 1;
-    if (printFlag) printf("\n\twriting ASIC regs");
     enableRunTrigger(false);
+    if (printFlag) printf("\n\twriting ASIC regs\n");
     ret |= writeASIC();
     loadRunTimeConfigAdditions(_runTimeConfigFileName);
     enableRunTrigger(true);
     if (printFlag) {
       clock_gettime(CLOCK_REALTIME, &end);
       uint64_t diff = timeDiff(&end, &start) + 50000LL;
-      printf("- 0x%x - so far %lld.%lld milliseconds\t", ret, diff/1000000LL, diff%1000000LL);
+      printf("- 0x%x - so far %lld.%lld milliseconds\n", ret, diff/1000000LL, diff%1000000LL);
     }
     ret <<= 1;
     if (usleep(10000)<0) perror("Epix10kaConfigurator::configure second ulseep failed\n");
@@ -911,11 +911,7 @@ void Epix10kaConfigurator::dumpFrontEnd() {
   int ret = Success;
   if (_debug & 0x100) {
     pgp()->printStatus();
-    uint32_t count = 0x1111;
-    uint32_t acount = 0x1112;
-    count = sequenceCount();
-    acount = acquisitionCount();
-    printf("\tSequence Count(%u), Acquisition Count(%u)\n", count, acount);
+    printf("\tSequence Count(%u), Acquisition Count(%u)\n", sequenceCount(), acquisitionCount());
     printf("Environmental Data:\n");
     for (int i=0; i<NumberOfEnviroDatas; i++) {
       if (i<3) printf("\t%s%5.2f\n", enviroNames[i], 0.01*(signed int)enviroData(i));

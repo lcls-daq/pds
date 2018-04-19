@@ -271,7 +271,12 @@ namespace Pds {
       for(unsigned lane=0; lane<G3_NUMBER_OF_LANES; lane++) {
         if ((1<<lane) & (lm<<offset)) {
           res |= pgpGetEvrControl(_pgp->fd(), lane, &cntl);
-          cntl.headerMask &= ~vcm;
+          cntl.evrSyncWord = 0;
+          cntl.runCode = 0;
+          cntl.acceptCode = 0;
+          cntl.runDelay = 0;
+          cntl.acceptDelay = 0;
+          cntl.headerMask = 0;
           cntl.laneRunMask = 1;
           res |= pgpSetEvrControl(_pgp->fd(), lane, &cntl);
         }
@@ -351,7 +356,7 @@ namespace Pds {
       for (x=0; x < G3_NUMBER_OF_LANES; x++) {
         printf("0x%.2x%s",status[x].remBuffStatus, x==7?"\n":" ");
       }
-      printf("           LinkErrors : %i : MCC fiber errors, six bits\n",evrStatus[0].linkErrors);
+      printf("           LinkErrors : %i : MCC fiber errors\n",evrStatus[0].linkErrors);
       printf("               LinkUp : %i : MCC fiber status\n",evrStatus[0].linkUp);
       printf("            EvrEnable : %i : Global enable for the EVR firmware\n           RunStatus  : ",evrControl[0].evrEnable);     // Global flag
       for (x=0; x < G3_NUMBER_OF_LANES; x++) {

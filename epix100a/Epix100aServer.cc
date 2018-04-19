@@ -326,6 +326,8 @@ void Pds::Epix100aServer::runTimeConfigName(char* name) {
 unsigned Pds::Epix100aServer::unconfigure(void) {
   unsigned c = flushInputQueue(fd());
   if (c) printf("Epix100aServer::unconfigure flushed %u event%s\n", c, c>1 ? "s" : "");
+//  printf("Epix100aServer::unconfigure cleaning up evr\n");
+//  _cnfgrtr->cleanupEvr(1);
   return 0;
 }
 

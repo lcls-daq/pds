@@ -311,7 +311,6 @@ class Epix10kaEndCalibCycleAction : public Action {
       printf("Epix10kaEndCalibCycleAction:;fire(Transition) %p", _cfg.current());
       _cfg.next();
       printf(" %p\n", _cfg.current());
-      _result = _server->unconfigure();
 
       return tr;
     }

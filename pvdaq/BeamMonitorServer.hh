@@ -14,7 +14,7 @@ namespace Pds {
     class BeamMonitorServer : public Pds::PvDaq::Server, 
                               public Pds_Epics::PVMonitorCb {
     public:
-      BeamMonitorServer(const char*, const DetInfo&);
+      BeamMonitorServer(const char*, const char*, const DetInfo&);
       ~BeamMonitorServer();
     public:
       // Server interface
@@ -27,6 +27,7 @@ namespace Pds {
       enum { NCHANNELS=16 };
     private:
       std::string            _pvbase;
+      std::string            _iocbase;
       Pds_Epics::EpicsCA*    _raw;
       PvServer*              _raw_nord;
       uint32_t               _exp_nord;

@@ -48,8 +48,10 @@ static Pds::TypeId _data_type( Pds::TypeId::Type(G1DData::TypeId),
 //#define DBUG
 
 BeamMonitorServer::BeamMonitorServer(const char*         pvbase,
+                                     const char*         iocbase,
                                      const Pds::DetInfo& info) :
   _pvbase     (pvbase),
+  _iocbase    (iocbase),
   _exp_nord   (0),
   _config_pvs (NCHANNELS),
   _offset_pvs (NCHANNELS),
@@ -64,48 +66,45 @@ BeamMonitorServer::BeamMonitorServer(const char*         pvbase,
 {
   _xtc = Xtc(_data_type, info);
 
-  char wvbase[32];
-  sprintf(wvbase,"WV8:%s",pvbase);
-
   //
   //  Create PvServers for fetching configuration data
   //
   char pvname[64];
-  sprintf(pvname,"%s:ChanEnable",wvbase);
+  sprintf(pvname,"%s:ChanEnable",pvbase);
   _chan_enable = new PvServer(pvname);
 
   for(unsigned i=0; i<NCHANNELS; i++) {
-    sprintf(pvname,"%s:NumberOfSamples%d_RBV",wvbase, i);
+    sprintf(pvname,"%s:NumberOfSamples%d_RBV",pvbase, i);
     printf("Creating EpicsCA(%s)\n",pvname);
     _config_pvs[i] = new PvServer(pvname);
 
-    sprintf(pvname,"%s:Delay%d_RBV",wvbase, i);
+    sprintf(pvname,"%s:Delay%d_RBV",pvbase, i);
     printf("Creating EpicsCA(%s)\n",pvname);
     _offset_pvs[i] = new PvServer(pvname);
   }
 
-  sprintf(pvname,"%s:CFG_DONE",wvbase);
+  sprintf(pvname,"%s:CFG_DONE",pvbase);
   _cfg_done = new Pds_Epics::EpicsCA(pvname,_configMonitor);
-  sprintf(pvname,"%s:CFG_ERRS",wvbase);
+  sprintf(pvname,"%s:CFG_ERRS",pvbase);
   _cfg_errs = new PvServer(pvname);
-  sprintf(pvname,"%s:SYNC",wvbase);
+  sprintf(pvname,"%s:SYNC",pvbase);
   _sync     = new PvServer(pvname);
 
   //
   //  Create EpicsCA for monitoring event data
   //
-  sprintf(pvname,"%s:RAW",wvbase);
+  sprintf(pvname,"%s:RAW",pvbase);
   _raw = new Pds_Epics::EpicsCA(pvname,this);
-  sprintf(pvname,"%s:RAW.NORD",wvbase);
+  sprintf(pvname,"%s:RAW.NORD",pvbase);
   _raw_nord = new PvServer(pvname);
 
   //
   //  Create PVs for validating setup
   //
-  sprintf(pvname,"IOC:%s:FORMAT_VERSION",pvbase);
+  sprintf(pvname,"%s:FORMAT_VERSION",iocbase);
   _api_version = new PvServer(pvname);
 
-  sprintf(pvname,"IOC:%s:VERSION",pvbase);
+  sprintf(pvname,"%s:VERSION",iocbase);
   _ioc_version = new PvServer(pvname);
 
   for(unsigned i=0; i<_pool.size(); i++) {

@@ -58,7 +58,7 @@ namespace Pds {
       // config update callback
       virtual void config_updated() = 0;
 
-      static Server* lookup(const char*, const Pds::DetInfo&, const unsigned, const unsigned flags=0);
+      static Server* lookup(const char*, const char*, const Pds::DetInfo&, const unsigned, const unsigned flags=0);
 
     protected:
       Xtc        _xtc;

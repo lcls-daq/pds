@@ -29,7 +29,8 @@ extern "C" {
 
 static void display_serialcmd(char*, int);
 static int nPrint=0;
-static const int _tmo_ms = 0x7fffffff;
+static const int TMO_MS = 0x7fffffff;
+static const int TMO_PDV = 0;
 
 namespace Pds {
 
@@ -70,23 +71,26 @@ namespace Pds {
     ~EdtReader() {}
   public:
     void start        () {} // { _task->call(this); }
-    void queue_enable () { _task->call(_enable ); _enable ->block(); }
-    void queue_disable() { _task->call(_disable); _disable->block(); }
+    void queue_enable () { _running = true;  _task->call(_enable ); _enable ->block(); }
+    void queue_disable() { _running = false; _task->call(_disable); edt_do_timeout(_base->dev()); _disable->block(); }
     void enable       (bool v)
     {
       nPrint=0;
       PdvDev* pdv_p = _base->dev();
-      _running = v; 
       if (v) {
         pdv_cl_reset_fv_counter(pdv_p);
-	pdv_multibuf(_base->dev(), N_RING_BUFFERS);
-	_last_timeouts = pdv_timeouts(_base->dev());
-	pdv_start_images(pdv_p, N_RING_BUFFERS);
-	_task->call(this);
-	_enable->unblock();
+	      pdv_multibuf(_base->dev(), N_RING_BUFFERS);
+	      _last_timeouts = pdv_timeouts(_base->dev());
+	      pdv_start_images(pdv_p, N_RING_BUFFERS);
+	      _task->call(this);
+	      _enable->unblock();
       }
       else {
-        edt_do_timeout(_base->dev());
+        if (_recover_timeout) {
+          pdv_timeout_restart(pdv_p, TRUE);
+          _recover_timeout = false;
+        }
+        _disable->unblock();
       }
     }
     void routine()
@@ -114,21 +118,25 @@ namespace Pds {
       }
 
       if (timeouts > _last_timeouts) {
-	pdv_timeout_restart(pdv_p, TRUE);
-	_last_timeouts = timeouts;
-	_recover_timeout = true;
-      }
-      else if (overrun) {
-	_base->handle_error("Frame readout error: overrun\n");
+	      pdv_timeout_restart(pdv_p, TRUE);
+	      _last_timeouts = timeouts;
+	      _recover_timeout = true;
       }
       else {
-	_base->handle(image_p);
+        if (overrun) {
+	        _base->handle_error("Frame readout error: overrun\n");
+        }
+        else {
+	        _base->handle(image_p);
+        }
+        if (_recover_timeout) {
+          pdv_timeout_restart(pdv_p, TRUE);
+          _recover_timeout = false;
+        }
       }
 
       if (_running)
-	_task->call(this);
-      else
-	_disable->unblock();
+	      _task->call(this);
     }
   private:
     EdtPdvCL*  _base;
@@ -153,6 +161,8 @@ EdtPdvCL::EdtPdvCL(CameraBase& camera, int unit, int channel) :
   CameraDriver(camera),
   _unit    (unit),
   _channel (channel),
+  _tmo_ms  (TMO_MS),
+  _tmo_pdv (TMO_PDV),
   _dev     (0),
   _acq     (new EdtReader(this, new Task(TaskObject("edtacq")))),
   _fsrv    (0),
@@ -329,6 +339,12 @@ void EdtPdvCL::_setup(int unit, int channel)
     exit(1);
   }      
 #endif
+
+  /* The user_timeout field in the Dependent struct doesn't seem to work on
+   * some edt cards/firmware/driver combos - use this command to set infinite
+   * timeout on the image waiting commands for those cards.
+   */
+  pdv_set_timeout(edt_p, _tmo_pdv);
 
   _dev = edt_p;
 }

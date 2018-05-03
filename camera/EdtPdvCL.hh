@@ -53,6 +53,7 @@ namespace Pds {
     int                  _unit;
     int                  _channel;
     int                  _tmo_ms;
+    int                  _tmo_pdv;
     PdvDev*              _dev;
     EdtReader*           _acq;
   private:

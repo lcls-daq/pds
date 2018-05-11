@@ -428,6 +428,7 @@ void ControlsCameraServer::config_updated()
     sendOcc(umsg);
     Occurrence* occ = new(_occPool) Occurrence(OccurrenceId::ClearReadout);
     sendOcc(occ);
+    _configured = false; // inhibit more of these
   }
 }
 

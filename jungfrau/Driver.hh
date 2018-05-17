@@ -5,6 +5,7 @@
 
 #include <poll.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <string>
 #include <vector>
 
@@ -52,6 +53,7 @@ namespace Pds {
         void shutdown();
         bool connected() const;
         bool check_config();
+        bool configure_mac(bool config_det_ip=true);
         bool configure_dacs(const DacsConfig& dac_config);
         bool configure_adc();
         bool configure_speed(JungfrauConfigType::SpeedMode speed, bool& sleep);
@@ -83,11 +85,13 @@ namespace Pds {
         std::string status_str();
         bool start();
         bool stop();
+        void flush();
         void reset();
         bool get_packet(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data, bool* first_packet, bool* last_packet, unsigned* npackets);
         bool get_frame(uint64_t* framenum, uint16_t* data);
         bool get_frame(uint64_t* framenum, JungfrauModInfoType* metadata, uint16_t* data);
         const char* error();
+        void set_error(const char* fmt, ...);
         void clear_error();
         int fd() const;
         unsigned get_num_rows() const;
@@ -108,6 +112,7 @@ namespace Pds {
         bool              _connected;
         bool              _boot;
         bool              _freerun;
+        bool              _poweron;
         unsigned          _sockbuf_sz;
         unsigned          _readbuf_sz;
         unsigned          _frame_sz;
@@ -133,14 +138,18 @@ namespace Pds {
         bool get_module_config(JungfrauModConfigType* module_config, unsigned max_modules=JungfrauConfigType::MaxModulesPerDetector);
         bool start();
         bool stop();
+        void flush();
         unsigned get_num_rows(unsigned module) const;
         unsigned get_num_columns(unsigned module) const;
         unsigned get_num_modules() const;
         unsigned get_num_pixels() const;
         unsigned get_frame_size() const;
+        uint64_t sync_nframes();
         const char** errors();
         void clear_errors();
+        void abort();
       private:
+        void signal(int sig);
         bool get_frame_thread(uint64_t* framenum, JungfrauModInfoType* metadata, uint16_t* data);
         bool get_frame_poll(uint64_t* framenum, JungfrauModInfoType* metadata, uint16_t* data);
       private:
@@ -148,8 +157,10 @@ namespace Pds {
         pthread_t*            _threads;
         pthread_attr_t*       _thread_attr;
         pollfd*               _pfds;
+        int                   _sigfd[2];
         unsigned              _num_modules;
         uint64_t*             _module_frames;
+        uint64_t*             _module_frames_offset;
         bool*                 _module_first_packet;
         bool*                 _module_last_packet;
         unsigned*             _module_npackets;

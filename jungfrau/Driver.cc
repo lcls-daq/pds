@@ -20,6 +20,7 @@
 #define ADCPHASE_QUARTER 25
 #define CLKDIV_HALF 1
 #define CLKDIV_QUARTER 2
+#define FRAME_WAIT_EXIT -1
 
 // Temporary fixed sizes :(
 #define NUM_ROWS 512
@@ -176,7 +177,7 @@ uint16_t DacsConfig::vdd_prot() const   { return _vdd_prot; }
 
 Module::Module(const int id, const char* control, const char* host, unsigned port, const char* mac, const char* det_ip, bool config_det_ip) :
   _id(id), _control(control), _host(host), _port(port), _mac(mac), _det_ip(det_ip),
-  _socket(-1), _connected(false), _boot(true), _freerun(false),
+  _socket(-1), _connected(false), _boot(true), _freerun(false), _poweron(false),
   _sockbuf_sz(sizeof(jungfrau_dgram)*PACKET_NUM*EVENTS_TO_BUFFER), _readbuf_sz(sizeof(jungfrau_header)), _frame_sz(DATA_ELEM * sizeof(uint16_t)), _frame_elem(DATA_ELEM),
   _speed(JungfrauConfigType::Quarter)
 {
@@ -194,35 +195,7 @@ Module::Module(const int id, const char* control, const char* host, unsigned por
   if (!reply.empty()) {
     std::string type  = get_command("type");
 
-    bool needs_config = false;
-    bool detmac_status = false;
-    std::string rx_ip  = get_command("rx_udpip");
-    std::string rx_mac = get_command("rx_udpmac");
-
-    if (!strcmp(rx_ip.c_str(), "none") || !strcmp(rx_mac.c_str(), "none")) {
-      printf("detector udp_rx interface appears to be unset\n");
-      needs_config = true;
-    }
-
-    if (config_det_ip || needs_config) {
-      printf("setting up detector udp_rx interface\n");
-      put_command_print("rx_udpport", _port);
-      put_command_print("rx_udpip",   _host);
-      put_command_print("rx_udpmac", _mac);
-      put_command_print("detectorip", _det_ip);
-      put_command_print("detectormac", "00:aa:bb:cc:dd:ee");
-      std::string cfgmac_reply = put_command("configuremac", 0);
-      printf("cmd_put configuremac: %s\n", cfgmac_reply.c_str());
-      if (!strcmp(cfgmac_reply.c_str(), "3") || !strcmp(cfgmac_reply.c_str(), "0")) {
-        detmac_status = true;
-        printf("detector udp_rx interface is up\n");
-      } else {
-        error_print("Error: detector udp_rx interface did not come up\n");
-      }
-    } else {
-      printf("detector udp_rx interface is being set externally\n");
-      detmac_status = true;
-    }
+    bool detmac_status = configure_mac(config_det_ip);
 
     hostent* entries = gethostbyname(host);
     if (entries) {
@@ -300,11 +273,50 @@ bool Module::check_config()
   _boot = (power_status == 0);
   if (_boot) {
     printf("module chips need to be powered on\n");
+    if (_poweron) {
+      printf("Warning: module has likely been rebooted!\n");
+      configure_mac(true);
+    }
   } else {
     printf("module chips are already on\n");
   }
 
   return true;
+}
+
+bool Module::configure_mac(bool config_det_ip)
+{
+  bool needs_config = false;
+  bool detmac_status = false;
+  std::string rx_ip  = get_command("rx_udpip");
+  std::string rx_mac = get_command("rx_udpmac");
+
+  if (!strcmp(rx_ip.c_str(), "none") || !strcmp(rx_mac.c_str(), "none")) {
+    printf("detector udp_rx interface appears to be unset\n");
+    needs_config = true;
+  }
+
+  if (config_det_ip || needs_config) {
+      printf("setting up detector udp_rx interface\n");
+      put_command_print("rx_udpport", _port);
+      put_command_print("rx_udpip",   _host);
+      put_command_print("rx_udpmac", _mac);
+      put_command_print("detectorip", _det_ip);
+      put_command_print("detectormac", "00:aa:bb:cc:dd:ee");
+      std::string cfgmac_reply = put_command("configuremac", 0);
+      printf("cmd_put configuremac: %s\n", cfgmac_reply.c_str());
+      if (!strcmp(cfgmac_reply.c_str(), "3") || !strcmp(cfgmac_reply.c_str(), "0")) {
+        detmac_status = true;
+        printf("detector udp_rx interface is up\n");
+      } else {
+        error_print("Error: detector udp_rx interface did not come up\n");
+      }
+  } else {
+    printf("detector udp_rx interface is being set externally\n");
+    detmac_status = true;
+  }
+
+  return detmac_status;
 }
 
 bool Module::configure_dacs(const DacsConfig& dac_config)
@@ -368,6 +380,9 @@ bool Module::configure_adc()
     put_adcreg_print(0x18, 0x2);
     put_register_print(0x43, 0x453b2a9c);
   }
+
+  // initial powerup complete
+  _poweron = true;
 
   return status() != ERROR;
 }
@@ -735,6 +750,21 @@ void Module::reset()
   printf(" done\n");
 }
 
+void Module::flush()
+{
+  ssize_t nb;
+  struct sockaddr_in clientaddr;
+  unsigned count = 0;
+  socklen_t clientaddrlen = sizeof(clientaddr);
+  do {
+    nb = ::recvfrom(_socket, _readbuf, sizeof(jungfrau_header), MSG_DONTWAIT, (struct sockaddr *)&clientaddr, &clientaddrlen);
+    if (nb > 0) {
+      count += 1;
+    }
+  } while(nb>0);
+  printf("flushed %u packets from socket buffer\n", count);
+}
+
 bool Module::get_frame(uint64_t* frame, uint16_t* data)
 {
   return get_frame(frame, NULL, data);
@@ -811,6 +841,15 @@ const char* Module::error()
   return _msgbuf;
 }
 
+void Module::set_error(const char* fmt, ...)
+{
+  va_list err_args;
+  va_start(err_args, fmt);
+  vsnprintf(_msgbuf, MSG_LEN, fmt, err_args);
+  va_end(err_args);
+  fprintf(stderr, _msgbuf);
+}
+
 void Module::clear_error()
 {
   _msgbuf[0] = 0;
@@ -848,6 +887,7 @@ Detector::Detector(std::vector<Module*>& modules, bool use_threads, int thread_r
   _pfds(0),
   _num_modules(modules.size()),
   _module_frames(new uint64_t[modules.size()]),
+  _module_frames_offset(new uint64_t[modules.size()]),
   _module_first_packet(new bool[modules.size()]),
   _module_last_packet(new bool[modules.size()]),
   _module_npackets(new unsigned[modules.size()]),
@@ -855,6 +895,10 @@ Detector::Detector(std::vector<Module*>& modules, bool use_threads, int thread_r
   _modules(modules),
   _msgbuf(new const char*[modules.size()])
 {
+  int err = ::pipe(_sigfd);
+  if (err) {
+    fprintf(stderr, "%s pipe error: %s\n", __FUNCTION__, strerror(errno));
+  }
   if (_use_threads) {
     _threads = new pthread_t[_num_modules];
     _thread_attr = new pthread_attr_t;
@@ -872,7 +916,10 @@ Detector::Detector(std::vector<Module*>& modules, bool use_threads, int thread_r
       pthread_attr_setschedparam(_thread_attr, &params);
     }
   } else {
-    _pfds = new pollfd[_num_modules];
+    _pfds = new pollfd[_num_modules+1];
+    _pfds[_num_modules].fd       = _sigfd[0];
+    _pfds[_num_modules].events   = POLLIN;
+    _pfds[_num_modules].revents  = 0;
     for (unsigned i=0; i<_num_modules; i++) {
       _pfds[i].fd       = _modules[i]->fd();
       _pfds[i].events   = POLLIN;
@@ -894,6 +941,7 @@ Detector::~Detector()
   }
   if (_pfds) delete[] _pfds;
   if (_module_frames) delete[] _module_frames;
+  if (_module_frames_offset) delete[] _module_frames_offset;
   if (_module_first_packet) delete[] _module_first_packet;
   if (_module_last_packet) delete[] _module_last_packet;
   if (_module_npackets) delete[] _module_npackets;
@@ -914,6 +962,37 @@ bool Detector::connected() const
     if(!_modules[i]->connected()) return false;
   }
   return true;
+}
+
+void Detector::signal(int sig)
+{
+  ::write(_sigfd[1], &sig, sizeof(sig));
+}
+
+void Detector::abort()
+{
+  signal(FRAME_WAIT_EXIT);
+}
+
+uint64_t Detector::sync_nframes()
+{
+  uint64_t frame_num[_num_modules];
+  uint64_t last_frame = 0;
+  for (unsigned i=0; i<_num_modules; i++) {
+    frame_num[i] = _modules[i]->nframes();
+    if (frame_num[i] > last_frame) {
+      last_frame = frame_num[i];
+    }
+  }
+
+  for (unsigned i=0; i<_num_modules; i++) {
+    if (frame_num[i] < last_frame) {
+        printf("Warning: module %u is behind by %lu frame%s! - adjusting frame offset\n", i, last_frame - frame_num[i], (last_frame - frame_num[i])==1 ? "" : "s");
+        _module_frames_offset[i] = last_frame - frame_num[i];
+    }
+  }
+
+  return last_frame;
 }
 
 bool Detector::check_size(uint32_t num_modules, uint32_t num_rows, uint32_t num_columns) const
@@ -1042,11 +1121,11 @@ bool Detector::get_frame_thread(uint64_t* frame, JungfrauModInfoType* metadata, 
     // Check that we got a consistent frame
     for (unsigned i=0; i<_num_modules; i++) {
       if (frame_unset) {
-        *frame = _module_frames[i];
+        *frame = (_module_frames[i] + _module_frames_offset[i]);
         frame_unset = false;
       } else {
-        if (*frame != _module_frames[i]) {
-          fprintf(stderr,"Error: data out-of-order got data for module %u got frame %lu, but was expecting frame %lu\n", i, _module_frames[i], *frame);
+        if (*frame != (_module_frames[i] + _module_frames_offset[i])) {
+          fprintf(stderr,"Error: data out-of-order got data for module %u got frame %lu, but was expecting frame %lu\n", i, _module_frames[i] + _module_frames_offset[i], *frame);
           drop_frame = true;
         }
       }
@@ -1073,28 +1152,39 @@ bool Detector::get_frame_poll(uint64_t* frame, JungfrauModInfoType* metadata, ui
 
   while(!frame_complete) {
     frame_complete = true;
-    npoll = ::poll(_pfds, (nfds_t) _num_modules, -1);
+    npoll = ::poll(_pfds, (nfds_t) _num_modules+1, -1);
     if (npoll < 0) {
       fprintf(stderr,"Error: frame poller failed with error code: %s\n", strerror(errno));
       return false;
+    }
+
+    if(_pfds[_num_modules].revents & POLLIN) {
+        int signal;
+        ::read(_sigfd[0], &signal, sizeof(signal));
+        if (signal == FRAME_WAIT_EXIT) {
+          printf("received frame wait exit signal - canceling get_frame\n");
+          return false;
+        } else {
+          fprintf(stderr,"Warning: received unknown signal: %d\n", signal);
+        }
     }
 
     for (unsigned i=0; i<_num_modules; i++) {
       if ((_pfds[i].revents & POLLIN) && (!_module_last_packet[i])) {
         if (_modules[i]->get_packet(&_module_frames[i], metadata?&metadata[i]:NULL, _module_data[i], &_module_first_packet[i], &_module_last_packet[i], &_module_npackets[i])) {
           if (frame_unset) {
-            *frame = _module_frames[i];
+            *frame = _module_frames[i] + _module_frames_offset[i];
             frame_unset = false;
           } else {
-            if (*frame != _module_frames[i]) {
-              fprintf(stderr,"Error: data out-of-order got data for module %u got frame %lu, but was expecting frame %lu\n", i, _module_frames[i], *frame);
+            if (*frame != (_module_frames[i] + _module_frames_offset[i])) {
+              fprintf(stderr,"Error: data out-of-order got data for module %u got frame %lu, but was expecting frame %lu\n", i, _module_frames[i] + _module_frames_offset[i], *frame);
               _module_last_packet[i] = true;
               drop_frame = true;
             }
           }
 
           if (_module_last_packet[i] && (_module_npackets[i] != PACKET_NUM)) {
-            fprintf(stderr,"Error: frame %lu from module %u is incomplete, received %u out of %d expected\n", _module_frames[i], i, _module_npackets[i], PACKET_NUM);
+            fprintf(stderr,"Error: frame %lu from module %u is incomplete, received %u out of %d expected\n", _module_frames[i] + _module_frames_offset[i], i, _module_npackets[i], PACKET_NUM);
             drop_frame = true;
           }
         }
@@ -1145,6 +1235,15 @@ bool Detector::stop()
     }
   }
   return success;
+}
+
+void Detector::flush()
+{
+  printf("Flushing any remaining data from module socket buffers\n");
+  for (unsigned i=0; i<_num_modules; i++) {
+    printf("flushing data socket of module %u\n", i);
+    _modules[i]->flush();
+  }
 }
 
 unsigned Detector::get_num_rows(unsigned module) const
@@ -1216,6 +1315,7 @@ void Detector::clear_errors()
 #undef CLKDIV_QUARTER
 #undef NUM_ROWS
 #undef NUM_COLUMNS
+#undef FRAME_WAIT_EXIT
 #undef get_command_print
 #undef put_command_print
 #undef get_register_print

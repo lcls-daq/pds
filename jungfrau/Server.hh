@@ -33,6 +33,7 @@ namespace Pds {
 
       unsigned count() const;
       void resetCount();
+      void setFrame(uint64_t);
 
       void post(const void*);
 

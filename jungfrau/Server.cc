@@ -70,6 +70,12 @@ void Server::resetCount()
   _count = 0;
 }
 
+void Server::setFrame(uint64_t frame)
+{
+  _last_frame = frame;
+  _first_frame = false;
+}
+
 void Server::post(const void* ptr)
 {
   void* ret_ptr;

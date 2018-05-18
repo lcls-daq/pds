@@ -6,7 +6,7 @@
 #include <string>
 #include <stdexcept>
 
-#include "picam/include/picam.h"
+#include "picam/picam.h"
 #include "pdsdata/xtc/DetInfo.hh"
 #include "pds/config/PimaxConfigType.hh"
 #include "pds/xtc/InDatagram.hh"

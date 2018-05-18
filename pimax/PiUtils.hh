@@ -1,4 +1,4 @@
-#include "picam/include/picam_advanced.h"
+#include "picam/picam_advanced.h"
 #include <string>
 
 namespace PiUtils

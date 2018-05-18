@@ -34,12 +34,8 @@ endif
 #  packages += xamps
 #  packages += fexamp
 
-ifneq ($(findstring x86_64-rhel6,$(tgt_arch)),)
-  packages += pimax
-endif
-
 ifneq ($(findstring x86_64-rhel7,$(tgt_arch)),)
-  packages += zyla
+  packages += zyla pimax
 endif
 
 

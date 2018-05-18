@@ -9,7 +9,7 @@
 
 #include <string>
 #include <iostream>
-#include "picam/include/picam.h"
+#include "picam/picam.h"
 
 // - prints any picam enum
 void PrintEnumString( PicamEnumeratedType type, piint value )

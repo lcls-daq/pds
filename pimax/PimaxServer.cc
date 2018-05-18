@@ -1314,12 +1314,12 @@ int PimaxServer::setupROI()
 
   PicamRoi roi =
   {
-    _config.orgX(),   // x
-    _config.width(),  // width
-    _config.binX(),   // x binning
-    _config.orgY(),   // y
-    _config.height(), // height
-    _config.binY(),   // y binning
+    (piint) _config.orgX(),   // x
+    (piint) _config.width(),  // width
+    (piint) _config.binX(),   // x binning
+    (piint) _config.orgY(),   // y
+    (piint) _config.height(), // height
+    (piint) _config.binY(),   // y binning
   };
   PicamRois rois = { &roi, 1 };
 
@@ -1345,6 +1345,8 @@ int PimaxServer::updateTemperatureData()
   else
   {
     iError = piReadTemperature(_hCam, fTemperature, sTemperatureStatus);
+    if (iError != 0)
+      printf("PimaxServer::updateTemperatureData(): piReadTemperature() failed. %s\n", piErrorDesc(iError));
     printf( "Detector Temperature report [%d]: %g C Status %s\n", _iNumExposure, fTemperature, sTemperatureStatus.c_str() );
   }
 

@@ -5,7 +5,6 @@
 #include <sstream>
 #include <vector>
 #include <stdio.h>
-#include "picam/include/picam_advanced.h"
 #include "PiUtils.hh"
 
 namespace PiUtils

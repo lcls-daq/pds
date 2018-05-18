@@ -966,7 +966,9 @@ bool Detector::connected() const
 
 void Detector::signal(int sig)
 {
-  ::write(_sigfd[1], &sig, sizeof(sig));
+  if(!_use_threads) {
+    ::write(_sigfd[1], &sig, sizeof(sig));
+  }
 }
 
 void Detector::abort()

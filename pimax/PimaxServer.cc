@@ -107,7 +107,7 @@ int PimaxServer::initDevice()
     CHECK_PICAM_ERROR(iError, "PimaxServer::initDevice(): Picam_GetAvailableCameraIDs()");
 
     printf("Found %d Pimax Cameras at %d-th try\n", (int) iNumCamera, iTry+1);
-    if (iNumCamera > 0)
+    if (iNumCamera > 0 || _iCamera < 0)
       break;
 
     iError = Picam_UninitializeLibrary();
@@ -131,13 +131,18 @@ int PimaxServer::initDevice()
     Picam_DestroyFirmwareDetails(firmware_array);
   }
 
-  if (_iCamera < 0 || _iCamera >= iNumCamera)
+  if (_iCamera >= iNumCamera)
   {
     printf("PimaxServer::initDevice(): Invalid Camera selection: %d (max %d)\n", _iCamera, (int) iNumCamera-1);
     Picam_DestroyCameraIDs( listCamID );
     return ERROR_INVALID_CONFIG;
   }
-  _piCameraId = listCamID[_iCamera];
+  if (_iCamera < 0) {
+    printf("PimaxServer::initDevice(): Requested Camera %d. Using a simulated camera\n", _iCamera);
+    Picam_ConnectDemoCamera(PicamModel_PIMax31024I,"0008675309",&_piCameraId);
+  } else {
+    _piCameraId = listCamID[_iCamera];
+  }
   iError = Picam_DestroyCameraIDs( listCamID );
   CHECK_PICAM_ERROR(iError, "PimaxServer::initDevice(): Picam_DestroyCameraIDs()");
 

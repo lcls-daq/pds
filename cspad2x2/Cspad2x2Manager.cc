@@ -84,6 +84,7 @@ class Cspad2x2L1Action : public Action {
 
    InDatagram* fire(InDatagram* in);
    void        reset(bool f=true);
+   unsigned    syncOffset() const;
 
    enum {FiducialErrorCountLimit=16};
 
@@ -92,13 +93,21 @@ class Cspad2x2L1Action : public Action {
    unsigned _lastMatchedFrameNumber;
    unsigned _lastMatchedAcqCount;
    unsigned _frameSyncErrorCount;
+   unsigned _frameSyncOffset;
    unsigned _damageCount;
 };
 
 void Cspad2x2L1Action::reset(bool resetError) {
   _lastMatchedFiducial = 0xffffffff;
   _lastMatchedFrameNumber = 0xffffffff;
-  if (resetError) _frameSyncErrorCount = 0;
+  if (resetError) {
+    _frameSyncErrorCount = 0;
+    _frameSyncOffset = 0;
+  }
+}
+
+unsigned Cspad2x2L1Action::syncOffset() const {
+  return _frameSyncOffset;
 }
 
 Cspad2x2L1Action::Cspad2x2L1Action(Cspad2x2Server* svr) :
@@ -106,6 +115,7 @@ Cspad2x2L1Action::Cspad2x2L1Action(Cspad2x2Server* svr) :
     _lastMatchedFiducial(0xffffffff),
     _lastMatchedFrameNumber(0xffffffff),
     _frameSyncErrorCount(0),
+    _frameSyncOffset(0),
     _damageCount(0) {}
 
 InDatagram* Cspad2x2L1Action::fire(InDatagram* in) {
@@ -150,6 +160,7 @@ InDatagram* Cspad2x2L1Action::fire(InDatagram* in) {
     if ((server->debug() & 0x10000) == 0) {
       if (noWrap && ((evrFiducials-_lastMatchedFiducial) != (server->runTrigFactor() * 3 * (acq-_lastMatchedAcqCount)))) {
         frameError |= 1;
+        _frameSyncOffset += ((evrFiducials-_lastMatchedFiducial) / 3) - (server->runTrigFactor() * (acq-_lastMatchedAcqCount));
         if (_frameSyncErrorCount < FiducialErrorCountLimit) {
           printf("Cspad2x2L1Action::fire(in) frame mismatch!  evr(0x%x) lastMatchedFiducial(0x%x)\n\tframeNumber(0x%x), lastMatchedFrameNumber(0x%x), ",
               evrFiducials, _lastMatchedFiducial, data->frameNumber(), _lastMatchedFrameNumber);
@@ -250,6 +261,10 @@ class Cspad2x2BeginCalibCycleAction : public Action {
 
     Transition* fire(Transition* tr) {
       printf("Cspad2x2BeginCalibCycleAction:;fire(Transition) payload size %u ", _server->payloadSize());
+      if(_l1.syncOffset()) {
+        _server->offset(_server->offset()-_l1.syncOffset());
+        printf("(sync offset adjusted by %d) ", (signed) _l1.syncOffset());
+      }
       _l1.reset();
       if (_cfg.scanning()) {
         if (_cfg.changed()) {

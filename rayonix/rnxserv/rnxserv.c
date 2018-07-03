@@ -151,6 +151,7 @@ int main(int argc, char *argv[]) {
       rnxlogInit(LEVEL_INFO, argv[0]);
       break;
     default:
+      setWorkRoutineVerbose(true);
       rnxlogInit(LEVEL_DEBUG, argv[0]);
       break;
   }

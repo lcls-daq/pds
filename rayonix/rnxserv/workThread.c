@@ -90,7 +90,7 @@ class FrameHandlerCB : public VirtualFrameCallback
       void RawFrameReady(int frame_number, const RxFrame *frame_p)
       {
          if (_rawFlag) {
-           boost::posix_time::ptime ppp = frame_p->constMetaData().HardwareTimestamp();
+           boost::posix_time::ptime ppp = frame_p->metaData().HardwareTimestamp();
            boost::posix_time::time_duration duration( ppp.time_of_day() );
            unsigned short timeStamp = duration.total_milliseconds() % 0xffff;
 
@@ -106,7 +106,7 @@ class FrameHandlerCB : public VirtualFrameCallback
       void FrameReady(int frame_number, const RxFrame *frame_p)
       {
          if (!_rawFlag) {
-           boost::posix_time::ptime ppp = frame_p->constMetaData().HardwareTimestamp();
+           boost::posix_time::ptime ppp = frame_p->metaData().HardwareTimestamp();
            boost::posix_time::time_duration duration( ppp.time_of_day() );
            unsigned short timeStamp = duration.total_milliseconds() % 0xffff;
 
@@ -121,7 +121,7 @@ class FrameHandlerCB : public VirtualFrameCallback
 
       void FrameAborted(int frame_number) {RxLog(LOG_WARNING) << "CB: Frame " << frame_number << " aborted." << std::endl;}
       void FrameCompleted(int frame_number) {RxLog(LOG_DEBUG) << "CB: Frame " << frame_number << " completed." << std::endl;}
-      void FrameError(int frame_number, const int error_code, const std::string& error_string) {RxLog(LOG_ERROR) << "CB: Frame " << frame_number << " reported error " << error_code << ":" << error_string << std::endl;}
+      void FrameError(int frame_number, const RxFrame* frame_p, int error_code, const std::string& error_string) {RxLog(LOG_ERROR) << "CB: Frame " << frame_number << " reported error " << error_code << ":" << error_string << std::endl;}
 
       void set_write_frames(const bool write_frames = true) {
       }
@@ -177,6 +177,7 @@ static uint16_t linebuf1[LINEBUF_WORDS * 2];
 
 static RxDetector *pDetector = NULL;
 static VirtualFrameCallback* pFrameCallback = NULL;
+static CallbackConnection_t frameCallbackConn;
 
 static int notifyFd, dataFdEven, dataFdOdd;
 static struct sockaddr_in notifyaddr, dataaddreven, dataaddrodd;
@@ -189,6 +190,11 @@ int sendWorkCommand(work_state_t *pState, workCmd_t *pCommand)
     return (-1);    /* ERROR */
   }
   return (0);       /* OK */
+}
+
+void setWorkRoutineVerbose(bool verbose)
+{
+  _verbose = verbose;
 }
 
 void *workRoutine(void *arg)
@@ -593,24 +599,6 @@ void *workRoutine(void *arg)
             printf("%s\n", logbuf);
             INFO_LOG(logbuf);
           }
-
-          if (pFrameCallback) {
-            /* set callbacks */
-            error = pDetector->SetAcquisitionUserCB(pFrameCallback);
-            if (error.IsError()) {
-              sprintf(logbuf, "Error: SetAcquisitionUserCB() failed");
-              printf("%s\n", logbuf);
-              ERROR_LOG(logbuf);
-            } else {
-              sprintf(logbuf, "SetAcquisitionUserCB() done");
-              printf("%s\n", logbuf);
-              INFO_LOG(logbuf);
-            }
-          } else {
-            sprintf(logbuf, "Error: pFrameCallback is NULL");
-            printf("%s\n", logbuf);
-            ERROR_LOG(logbuf);
-          }
         }
 
         /* command: 5=Error, 2=OK */
@@ -951,7 +939,7 @@ RxDetector *openDetector(const char *configFileName, const char *detectorName)
   RxDetector *pDetector;
 
   /* RxDetector aDetector("config_foo"); */
-  pDetector = new RxDetector(configFileName);
+  pDetector = RxDetector::create(configFileName);
   if (!pDetector) {
     std::cerr << "new RxDetector is NULL" << std::endl;
     return (NULL);
@@ -971,6 +959,12 @@ RxDetector *openDetector(const char *configFileName, const char *detectorName)
   }
   std::cout << "# Open()" << std::endl;
 
+  frameCallbackConn = pDetector->RegisterFrameCallback(pFrameCallback);
+  if (!frameCallbackConn.connected()) {
+    std::cerr << "RegisterFrameCallback failed" << std::endl;
+    return (NULL);
+  }
+
   return (pDetector);
 }
 
@@ -979,6 +973,10 @@ int closeDetector(RxDetector *pDetector)
   int rv = -1;
 
   if (pDetector) {
+    if (pFrameCallback && frameCallbackConn.connected()) {
+      pDetector->UnregisterFrameCallback(frameCallbackConn);
+      std::cout << "# UnregisterFrameCallback()" << std::endl;
+    }
     std::cout << "# Close()" << std::endl;
     pDetector->Close();
     rv = 0;

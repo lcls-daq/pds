@@ -45,6 +45,7 @@ typedef struct {
   uint16_t  pad;
 } line_header_t;
 
+void setWorkRoutineVerbose(bool verbose);
 void *workRoutine(void *arg);
 
 #endif /* _WORK_THREAD_H */

@@ -626,7 +626,7 @@ int create_threads(bool singleWorker)
   triggerState = (trigger_state_t *)malloc(sizeof(trigger_state_t));
   triggerState->task_id = 2;
   triggerState->write_pipe_fd = _workPipeFd[1];
-  triggerState->mode = RNX_TRIGGER_MODE_UDP;    /* modes: timer or udp */
+  triggerState->mode = RNX_TRIGGER_MODE_STATUS; /* modes: timer or udp or status*/
 
   /* create threads */
   int numWorkThreads = singleWorker ? 1 : NUM_WORK_THREADS;

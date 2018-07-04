@@ -11,7 +11,6 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
-#define RNX_TRIGGER_PORT  30051
 
 int createUdpSocket(int port);
 
@@ -26,17 +25,19 @@ void *triggerRoutine(void *arg)
   int     recvlen;
   char    trigbuf[512];
 
-  workCmd.cmd = RNX_WORK_FRAMEREADY;
   workCmd.epoch = 0;
 
   char msg[LOGBUF_SIZE];
 
   switch (mode) {
-    case 0:
+    case RNX_TRIGGER_MODE_TIMER:
       modeString = "Timer";
       break;
-    case 1:
+    case RNX_TRIGGER_MODE_UDP:
       modeString = "UDP";
+      break;
+    case RNX_TRIGGER_MODE_STATUS:
+      modeString = "Status";
       break;
     default:
       modeString = "Unsupported";
@@ -59,6 +60,8 @@ void *triggerRoutine(void *arg)
       break;
 
     case RNX_TRIGGER_MODE_UDP:
+    case RNX_TRIGGER_MODE_STATUS:
+      workCmd.cmd = (mode == RNX_TRIGGER_MODE_UDP) ? RNX_WORK_FRAMEREADY : RNX_WORK_STATUSCMD;
       triggerFd = createUdpSocket(RNX_TRIGGER_PORT);
       if (triggerFd) {
         INFO_LOG("Trigger socket open");
@@ -72,7 +75,7 @@ void *triggerRoutine(void *arg)
         /* wait for UDP packet */
         recvlen = recvfrom(triggerFd, trigbuf, sizeof(trigbuf), 0, 0, 0);
         /* write to work pipe */
-        if (rnxState() == RNX_STATE_ENABLED) {
+        if ((workCmd.cmd == RNX_WORK_STATUSCMD) || (rnxState() == RNX_STATE_ENABLED)) {
           if (write(myState->write_pipe_fd, &workCmd, sizeof(workCmd)) == -1) {
             perror("write");
             INFO_LOG("write failed");

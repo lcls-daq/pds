@@ -15,7 +15,6 @@
 #include "rnxState.h"
 
 #include "craydl/craydl.h"
-// #include "RxDetector.h"
 
 #define DEST_IPADDR         "10.0.1.1"
 #define NOTIFY_PORT         30050
@@ -34,13 +33,14 @@ static int _testPattern = 0;
 static bool _rawFlag = false;
 static bool _darkFlag = false;
 static craydl::ReadoutMode_t  _readoutMode = craydl::ReadoutModeStandard;
-static bool _verbose = false;   // FIXME command line parameter
+static bool _verbose = false;
 static bool _error = false;
 static int backgroundFrameCount = 0;
 static int savedFrameCount = 0;
 
 // forward declaration
 int sendFrame(int frameNumber, uint16_t timeStamp, uint16_t *frame);
+int sendStatus(std::vector<double>& temperatures);
 void millisleep(int milliseconds);
 
 static void die(int tid)
@@ -179,8 +179,8 @@ static RxDetector *pDetector = NULL;
 static VirtualFrameCallback* pFrameCallback = NULL;
 static CallbackConnection_t frameCallbackConn;
 
-static int notifyFd, dataFdEven, dataFdOdd;
-static struct sockaddr_in notifyaddr, dataaddreven, dataaddrodd;
+static int notifyFd, dataFdEven, dataFdOdd, statusFd;
+static struct sockaddr_in notifyaddr, dataaddreven, dataaddrodd, statusaddr;
 
 int sendWorkCommand(work_state_t *pState, workCmd_t *pCommand)
 {
@@ -213,31 +213,7 @@ void *workRoutine(void *arg)
   int kk;
 
   sprintf(logbuf, "Thread #%d started", tid);
-  DEBUG_LOG(logbuf);
-
-  /* open notification socket */
-  notifyFd = socket(AF_INET,SOCK_DGRAM, 0);
-  if (notifyFd == -1) {
-    perror("socket");
-    ERROR_LOG("Failed to open notification socket");
-    pthread_exit(NULL);
-  }
-  DEBUG_LOG("Notification socket open");
-
-  /* open data sockets */
-  dataFdEven = socket(AF_INET,SOCK_DGRAM, 0);
-  if (dataFdEven == -1) {
-    perror("socket");
-    ERROR_LOG("Error: Failed to open even data socket");
-    pthread_exit(NULL);
-  }
-  dataFdOdd = socket(AF_INET,SOCK_DGRAM, 0);
-  if (dataFdOdd == -1) {
-    perror("socket");
-    ERROR_LOG("Error: Failed to open odd data socket");
-    pthread_exit(NULL);
-  }
-  DEBUG_LOG("Data sockets open");
+  INFO_LOG(logbuf);
 
   /* init notifyMsg */
   bzero(&notifyMsg, sizeof(notifyMsg));
@@ -259,6 +235,12 @@ void *workRoutine(void *arg)
   dataaddrodd.sin_family = AF_INET;
   dataaddrodd.sin_addr.s_addr=inet_addr(DEST_IPADDR);
   dataaddrodd.sin_port=htons(RNX_DATA_PORT_ODD);
+
+  /* init statusaddr */
+  bzero(&statusaddr, sizeof(statusaddr));
+  statusaddr.sin_family = AF_INET;
+  statusaddr.sin_addr.s_addr=inet_addr(DEST_IPADDR);
+  statusaddr.sin_port=htons(RNX_STATUS_PORT);
 
   /* open device once, then leave it open */
   if (sem_wait(myState->pConfigSem) == -1) {          /* semaphore take */
@@ -290,7 +272,41 @@ void *workRoutine(void *arg)
                "To see if another process has the device open\n");
         die(tid);
       }
+
+      /* open notification socket */
+      notifyFd = socket(AF_INET,SOCK_DGRAM, 0);
+      if (notifyFd == -1) {
+        perror("socket");
+        ERROR_LOG("Failed to open notification socket");
+        pthread_exit(NULL);
+      }
+      INFO_LOG("Notification socket open");
+
+      /* open data sockets */
+      dataFdEven = socket(AF_INET,SOCK_DGRAM, 0);
+      if (dataFdEven == -1) {
+        perror("socket");
+        ERROR_LOG("Error: Failed to open even data socket");
+        pthread_exit(NULL);
+      }
+      dataFdOdd = socket(AF_INET,SOCK_DGRAM, 0);
+      if (dataFdOdd == -1) {
+        perror("socket");
+        ERROR_LOG("Error: Failed to open odd data socket");
+        pthread_exit(NULL);
+      }
+      INFO_LOG("Data sockets open");
+
+      /* open status (temperature report) socket */
+      statusFd = socket(AF_INET,SOCK_DGRAM, 0);
+      if (statusFd == -1) {
+        perror("socket");
+        ERROR_LOG("Failed to open status socket");
+        pthread_exit(NULL);
+      }
+      INFO_LOG("Status socket open");
     }
+
     if (sem_post(myState->pConfigSem) == -1) {        /* semaphore give */
       perror("sem_post pConfigSem");
       ERROR_LOG("sem_post() failed");
@@ -314,6 +330,9 @@ void *workRoutine(void *arg)
       switch (workCommand.cmd) {
         case  RNX_WORK_FRAMEREADY:
           sprintf(logbuf2, "Thread #%d: FRAMEREADY\n", tid);
+          break;
+        case  RNX_WORK_STATUSCMD:
+          sprintf(logbuf2, "Thread #%d: STATUSCMD\n", tid);
           break;
         case  RNX_WORK_OPENDEV:
           sprintf(logbuf2, "Thread #%d: OPENDEV\n", tid);
@@ -357,7 +376,6 @@ void *workRoutine(void *arg)
       int triggerMode = 0;      // FIXME default trigger mode (0=hw, 1=sw)
       int fast, slow, depth;
       int errorCount = 0;
-      double maxTemperature;
       if (_verbose) {
         printf(" ** workCommand.cmd == RNX_WORK_OPENDEV **\n");
       }
@@ -417,12 +435,6 @@ void *workRoutine(void *arg)
             printf("%s\n", logbuf);
             INFO_LOG(logbuf);
           }
-
-          /* read temperatures */
-          maxTemperature = pDetector->SensorTemperatureMax();
-          sprintf(logbuf, "Max Rayonix temperature: %5.5g C", maxTemperature);
-          printf("==== %s ====\n", logbuf);
-          INFO_LOG(logbuf);
 
           /* set exposure */
           _exposure = exposure_ms / 1000.0;
@@ -753,7 +765,6 @@ void *workRoutine(void *arg)
 
     if (workCommand.cmd == RNX_WORK_STARTACQ) {
       int n_frames = 0;   // 0=infinite
-      // RxFrameAcquisitionType frame_type;
       FrameAcquisitionType frame_type;
 
       /* check epoch */
@@ -870,6 +881,49 @@ void *workRoutine(void *arg)
         }
       } else {
         ERROR_LOG("RNX_WORK_SWTRIGGER ignored - device not open");
+      }
+
+      continue;
+    }
+
+    if (workCommand.cmd == RNX_WORK_STATUSCMD) {
+      if (pDetector) {
+
+        INFO_LOG("STATUSCMD");
+#if 0
+        std::vector<std::string> names;
+        error = pDetector->GetRawStatusNames(names);
+        if (error.IsError()) {
+          sprintf(logbuf, "Error: GetRawStatusNames() failed");
+          printf("%s\n", logbuf);
+          ERROR_LOG(logbuf);
+        } else {
+          std::vector<std::string>::iterator name_iter;
+          printf("found %d raw status names:\n", (int)names.size());
+          for (name_iter = names.begin(); name_iter != names.end(); name_iter++) {
+            printf("  %s\n", (*name_iter).c_str());
+          }
+        }
+#endif
+        double maxTemperature = pDetector->SensorTemperatureMax();
+        double minTemperature = pDetector->SensorTemperatureMin();
+        double aveTemperature = pDetector->SensorTemperatureAve();
+        sprintf(logbuf, "Min/Ave/Max Rayonix sensor temperature: %5.5g/%5.5g/%5.5g C (STATUSCMD)",
+                minTemperature, aveTemperature, maxTemperature);
+        printf("==== %s ====\n", logbuf);
+        INFO_LOG(logbuf);
+
+        std::vector<double> temperatures;
+        error = pDetector->SensorTemperatures(temperatures);
+        if (error.IsError()) {
+          sprintf(logbuf, "Error: SensorTemperatures() failed");
+          printf("%s\n", logbuf);
+          ERROR_LOG(logbuf);
+        } else {
+          sendStatus(temperatures);
+        }
+      } else {
+        ERROR_LOG("RNX_WORK_STATUSCMD ignored - device not open");
       }
 
       continue;
@@ -1135,6 +1189,51 @@ int sendFrame(int frame_number, uint16_t timeStamp, uint16_t *frame)
     printf("sent %d of %lu bytes\n", sent, sizeof(data_footer_t));
     ERROR_LOG("sendto() notify socket returned incorrect size");
   }
+  return (0);
+}
+
+int sendStatus(std::vector<double>& temperatures)
+{
+  std::vector<double>::iterator temp_iter;
+  char tempbuf[LOGBUF_SIZE];
+  int ii, sent;
+  rnxStatus_t statusMsg;
+  int writeSize = (int)sizeof(statusMsg);
+
+  if (temperatures.size() > RNX_STATUS_MAXTEMPS) {
+    sprintf(tempbuf, "Error: exceeded status count limit of %d", RNX_STATUS_MAXTEMPS);
+    printf("%s\n", tempbuf);
+    ERROR_LOG(tempbuf);
+    return (-1);
+  }
+
+  /* init statusMsg */
+  bzero(&statusMsg, sizeof(statusMsg));
+  statusMsg.magic = RNX_STATUS_MAGIC;
+  statusMsg.ntemps = temperatures.size();
+
+  /* fill statusMsg */
+  /* temperatures are stored in hundredths of degree C */
+  for (temp_iter = temperatures.begin(), ii = 0; temp_iter != temperatures.end(); temp_iter++, ii++) {
+    statusMsg.temperature[ii] = (int) round(*temp_iter * 100.);
+    if (_verbose) {
+      sprintf(tempbuf, "%d: %5.5g C", ii, statusMsg.temperature[ii] / 100.);
+      printf(" === %s ===\n", tempbuf);
+      INFO_LOG(tempbuf);
+    }
+  }
+
+  /* send statusMsg */
+  sent = sendto(statusFd, (void *)&statusMsg, writeSize, 0,
+             (struct sockaddr *)&statusaddr, sizeof(statusaddr));
+  if (sent == -1) {
+    perror("sendto");
+    ERROR_LOG("Failed sendto() on status socket");
+  } else if (sent != writeSize) {
+    printf("%s: sent %d of %d bytes\n", __FUNCTION__, sent, writeSize);
+    ERROR_LOG("sendto() status socket returned incorrect size");
+  }
+
   return (0);
 }
 

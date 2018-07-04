@@ -7,6 +7,7 @@
 
 #define RNX_TRIGGER_MODE_TIMER  0
 #define RNX_TRIGGER_MODE_UDP    1
+#define RNX_TRIGGER_MODE_STATUS 2
 
 typedef struct {
   int cmd;
@@ -14,7 +15,7 @@ typedef struct {
 
 typedef struct {
   int task_id;
-  int mode;       /* 0=timer, 1=UDP port 30051 */
+  int mode;       /* 0=timer, 1=UDP, 2=status */
   int read_socket;
   int write_pipe_fd;
 } trigger_state_t;

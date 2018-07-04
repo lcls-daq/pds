@@ -5,7 +5,7 @@
 #define RNX_DATA_PORT_EVEN  30000
 #define RNX_DATA_PORT_ODD   30001
 #define RNX_NOTIFY_PORT     30050
-#define RNX_TRIGGER_PORT    30051 /* sim */
+#define RNX_TRIGGER_PORT    30051
 
 typedef struct {
   uint32_t  cmd;

@@ -10,6 +10,7 @@
 #include <errno.h>
 
 #define NUM_BUFFERS 3
+#define MODULE_MAX 12
 #define MSG_HEADER_LEN 3
 #define MSG_BINHEADER_LEN 4
 #define MAX_CMD_LEN 64
@@ -86,6 +87,16 @@ uint32_t OutputParser::get_value_as_uint32(std::string key) const
 int32_t OutputParser::get_value_as_int32(std::string key) const
 {
   return strtol(get_value(key).c_str(), NULL, 0);
+}
+
+uint16_t OutputParser::get_value_as_uint16(std::string key) const
+{
+  return strtoul(get_value(key).c_str(), NULL, 16);
+}
+
+int16_t OutputParser::get_value_as_int16(std::string key) const
+{
+  return strtol(get_value(key).c_str(), NULL, 16);
 }
 
 double OutputParser::get_value_as_double(std::string key) const
@@ -268,6 +279,90 @@ uint64_t BufferInfo::get_ts_buffer(const char* cmd_fmt, unsigned buffer_idx) con
   return get_value_as_uint64(cmd);
 }
 
+System::System(int num_modules) :
+  _num_modules(num_modules)
+{
+  _cmd_buff = new char[MAX_CMD_LEN];
+}
+
+System::~System()
+{
+  if (_cmd_buff) {
+    delete[] _cmd_buff;
+  }
+}
+
+int System::num_modules() const
+{
+  return _num_modules;
+}
+
+uint32_t System::type() const
+{
+  return get_value_as_uint32("BACKPLANE_TYPE");
+}
+
+uint32_t System::rev() const
+{
+  return get_value_as_uint32("BACKPLANE_REV");
+}
+
+std::string System::version() const
+{
+  return get_value("BACKPLANE_VERSION");
+}
+
+uint16_t System::id() const
+{
+  return get_value_as_uint16("BACKPLANE_ID");
+}
+
+uint16_t System::present() const
+{
+  return get_value_as_uint16("MOD_PRESENT");
+}
+
+bool System::module_present(unsigned mod) const
+{
+  if (mod < (unsigned) _num_modules) {
+    return ((1U<<mod) & present());
+  } else {
+    return false;
+  }
+}
+
+uint32_t System::module_type(unsigned mod) const
+{
+  snprintf(_cmd_buff, MAX_CMD_LEN, "MOD%u_TYPE", mod);
+  std::string cmd(_cmd_buff);
+  return get_value_as_uint32(cmd);
+}
+
+uint32_t System::module_rev(unsigned mod) const
+{
+  snprintf(_cmd_buff, MAX_CMD_LEN, "MOD%u_REV", mod);
+  std::string cmd(_cmd_buff);
+  return get_value_as_uint32(cmd);
+}
+
+std::string System::module_version(unsigned mod) const
+{
+  snprintf(_cmd_buff, MAX_CMD_LEN, "MOD%u_VERSION", mod);
+  std::string cmd(_cmd_buff);
+  return get_value(cmd);
+}
+
+uint16_t System::module_id(unsigned mod) const
+{
+  snprintf(_cmd_buff, MAX_CMD_LEN, "MOD%u_ID", mod);
+  std::string cmd(_cmd_buff);
+  return get_value_as_uint16(cmd);
+}
+
+bool System::update(char* buffer)
+{
+  return (parse(buffer) == (NUM_ENTRIES_PER_MOD * _num_modules + NUM_ENTRIES_BASE));
+}
 
 Status::Status() :
   _num_module_entries(0)
@@ -360,6 +455,7 @@ Driver::Driver(const char* host, unsigned port) :
   _readbuf_sz(BUFFER_SIZE),
   _writebuf_sz(BUFFER_SIZE),
   _last_frame(0),
+  _system(MODULE_MAX),
   _buffer_info(NUM_BUFFERS)
 {
   // 1ms frame poll interval by default
@@ -585,6 +681,11 @@ bool Driver::stop_acquisition()
   return status;
 }
 
+bool Driver::set_preframe_clear(bool enable)
+{
+  return load_parameter("SweepCount", enable ? 1 : 0);
+}
+
 bool Driver::set_integration_time(unsigned milliseconds)
 {
   return load_parameter("IntMS", milliseconds);
@@ -719,6 +820,14 @@ bool Driver::wr_config_line(unsigned num, const char* line)
   return command(_writebuf);
 }
 
+bool Driver::fetch_system()
+{
+  if (command("SYSTEM")) {
+    return _system.update(_message);
+  }
+  return false;
+}
+
 bool Driver::fetch_status()
 {
   if (command("STATUS")) {
@@ -784,6 +893,11 @@ const char* Driver::message() const
   return _message;
 }
 
+const System& Driver::system() const
+{
+  return _system;
+}
+
 const Status& Driver::status() const
 {
   return _status;
@@ -807,6 +921,7 @@ bool Driver::lock_buffer(unsigned buffer_idx)
 }
 
 #undef NUM_BUFFERS
+#undef MODULE_MAX
 #undef MSG_HEADER_LEN
 #undef MSG_BINHEADER_LEN
 #undef MAX_CMD_LEN

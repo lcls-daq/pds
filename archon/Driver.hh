@@ -23,7 +23,10 @@ namespace Pds {
         int64_t get_value_as_int64(std::string key) const;
         uint32_t get_value_as_uint32(std::string key) const;
         int32_t get_value_as_int32(std::string key) const;
+        uint16_t get_value_as_uint16(std::string key) const;
+        int16_t get_value_as_int16(std::string key) const;
         double get_value_as_double(std::string key) const;
+        virtual bool update(char* buffer) = 0;
         void dump() const;
       private:
         std::map<std::string, std::string> _data;
@@ -68,6 +71,30 @@ namespace Pds {
         char*           _cmd_buff;
     };
 
+    class System : public OutputParser {
+      public:
+        System(int num_modules);
+        ~System();
+        int num_modules() const;
+        uint32_t type() const;
+        uint32_t rev() const;
+        std::string version() const;
+        uint16_t id() const;
+        uint16_t present() const;
+        uint32_t module_type(unsigned mod) const;
+        uint32_t module_rev(unsigned mod) const;
+        std::string module_version(unsigned mod) const;
+        uint16_t module_id(unsigned mod) const;
+        bool module_present(unsigned mod) const;
+        bool update(char* buffer);
+      protected:
+        static const int NUM_ENTRIES_BASE = 6;
+        static const int NUM_ENTRIES_PER_MOD = 4;
+      private:
+        int   _num_modules;
+        char* _cmd_buff;
+    };
+
     class Status : public OutputParser {
       public:
         Status();
@@ -108,12 +135,14 @@ namespace Pds {
         bool command(const char* cmd);
         bool load_parameter(const char* param, unsigned value, bool fast=true);
         bool wr_config_line(unsigned num, const char* line);
+        bool fetch_system();
         bool fetch_status();
         bool fetch_buffer_info();
         bool fetch_frame(uint32_t frame_number, void* data, FrameMetaData* frame_meta=NULL, bool need_fetch=true);
         bool wait_frame(void* data, FrameMetaData* frame_meta=NULL, int timeout=0);
         bool start_acquisition(uint32_t num_frames=0);
         bool stop_acquisition();
+        bool set_preframe_clear(bool enable);
         bool set_integration_time(unsigned milliseconds);
         bool set_non_integration_time(unsigned milliseconds);
         void set_frame_poll_interval(unsigned microseconds);
@@ -121,6 +150,7 @@ namespace Pds {
         const char* command_output(const char* cmd, char delim='\n');
         const char* message() const;
         AcqMode acquisition_mode() const;
+        const System& system() const;
         const Status& status() const;
         const BufferInfo& buffer_info() const;
       private:
@@ -141,6 +171,7 @@ namespace Pds {
         char*         _message;
         uint32_t      _last_frame;
         timespec      _sleep_time;
+        System        _system;
         Status        _status;
         BufferInfo    _buffer_info;
     };

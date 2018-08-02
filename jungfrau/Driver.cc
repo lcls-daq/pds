@@ -899,6 +899,9 @@ Detector::Detector(std::vector<Module*>& modules, bool use_threads, int thread_r
   if (err) {
     fprintf(stderr, "%s pipe error: %s\n", __FUNCTION__, strerror(errno));
   }
+  // explicitly zero the _module_frames and _module_frames_offset buffers
+  memset(_module_frames, 0, modules.size() * sizeof(uint64_t));
+  memset(_module_frames_offset, 0, modules.size() * sizeof(uint64_t));
   if (_use_threads) {
     _threads = new pthread_t[_num_modules];
     _thread_attr = new pthread_attr_t;

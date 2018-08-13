@@ -7,7 +7,7 @@ namespace Pds {
   namespace PvDaq {
     class ImageServer : public Pds_Epics::EpicsCA {
       public:
-        ImageServer(const char*, Pds_Epics::PVMonitorCb*);
+        ImageServer(const char*, Pds_Epics::PVMonitorCb*, const int);
         ~ImageServer();
       public:
         const char* name() const;

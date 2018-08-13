@@ -1,6 +1,7 @@
 #include "pds/pvdaq/ControlsCameraServer.hh"
 #include "pds/pvdaq/ConfigMonitor.hh"
 #include "pds/pvdaq/CamPvServer.hh"
+#include "pds/config/RayonixConfigType.hh"
 #include "pds/config/EpicsCamConfigType.hh"
 #include "pds/config/EpicsCamDataType.hh"
 #include "pds/config/FrameFexConfigType.hh"
@@ -14,15 +15,13 @@ static const unsigned EB_EVT_EXTRA = 0x10000;
 static const unsigned NPRINT = 20;
 static const unsigned PV_LEN = 64;
 
-#define CREATE_IMG_PV(pv, name)            \
-  snprintf(pvname, PV_LEN, name, pvbase);  \
-  printf("Creating EpicsCA(%s)\n",pvname); \
-  pv = new ImageServer(pvname,this);
+#define CREATE_PV_NAME(pvname, fmt, ...)                \
+  snprintf(pvname, PV_LEN, fmt, pvbase, ##__VA_ARGS__);
 
-#define CREATE_PV(pv, name)                       \
-  snprintf(pvname, PV_LEN, name, pvbase);         \
-  printf("Creating EpicsCA(%s)\n",pvname);        \
-  pv = new ConfigServer(pvname, _configMonitor);  \
+#define CREATE_PV(pv, fmt, ...)                         \
+  snprintf(pvname, PV_LEN, fmt, pvbase, ##__VA_ARGS__); \
+  printf("Creating EpicsCA(%s)\n",pvname);              \
+  pv = new ConfigServer(pvname, _configMonitor);        \
   _config_pvs.push_back(pv);
 
 #define CHECK_PV(pv, val)                                         \
@@ -41,10 +40,13 @@ static const unsigned PV_LEN = 64;
 using namespace Pds::PvDaq;
 
 ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
+                                           const char*          pvimage,
                                            const Pds::DetInfo&  info,
                                            const unsigned       max_event_size,
                                            const unsigned       flags) :
   _pvbase     (pvbase),
+  _pvimage    (pvimage ? pvimage : "IMAGE1"),
+  _info       (info),
   _image      (0),
   _nrows      (0),
   _ncols      (0),
@@ -59,6 +61,12 @@ ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
   _xlen       (0),
   _yorg       (0),
   _ylen       (0),
+  _rnx_bin    (0),
+  _rnx_trig   (0),
+  _rnx_mode   (0),
+  _rnx_bin_val(0),
+  _rnx_trig_val(0),
+  _rnx_mode_val(0),
   _width      (0),
   _height     (0),
   _depth      (0),
@@ -75,6 +83,7 @@ ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
   _yscale_val   (1.0),
   _manufacturer_str (new char[EpicsCamConfigType::DESC_CHAR_MAX]),
   _model_str        (new char[EpicsCamConfigType::DESC_CHAR_MAX]),
+  _image_pvname     (new char[PV_LEN]),
   _enabled    (false),
   _configured (false),
   _scale      (flags & (1<<SCALEPV)),
@@ -84,7 +93,8 @@ ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
   _configMonitor(new ConfigMonitor(*this)),
   _nprint     (NPRINT),
   _wrp        (0),
-  _pool       (8)
+  _pool       (8),
+  _context    (ca_current_context())
 {
   _xtc = Xtc(_epicsCamDataType, info);
   _manufacturer_str[0] = '\0';
@@ -96,8 +106,8 @@ ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
   char pvname[PV_LEN];
 
   if (_unixcam) {
-    // image waveform
-    CREATE_IMG_PV(_image, "%s:LIVE_IMAGE_FAST");
+    // image waveform name
+    CREATE_PV_NAME(_image_pvname, "%s:LIVE_IMAGE_FAST")
     // nrows config pv
     CREATE_PV(_nrows, "%s:N_OF_ROW");
     // ncols config pv
@@ -127,14 +137,14 @@ ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
       _scale = false;
     }
   } else {
-    // image waveform
-    CREATE_IMG_PV(_image, "%s:IMAGE1:ArrayData");
+    // image waveform name
+    CREATE_PV_NAME(_image_pvname, "%s:%s:ArrayData", _pvimage);
     // nrows config pv
-    CREATE_PV(_nrows, "%s:IMAGE1:ArraySize1_RBV");
+    CREATE_PV(_nrows, "%s:%s:ArraySize1_RBV", _pvimage);
     // ncols config pv
-    CREATE_PV(_ncols, "%s:IMAGE1:ArraySize0_RBV");
+    CREATE_PV(_ncols, "%s:%s:ArraySize0_RBV", _pvimage);
     // bits config pv
-    CREATE_PV(_nbits, "%s:IMAGE1:BitsPerPixel_RBV");
+    CREATE_PV(_nbits, "%s:%s:BitsPerPixel_RBV", _pvimage);
     // gain config pv
     CREATE_PV(_gain, "%s:Gain_RBV");
     // model config pv
@@ -158,6 +168,15 @@ ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
       // yscale config pv
       CREATE_PV(_yscale, "%s:ScaleY_RBV");
     }
+
+    if (info.device() == Pds::DetInfo::Rayonix) {
+      // Rayonix binning pv
+      CREATE_PV(_rnx_bin, "%s:Bin_RBV");
+      // Rayonix trigger pv
+      CREATE_PV(_rnx_trig, "%s:TriggerMode");
+      // Rayonix readout mode pv
+      CREATE_PV(_rnx_mode, "%s:ReadoutMode");
+    }
   }
 
   for(unsigned i=0; i<_pool.size(); i++) {
@@ -172,6 +191,7 @@ ControlsCameraServer::~ControlsCameraServer()
 {
   delete[] _manufacturer_str;
   delete[] _model_str;
+  delete[] _image_pvname;
   if (_image)
     delete _image;
   if (_nrows)
@@ -198,6 +218,12 @@ ControlsCameraServer::~ControlsCameraServer()
     delete _yorg;
   if (_ylen)
     delete _ylen;
+  if (_rnx_bin)
+    delete _rnx_bin;
+  if (_rnx_trig)
+    delete _rnx_trig;
+  if (_rnx_mode)
+    delete _rnx_mode;
   for(unsigned i=0; i<_pool.size(); i++) {
     if (_pool[i])
       delete[] _pool[i];
@@ -320,6 +346,8 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
       reinterpret_cast<Dgram*>(_pool[i])->seq = Sequence(ClockTime(0,0),
                                                          TimeStamp(0,0,0,0));
     bool error = false;
+    uint32_t rnx_trig_ddl = 0;
+    RayonixConfigType::ReadoutMode rnx_mode_ddl = RayonixConfigType::Unknown;
     printf("Retrieving camera configuration information from epics...\n");
     CHECK_PV(_ncols,    _width);
     CHECK_PV(_nrows,    _height);
@@ -338,6 +366,38 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
     if (_yscale) { // Not all cameras have this!
       CHECK_PV(_yscale, _yscale_val);
     }
+    if (_rnx_bin) { // Not all cameras have this!
+      CHECK_PV(_rnx_bin, _rnx_bin_val);
+    }
+    if (_rnx_trig) { // Not all cameras have this!
+      CHECK_PV(_rnx_trig, _rnx_trig_val);
+      // Convert to DDL value scheme
+      switch (_rnx_trig_val) {
+        case 1:
+          rnx_trig_ddl = 0;
+          break;
+        case 2:
+          rnx_trig_ddl = 1;
+          break;
+        case 3:
+          rnx_trig_ddl = 2;
+          break;
+        default:
+          rnx_trig_ddl = 3;
+      }
+    }
+    if (_rnx_mode) { // Not all cameras have this!
+      CHECK_PV(_rnx_mode, _rnx_mode_val);
+      // Convert to DDL enum scheme
+      switch (_rnx_mode_val) {
+        case 0:
+          rnx_mode_ddl = RayonixConfigType::Standard;
+          break;
+        case 1:
+          rnx_mode_ddl = RayonixConfigType::LowNoise;
+          break;
+      }
+    }
 
     CHECK_STR_PV(_model,        _model_str,         EpicsCamConfigType::DESC_CHAR_MAX);
     CHECK_STR_PV(_manufacturer, _manufacturer_str,  EpicsCamConfigType::DESC_CHAR_MAX);
@@ -350,6 +410,12 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
       // Areadet gives the len of the ROI
       _roi_x_end = _roi_x_org+_roi_x_len;
       _roi_y_end = _roi_y_org+_roi_y_len;
+    }
+
+    if (!_image) {
+      if (ca_current_context() == NULL) ca_attach_context(_context);
+      printf("Creating EpicsCA(%s)\n", _image_pvname);
+      _image = new ImageServer(_image_pvname, this, _width * _height);
     }
 
     printf("Camera configuration information:\n"
@@ -375,24 +441,32 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
     Pds::Camera::FrameCoord roi_beg(_roi_x_org, _roi_x_end);
     Pds::Camera::FrameCoord roi_end(_roi_y_org, _roi_y_end);
 
-    Pds::Xtc* xtc = new ((char*)dg->xtc.next())
-      Pds::Xtc(_epicsCamConfigType, _xtc.src );
-    new (xtc->alloc(sizeof(EpicsCamConfigType)))
-      EpicsCamConfigType(_width, _height, _depth, EpicsCamConfigType::Mono, _exposure_val, _gain_val, _manufacturer_str, _model_str);
-    dg->xtc.alloc(xtc->extent);
-
-    xtc = new ((char*)dg->xtc.next())
-      Pds::Xtc(_frameFexConfigType, _xtc.src);
-    new (xtc->alloc(sizeof(FrameFexConfigType)))
-      FrameFexConfigType(FrameFexConfigType::FullFrame, 1, FrameFexConfigType::NoProcessing, roi_beg, roi_end, 0, 0, 0);
-    dg->xtc.alloc(xtc->extent);
-
-    if (_scale) {
-      xtc = new ((char*)dg->xtc.next())
-        Pds::Xtc(_pimImageConfigType, _xtc.src );
-      new (xtc->alloc(sizeof(PimImageConfigType)))
-        PimImageConfigType(_xscale_val, _yscale_val);  
+    if (_info.device() == Pds::DetInfo::Rayonix) {
+      Pds::Xtc* xtc = new ((char*)dg->xtc.next())
+        Pds::Xtc(_rayonixConfigType, _xtc.src );
+      new (xtc->alloc(sizeof(RayonixConfigType)))
+        RayonixConfigType((uint8_t) _rnx_bin_val, (uint8_t) _rnx_bin_val, 0, (uint32_t) _exposure_val, rnx_trig_ddl, 0, 0, rnx_mode_ddl, _model_str);
       dg->xtc.alloc(xtc->extent);
+    } else {
+      Pds::Xtc* xtc = new ((char*)dg->xtc.next())
+        Pds::Xtc(_epicsCamConfigType, _xtc.src );
+      new (xtc->alloc(sizeof(EpicsCamConfigType)))
+        EpicsCamConfigType(_width, _height, _depth, EpicsCamConfigType::Mono, _exposure_val, _gain_val, _manufacturer_str, _model_str);
+      dg->xtc.alloc(xtc->extent);
+
+      xtc = new ((char*)dg->xtc.next())
+        Pds::Xtc(_frameFexConfigType, _xtc.src);
+      new (xtc->alloc(sizeof(FrameFexConfigType)))
+        FrameFexConfigType(FrameFexConfigType::FullFrame, 1, FrameFexConfigType::NoProcessing, roi_beg, roi_end, 0, 0, 0);
+      dg->xtc.alloc(xtc->extent);
+
+      if (_scale) {
+        xtc = new ((char*)dg->xtc.next())
+          Pds::Xtc(_pimImageConfigType, _xtc.src );
+        new (xtc->alloc(sizeof(PimImageConfigType)))
+          PimImageConfigType(_xscale_val, _yscale_val);
+        dg->xtc.alloc(xtc->extent);
+      }
     }
 
     _frame_sz = _width * _height * ((_depth+7)/8);
@@ -415,6 +489,12 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
       sendOcc(umsg);
       dg->datagram().xtc.damage.increase(Pds::Damage::UserDefined);
     }
+  } else if (dg->seq.service()==Pds::TransitionId::Unconfigure) {
+    if (_image) {
+      if (ca_current_context() == NULL) ca_attach_context(_context);
+      delete _image;
+      _image = 0;
+    }
   }
   
   return dg;
@@ -432,7 +512,7 @@ void ControlsCameraServer::config_updated()
   }
 }
 
-#undef CREATE_IMG_PV
+#undef CREATE_PV_NAME
 #undef CREATE_PV
 #undef CHECK_PV
 #undef CHECK_STR_PV

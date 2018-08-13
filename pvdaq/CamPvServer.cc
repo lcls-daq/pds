@@ -15,8 +15,8 @@
 
 using namespace Pds::PvDaq;
 
-ImageServer::ImageServer(const char* name, Pds_Epics::PVMonitorCb* mon_cb) :
-  Pds_Epics::EpicsCA (name, mon_cb),
+ImageServer::ImageServer(const char* name, Pds_Epics::PVMonitorCb* mon_cb, const int max_elem) :
+  Pds_Epics::EpicsCA (name, mon_cb, max_elem),
   _name(new char[strlen(name)+1])
 {
   strcpy(_name, name);

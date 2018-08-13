@@ -15,7 +15,7 @@ namespace Pds {
                                  public Pds_Epics::PVMonitorCb {
     public:
       enum Flags { SCALEPV = 0, UNIXCAM = 1 };
-      ControlsCameraServer(const char*, const DetInfo&, const unsigned, const unsigned);
+      ControlsCameraServer(const char*, const char*, const DetInfo&, const unsigned, const unsigned);
       ~ControlsCameraServer();
     public:
       // Server interface
@@ -27,6 +27,8 @@ namespace Pds {
       void        config_updated();
     private:
       const char*                 _pvbase;
+      const char*                 _pvimage;
+      const DetInfo&              _info;
       ImageServer*                _image;
       ConfigServer*               _nrows;
       ConfigServer*               _ncols;
@@ -41,7 +43,13 @@ namespace Pds {
       ConfigServer*               _xlen;
       ConfigServer*               _yorg;
       ConfigServer*               _ylen;
+      ConfigServer*               _rnx_bin;
+      ConfigServer*               _rnx_trig;
+      ConfigServer*               _rnx_mode;
       std::vector<ConfigServer*>  _config_pvs;
+      uint16_t                    _rnx_bin_val;
+      uint16_t                    _rnx_trig_val;
+      uint16_t                    _rnx_mode_val;
       uint32_t                    _width;
       uint32_t                    _height;
       uint32_t                    _depth;
@@ -58,6 +66,7 @@ namespace Pds {
       double                      _yscale_val;
       char*                       _manufacturer_str;
       char*                       _model_str;
+      char*                       _image_pvname;
       bool                        _enabled;
       bool                        _configured;
       bool                        _scale;
@@ -69,6 +78,7 @@ namespace Pds {
       ClockTime                   _last;
       unsigned                    _wrp;
       std::vector<char*>          _pool;
+      ca_client_context*          _context;
     };
   };
 };

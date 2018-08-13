@@ -51,7 +51,7 @@ BeamMonitorServer::BeamMonitorServer(const char*         pvbase,
                                      const char*         iocbase,
                                      const Pds::DetInfo& info) :
   _pvbase     (pvbase),
-  _iocbase    (iocbase),
+  _iocbase    (iocbase ? iocbase : ""),
   _exp_nord   (0),
   _config_pvs (NCHANNELS),
   _offset_pvs (NCHANNELS),
@@ -101,11 +101,20 @@ BeamMonitorServer::BeamMonitorServer(const char*         pvbase,
   //
   //  Create PVs for validating setup
   //
-  sprintf(pvname,"%s:FORMAT_VERSION",iocbase);
-  _api_version = new PvServer(pvname);
+  if (!_iocbase.empty()) {
+    sprintf(pvname,"%s:FORMAT_VERSION",iocbase);
+    _api_version = new PvServer(pvname);
 
-  sprintf(pvname,"%s:VERSION",iocbase);
-  _ioc_version = new PvServer(pvname);
+    sprintf(pvname,"%s:VERSION",iocbase);
+    _ioc_version = new PvServer(pvname);
+  } else {
+    sprintf(pvname,"IOC:%s:FORMAT_VERSION",pvbase);
+    _api_version = new PvServer(pvname);
+
+    sprintf(pvname,"IOC:%s:VERSION",pvbase);
+    _ioc_version = new PvServer(pvname);
+
+  }
 
   for(unsigned i=0; i<_pool.size(); i++) {
     _pool[i] = new char[0x400000];

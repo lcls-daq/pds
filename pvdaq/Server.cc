@@ -61,7 +61,7 @@ void Server::post(const void* p)
 #include "pds/pvdaq/ControlsCameraServer.hh"
 
 Server* Server::lookup(const char*    pvbase,
-                       const char*    iocbase,
+                       const char*    pvbase_alt,
                        const DetInfo& info,
                        const unsigned max_event_size,
                        const unsigned flags)
@@ -69,7 +69,7 @@ Server* Server::lookup(const char*    pvbase,
   Server* s=0;
   switch(info.device()) {
   case Pds::DetInfo::Wave8:
-    s = new BeamMonitorServer(pvbase,iocbase,info);
+    s = new BeamMonitorServer(pvbase,pvbase_alt,info);
     break;
   case Pds::DetInfo::Opal1000:
   case Pds::DetInfo::Opal2000:
@@ -80,7 +80,7 @@ Server* Server::lookup(const char*    pvbase,
   case Pds::DetInfo::Quartz4A150:
   case Pds::DetInfo::Rayonix:
   case Pds::DetInfo::ControlsCamera:
-    s = new ControlsCameraServer(pvbase,info,max_event_size,flags);
+    s = new ControlsCameraServer(pvbase,pvbase_alt,info,max_event_size,flags);
     break;
   default:
     break;

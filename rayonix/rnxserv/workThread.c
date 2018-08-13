@@ -19,8 +19,8 @@
 #define DEST_IPADDR         "10.0.1.1"
 #define NOTIFY_PORT         30050
 
-#define MAX_LINE_PIXELS     3840
-#define LINEBUF_WORDS       4000    /* enough for data footer + max line (3840 16-bit pixels) */
+#define MAX_LINE_PIXELS     7680
+#define LINEBUF_WORDS       8000    /* enough for data footer + max line (7680 16-bit pixels) */
 
 #define UDP_SNDBUF_SIZE     (64*1024*1024)
 
@@ -1120,7 +1120,7 @@ int sendFrame(int frame_number, uint16_t timeStamp, uint16_t *frame)
   int writeSize, sent;
   char logbuf[LOGBUF_SIZE];
   uint16_t frameNumber = (uint16_t)frame_number;
-  uint16_t linebuf[4000];
+  uint16_t linebuf[LINEBUF_WORDS];
 
   /* init footer */
   pFooter = (data_footer_t *)(linebuf + MAX_LINE_PIXELS);

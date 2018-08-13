@@ -8,6 +8,8 @@ RAYONIX_LIB = $(RAYONIX_ROOT)/lib64
 
 all: rnxserv
 
+# Notes to build on rhel7 add the flag -lboost_thread-mt for now: Instructions for Michael Blum 08/2018
+#   - this should be fixed in a future release of craydl
 rnxserv: rnxserv.o helper.o workThread.o triggerThread.o rnxlog.o
 	g++ -o rnxserv rnxserv.o helper.o workThread.o triggerThread.o rnxlog.o -lpthread -std=c++0x -Wall -rdynamic -L $(RAYONIX_LIB) -lcraydl
 

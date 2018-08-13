@@ -13,7 +13,7 @@
 #define RNX_NOTIFY_PORT     30050
 #define RNX_SIM_TRIGGER_PORT 30051
 
-#define MAX_LINE_PIXELS     3840
+#define MAX_LINE_PIXELS     7680
 #define MAX_FRAME_PIXELS    (MAX_LINE_PIXELS * MAX_LINE_PIXELS)
 
 typedef struct {

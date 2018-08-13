@@ -22,6 +22,9 @@
 int createUdpSocket(int port);
 int setrcvbuf(int socketFd, unsigned size);
 
+static const char* MX170HS_DEVICE_STR = "MX170-HS";
+static const char* MX340HS_DEVICE_STR = "MX340-HS";
+
 using namespace Pds;
 
 Pds::rayonix_data::rayonix_data(bool verbose)
@@ -210,6 +213,18 @@ int Pds::rayonix_data::readFrame(uint16_t& frameNumber, char *payload, int paylo
     rv = -1;
   }
   return (rv == 0 ? MAX_FRAME_PIXELS/binning_s/binning_f : rv);
+}
+
+Pds::Rayonix_Info::Model Pds::rayonix_data::getDetectorModel(const char* device_id) const
+{
+  if (!strncmp(device_id, MX340HS_DEVICE_STR, strlen(MX340HS_DEVICE_STR))) {
+    return Pds::Rayonix_Info::MX340HS;
+  } else if (!strncmp(device_id, MX170HS_DEVICE_STR, strlen(MX170HS_DEVICE_STR))) {
+    return Pds::Rayonix_Info::MX170HS;
+  } else {
+    /* Return the MX170-HS otherwise for backwards compatability */
+    return Pds::Rayonix_Info::MX170HS;
+  }
 }
 
 int createUdpSocket(int port)

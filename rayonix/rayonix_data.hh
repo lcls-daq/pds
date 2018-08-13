@@ -25,6 +25,24 @@ namespace Pds
     enum { min_binning_f = 2, max_binning_f = 10 };
     enum { min_binning_s = 2, max_binning_s = 10 };
   }
+
+  namespace Rayonix_MX340HS {
+    enum { depth_bits = 16 };
+    enum { depth_bytes = 2 };
+    enum { n_pixels = 58982400 };
+    enum { n_pixels_fast = 7680 };
+    enum { n_pixels_slow = 7680 };
+    enum { n_sensors = 16 };
+    enum { n_sensors_fast = 2 };
+    enum { n_sensors_slow = 2 };
+    enum { offset = 0 };
+    enum { min_binning_f = 2, max_binning_f = 10 };
+    enum { min_binning_s = 2, max_binning_s = 10 };
+  }
+
+  namespace Rayonix_Info {
+    enum Model { MX170HS=0, MX340HS=1 };
+  }
 }
 
 class Pds::rayonix_data {
@@ -37,6 +55,7 @@ public:
   int drainFd(int fd) const;
   int reset(bool verbose) const;
   int readFrame(uint16_t& frameNumber, char *payload, int payloadMax, int &binning_f, int &binning_s, bool verbose) const;
+  Rayonix_Info::Model getDetectorModel(const char* device_id) const;
 
   enum { DiscardBufSize = 10000 };
 

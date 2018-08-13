@@ -9,7 +9,7 @@
 
 using namespace Pds;
 
-#define MAXFRAME             (32 * 1024 * 1024)
+#define MAXFRAME             (128 * 1024 * 1024)
 
 Pds::RayonixServer::RayonixServer( const Src& client, bool verbose)
   : _xtc        ( _frameType, client ),
@@ -23,6 +23,7 @@ Pds::RayonixServer::RayonixServer( const Src& client, bool verbose)
     _darkFlag(0),
     _readoutMode(1),
     _trigger(0),
+    _model(Rayonix_Info::MX170HS),
     _rnxctrl(NULL),
     _rnxdata(NULL)
 {
@@ -129,6 +130,7 @@ unsigned Pds::RayonixServer::configure(RayonixConfigType& config)
           // copy to _deviceID
           strncpy(_deviceID, deviceBuf, Pds::rayonix_control::DeviceIDMax);
           printf("Rayonix Device ID: \"%s\"\n", _deviceID);
+          _model = _rnxdata->getDetectorModel(_deviceID);
 
           if (_verbose) {
              printf("Rayonix Device ID: %s\n", _deviceID);
@@ -224,15 +226,29 @@ unsigned Pds::RayonixServer::endrun(void)
 int Pds::RayonixServer::fetch( char* payload, int flags )
 {
   uint16_t frameNumber;
-  int width  = Pds::Rayonix_MX170HS::n_pixels_fast/_binning_f;
-  int height = Pds::Rayonix_MX170HS::n_pixels_slow/_binning_s;
-  int size_npixels = width*height;
+  int width;
+  int height;
+  int size_npixels;
   int binning_f = 0;
   int binning_s = 0;
   int verbose = RayonixServer::verbose();
   int rv;
   int damage = 0;
   char msgBuf[80];
+
+  switch(_model) {
+    case Pds::Rayonix_Info::MX340HS:
+      width  = Pds::Rayonix_MX340HS::n_pixels_fast/_binning_f;
+      height = Pds::Rayonix_MX340HS::n_pixels_slow/_binning_s;
+      size_npixels = width*height;
+      break;
+    case Pds::Rayonix_Info::MX170HS:
+    default:
+      width  = Pds::Rayonix_MX170HS::n_pixels_fast/_binning_f;
+      height = Pds::Rayonix_MX170HS::n_pixels_slow/_binning_s;
+      size_npixels = width*height;
+      break;
+  }
 
   if (verbose) {
      printf("Entered %s\n", __PRETTY_FUNCTION__);

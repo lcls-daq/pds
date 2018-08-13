@@ -78,6 +78,7 @@ public:
   uint16_t  _readoutMode;
   uint32_t  _trigger;
   char      _deviceID[Pds::rayonix_control::DeviceIDMax + 1];
+  Rayonix_Info::Model _model;
   rayonix_control * _rnxctrl;
   rayonix_data *    _rnxdata;
 };

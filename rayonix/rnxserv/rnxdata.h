@@ -15,7 +15,8 @@ typedef struct {
   uint32_t  epoch;
   uint8_t   binning_f;
   uint8_t   binning_s;
-  uint16_t  pad;
+  uint8_t   scaling;
+  uint8_t   pad;
 } data_footer_t;
 
 #endif /* _RNX_DATA_H */

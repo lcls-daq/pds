@@ -229,8 +229,10 @@ int Pds::RayonixServer::fetch( char* payload, int flags )
   int width;
   int height;
   int size_npixels;
+  int expected_scaling;
   int binning_f = 0;
   int binning_s = 0;
+  int scaling;
   int verbose = RayonixServer::verbose();
   int rv;
   int damage = 0;
@@ -240,12 +242,14 @@ int Pds::RayonixServer::fetch( char* payload, int flags )
     case Pds::Rayonix_Info::MX340HS:
       width  = Pds::Rayonix_MX340HS::n_pixels_fast/_binning_f;
       height = Pds::Rayonix_MX340HS::n_pixels_slow/_binning_s;
+      expected_scaling = Pds::Rayonix_MX340HS::n_pixels / Pds::Rayonix_MX170HS::n_pixels;
       size_npixels = width*height;
       break;
     case Pds::Rayonix_Info::MX170HS:
     default:
       width  = Pds::Rayonix_MX170HS::n_pixels_fast/_binning_f;
       height = Pds::Rayonix_MX170HS::n_pixels_slow/_binning_s;
+      expected_scaling = Pds::Rayonix_MX170HS::n_pixels / Pds::Rayonix_MX170HS::n_pixels;
       size_npixels = width*height;
       break;
   }
@@ -263,7 +267,7 @@ int Pds::RayonixServer::fetch( char* payload, int flags )
   new (payload+offset) Pds::Camera::FrameV1(width, height, Pds::Rayonix_MX170HS::depth_bits, 0);
 
   offset += sizeof(Pds::Camera::FrameV1);
-  rv = _rnxdata->readFrame(frameNumber, (payload+offset), MAXFRAME, binning_f, binning_s, verbose);
+  rv = _rnxdata->readFrame(frameNumber, (payload+offset), MAXFRAME, binning_f, binning_s, scaling, verbose);
   _count++;
 
   if (verbose) {
@@ -288,6 +292,12 @@ int Pds::RayonixServer::fetch( char* payload, int flags )
   if ((binning_f != _binning_f) || (binning_s != _binning_s)) {
      printf ("ERROR:  Rayonix device binning is %dx%d, expected %dx%d\n", 
              binning_f, binning_s, _binning_f, _binning_s);
+     damage++;
+  }
+  // detector scaling factor in units of MX170-HS size.
+  if (scaling != expected_scaling) {
+     printf ("ERROR:  Rayonix device scaling is %d, expected %d\n",
+             scaling, expected_scaling);
      damage++;
   }
   // readFrame return -1 on ERROR, otherwise the number of 16-bit pixels read.

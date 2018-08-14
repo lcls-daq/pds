@@ -54,7 +54,7 @@ public:
   int fd() const                  { return (_notifyFd); }
   int drainFd(int fd) const;
   int reset(bool verbose) const;
-  int readFrame(uint16_t& frameNumber, char *payload, int payloadMax, int &binning_f, int &binning_s, bool verbose) const;
+  int readFrame(uint16_t& frameNumber, char *payload, int payloadMax, int &binning_f, int &binning_s, int &scaling, bool verbose) const;
   Rayonix_Info::Model getDetectorModel(const char* device_id) const;
 
   enum { DiscardBufSize = 10000 };

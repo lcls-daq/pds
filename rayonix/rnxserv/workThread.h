@@ -46,6 +46,7 @@ typedef struct {
 } line_header_t;
 
 void setWorkRoutineVerbose(bool verbose);
+void setDetectorScaling(int detectorScaling);
 void *workRoutine(void *arg);
 
 #endif /* _WORK_THREAD_H */

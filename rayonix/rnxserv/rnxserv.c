@@ -88,6 +88,7 @@ void usage(const char *name)
 {
   printf("Usage: %s [OPTIONS]\n\n", name);
   printf("OPTIONS:\n");
+  printf("  -d         Detector model (0 - MX170-HS, 1 - MX340-HS)\n");
   printf("  -s         Use simulator\n");
   printf("  -v         Be verbose (may be repeated)\n");
 }
@@ -111,11 +112,12 @@ int main(int argc, char *argv[]) {
   bool      singleWorker = false;
   bool helpFlag = false;
   bool errorFlag = false;
+  unsigned detectorModel = 0;  /* Default to MX170-HS */
 //char *endPtr;
 //extern char* optarg;
 
   int c;
-  while( ( c = getopt( argc, argv, "vhs" ) ) != EOF ) {
+  while( ( c = getopt( argc, argv, "vhsd:" ) ) != EOF ) {
     switch(c) {
       case 'h':
         helpFlag = true;
@@ -125,6 +127,9 @@ int main(int argc, char *argv[]) {
         break;
       case 's':
         _simFlag = true;
+        break;
+      case 'd':
+        detectorModel = strtoul(optarg, NULL, 0);
         break;
       default:
         errorFlag = true;
@@ -138,6 +143,11 @@ int main(int argc, char *argv[]) {
   }
 
   if (errorFlag) {
+    usage(argv[0]);
+    exit(1);
+  }
+
+  if (detectorModel > 1) {
     usage(argv[0]);
     exit(1);
   }
@@ -162,6 +172,20 @@ int main(int argc, char *argv[]) {
     sprintf(lilbuf, "%s: SIMULATION flag is set", argv[0]);
     printf("%s\n", lilbuf);
     INFO_LOG(lilbuf);
+  }
+
+  switch(detectorModel) {
+    case 0:
+      setDetectorScaling(1); /* this is the nominal default size */
+      INFO_LOG("Detector model set to MX170-HS");
+      break;
+    case 1:
+      setDetectorScaling(4); /* this detector has 4 times the pixels of the MX170-HS */
+      INFO_LOG("Detector model set to MX340-HS");
+      break;
+    default:
+      fprintf(stderr, "Unknown detector model: %d\n", detectorModel);
+      break;
   }
 
   /* init frame count and semaphore */

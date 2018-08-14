@@ -110,7 +110,7 @@ int Pds::rayonix_data::reset(bool verbose) const
  * RETURNS: -1 on ERROR, otherwise the number of 16-bit pixels read.
  */
 int Pds::rayonix_data::readFrame(uint16_t& frameNumber, char *payload, int payloadMax,
-                                 int &binning_f, int &binning_s, bool verbose) const
+                                 int &binning_f, int &binning_s, int &scaling, bool verbose) const
 {
   int     dataFd;
   int     recvlen, recvsum, pixelsReceived, datalen, expectlen;
@@ -132,6 +132,7 @@ int Pds::rayonix_data::readFrame(uint16_t& frameNumber, char *payload, int paylo
     }
     binning_f = pNotifyMsg->binning_f;
     binning_s = pNotifyMsg->binning_s;
+    scaling   = pNotifyMsg->scaling;
     expectlen = MAX_LINE_PIXELS * 2;
 
     // sanity check binning
@@ -149,7 +150,7 @@ int Pds::rayonix_data::readFrame(uint16_t& frameNumber, char *payload, int paylo
     // fetch frame data
     recvsum = 0;
     dataFd = (pNotifyMsg->frameNumber & 1) ? _dataFdOdd : _dataFdEven;
-    for (int ii = 0; ii < MAX_LINE_PIXELS/binning_s; ii += binning_f) {
+    for (int ii = 0; ii < (scaling * MAX_LINE_PIXELS)/binning_s; ii += binning_f) {
       recvlen = recvfrom(dataFd, tmpload, payloadMax, MSG_DONTWAIT, 0, 0);
       // verify len
       if (recvlen <= 0) {
@@ -193,7 +194,7 @@ int Pds::rayonix_data::readFrame(uint16_t& frameNumber, char *payload, int paylo
       payloadMax -= datalen;
     }
     pixelsReceived = recvsum / 2;
-    expectlen = ROUND_UP(MAX_FRAME_PIXELS/binning_s/binning_f, MAX_LINE_PIXELS);
+    expectlen = ROUND_UP((scaling*MAX_FRAME_PIXELS)/binning_s/binning_f, MAX_LINE_PIXELS);
     if (pixelsReceived != expectlen) {
       printf(" ** ERROR %s: received %d pixels from dataFd (expected %d)\n\r",
              __FUNCTION__, pixelsReceived, expectlen);
@@ -212,7 +213,7 @@ int Pds::rayonix_data::readFrame(uint16_t& frameNumber, char *payload, int paylo
     printf(" *** ERROR %s: received %d bytes from notifyFd\n\r", __PRETTY_FUNCTION__, recvlen);
     rv = -1;
   }
-  return (rv == 0 ? MAX_FRAME_PIXELS/binning_s/binning_f : rv);
+  return (rv == 0 ? (scaling*MAX_FRAME_PIXELS)/binning_s/binning_f : rv);
 }
 
 Pds::Rayonix_Info::Model Pds::rayonix_data::getDetectorModel(const char* device_id) const

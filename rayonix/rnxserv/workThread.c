@@ -19,8 +19,8 @@
 #define DEST_IPADDR         "10.0.1.1"
 #define NOTIFY_PORT         30050
 
-#define MAX_LINE_PIXELS     7680
-#define LINEBUF_WORDS       8000    /* enough for data footer + max line (7680 16-bit pixels) */
+#define MAX_LINE_PIXELS     3840
+#define LINEBUF_WORDS       4000    /* enough for data footer + max line (3840 16-bit pixels) */
 
 #define UDP_SNDBUF_SIZE     (64*1024*1024)
 
@@ -28,6 +28,7 @@
 static unsigned int _lastConfigEpoch = (unsigned int)-1;
 static int _binning_f = 2;
 static int _binning_s = 2;
+static int _detectorScaling = 1;
 static double _exposure = 0.0;
 static int _testPattern = 0;
 static bool _rawFlag = false;
@@ -195,6 +196,11 @@ int sendWorkCommand(work_state_t *pState, workCmd_t *pCommand)
 void setWorkRoutineVerbose(bool verbose)
 {
   _verbose = verbose;
+}
+
+void setDetectorScaling(int detectorScaling)
+{
+  _detectorScaling = detectorScaling;
 }
 
 void *workRoutine(void *arg)
@@ -692,6 +698,7 @@ void *workRoutine(void *arg)
       notifyMsg.epoch = _lastConfigEpoch;
       notifyMsg.binning_f = _binning_f;
       notifyMsg.binning_s = _binning_s;
+      notifyMsg.scaling = _detectorScaling;
       notifyMsg.pad = 0;
 
       /* simulate frame from detector */
@@ -707,6 +714,7 @@ void *workRoutine(void *arg)
       pFooter->epoch = _lastConfigEpoch;
       pFooter->binning_f = _binning_f;
       pFooter->binning_s = _binning_s;
+      pFooter->scaling = _detectorScaling;
       pFooter->pad = 0;
 
       /* send lines */
@@ -716,7 +724,7 @@ void *workRoutine(void *arg)
         DEBUG_LOG(logbuf);
       }
       writeSize = (MAX_LINE_PIXELS * 2) + sizeof(data_footer_t);
-      for (jj = 0; jj < MAX_LINE_PIXELS/_binning_s; jj += _binning_f) {
+      for (jj = 0; jj < (_detectorScaling * MAX_LINE_PIXELS)/_binning_s; jj += _binning_f) {
         /* update data footer */
         pFooter->lineNumber = jj;
 
@@ -1130,13 +1138,14 @@ int sendFrame(int frame_number, uint16_t timeStamp, uint16_t *frame)
   pFooter->epoch = _lastConfigEpoch;
   pFooter->binning_f = _binning_f;
   pFooter->binning_s = _binning_s;
+  pFooter->scaling = _detectorScaling;
   pFooter->pad = 0;
 
   /* send lines */
   sprintf(logbuf, "Send frame #%d lines...\n", frameNumber);
   DEBUG_LOG(logbuf);
   writeSize = (MAX_LINE_PIXELS * 2) + sizeof(data_footer_t);
-  for (jj = 0; jj < MAX_LINE_PIXELS/_binning_s; jj += _binning_s) {
+  for (jj = 0; jj < (_detectorScaling * MAX_LINE_PIXELS)/_binning_s; jj += _binning_s) {
 
     /* copy pixels to output buffer */
     for (ii = 0; ii < MAX_LINE_PIXELS; ii++) {

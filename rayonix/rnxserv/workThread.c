@@ -40,7 +40,7 @@ static int backgroundFrameCount = 0;
 static int savedFrameCount = 0;
 
 // forward declaration
-int sendFrame(int frameNumber, uint16_t timeStamp, uint16_t *frame);
+int sendFrame(int frameNumber, uint16_t timeStamp, uint16_t *frame, size_t frame_size);
 int sendStatus(std::vector<double>& temperatures);
 void millisleep(int milliseconds);
 
@@ -99,7 +99,7 @@ class FrameHandlerCB : public VirtualFrameCallback
              printf("%s: Raw Frame #%d  size=%u  timestamp=%hu ms\n", __FUNCTION__, frame_number, (unsigned)frame_p->getSize(), timeStamp);
            }
 
-           sendFrame(frame_number, timeStamp, (uint16_t *)(frame_p->getBufferAddress()));
+           sendFrame(frame_number, timeStamp, (uint16_t *)(frame_p->getBufferAddress()), frame_p->getSize());
          }
          return;
       }
@@ -115,7 +115,7 @@ class FrameHandlerCB : public VirtualFrameCallback
              printf("%s: Frame #%d  size=%u  timestamp=%hu ms\n", __FUNCTION__, frame_number, (unsigned)frame_p->getSize(), timeStamp);
            }
 
-           sendFrame(frame_number, timeStamp, (uint16_t *)(frame_p->getBufferAddress()));
+           sendFrame(frame_number, timeStamp, (uint16_t *)(frame_p->getBufferAddress()), frame_p->getSize());
          }
          return;
       }
@@ -1121,12 +1121,13 @@ int setsndbuf(int socketFd, unsigned size)
   return 0;
 }
 
-int sendFrame(int frame_number, uint16_t timeStamp, uint16_t *frame)
+int sendFrame(int frame_number, uint16_t timeStamp, uint16_t *frame, size_t frame_size)
 {
   int ii, jj;
   data_footer_t *pFooter;
   int writeSize, sent;
   char logbuf[LOGBUF_SIZE];
+  size_t bytes_read = 0;
   uint16_t frameNumber = (uint16_t)frame_number;
   uint16_t linebuf[LINEBUF_WORDS];
 
@@ -1148,8 +1149,9 @@ int sendFrame(int frame_number, uint16_t timeStamp, uint16_t *frame)
   for (jj = 0; jj < (_detectorScaling * MAX_LINE_PIXELS)/_binning_s; jj += _binning_s) {
 
     /* copy pixels to output buffer */
-    for (ii = 0; ii < MAX_LINE_PIXELS; ii++) {
+    for (ii = 0; (ii < MAX_LINE_PIXELS) && (bytes_read < frame_size); ii++) {
       linebuf[ii] = *frame++;
+      bytes_read += 2;
     }
 
     /* first 2 pixels of frame hold frame # and timestamp */

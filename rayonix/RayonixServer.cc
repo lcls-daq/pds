@@ -131,6 +131,7 @@ unsigned Pds::RayonixServer::configure(RayonixConfigType& config)
           strncpy(_deviceID, deviceBuf, Pds::rayonix_control::DeviceIDMax);
           printf("Rayonix Device ID: \"%s\"\n", _deviceID);
           _model = _rnxdata->getDetectorModel(_deviceID);
+          RayonixConfig::setDeviceID(config, _deviceID);
 
           if (_verbose) {
              printf("Rayonix Device ID: %s\n", _deviceID);

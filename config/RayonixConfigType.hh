@@ -12,6 +12,7 @@ static Pds::TypeId _rayonixConfigType(Pds::TypeId::Id_RayonixConfig,
 namespace Pds {
   namespace RayonixConfig {
     void setConfig(RayonixConfigType&);
+    void setDeviceID(RayonixConfigType&, const char*);
   }
 }
 

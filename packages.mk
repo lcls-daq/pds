@@ -35,7 +35,7 @@ endif
 #  packages += fexamp
 
 ifneq ($(findstring x86_64-rhel7,$(tgt_arch)),)
-  packages += zyla pimax
+  packages += zyla picam
 endif
 
 

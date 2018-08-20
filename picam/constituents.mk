@@ -1,7 +1,7 @@
-libnames := pdspimax
+libnames := pdspicam
 
-libsrcs_pdspimax := PicamManager.cc PiUtils.cc PicamServer.cc
-libincs_pdspimax := pdsdata/include ndarray/include boost/include picam/include
+libsrcs_pdspicam := PicamManager.cc PiUtils.cc PimaxManager.cc PimaxServer.cc PimaxConfigWrapper.cc
+libincs_pdspicam := pdsdata/include ndarray/include boost/include picam/include
 
 tgtnames := piConfigure
 #tgtnames := piConfigure piGui

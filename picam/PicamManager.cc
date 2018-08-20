@@ -1,4 +1,4 @@
-#include "PimaxManager.hh"
+#include "pds/picam/PicamManager.hh"
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -11,7 +11,6 @@
 #include <new>
 #include <vector>
 
-#include "pds/config/PimaxDataType.hh"
 #include "pds/service/GenericPool.hh"
 #include "pds/service/Task.hh"
 #include "pds/service/Routine.hh"
@@ -20,7 +19,8 @@
 #include "pds/client/Response.hh"
 #include "pds/config/CfgClientNfs.hh"
 #include "pds/utility/StreamPorts.hh"
-#include "PimaxServer.hh"
+#include "pds/picam/PicamConfig.hh"
+#include "pds/picam/PicamServer.hh"
 
 using std::string;
 
@@ -29,10 +29,10 @@ namespace Pds
 
 static int printDataTime(const InDatagram* in);
 
-class PimaxMapAction : public Action
+class PicamMapAction : public Action
 {
 public:
-    PimaxMapAction(PimaxManager& manager, CfgClientNfs& cfg, int iDebugLevel) :
+    PicamMapAction(PicamManager& manager, CfgClientNfs& cfg, int iDebugLevel) :
       _manager(manager), _cfg(cfg), _iMapCameraFail(0), _iDebugLevel(iDebugLevel) {}
 
     virtual Transition* fire(Transition* tr)
@@ -55,60 +55,25 @@ public:
       return in;
     }
 private:
-    PimaxManager& _manager;
+    PicamManager& _manager;
     CfgClientNfs&     _cfg;
     int               _iMapCameraFail;
     int               _iDebugLevel;
 };
 
-class PimaxConfigAction : public Action
+class PicamConfigAction : public Action
 {
 public:
-    PimaxConfigAction(PimaxManager& manager, CfgClientNfs& cfg, bool bDelayMode, int iDebugLevel) :
-        _manager(manager), _cfg(cfg), _occPool(sizeof(UserMessage),2), _bDelayMode(bDelayMode), _iDebugLevel(iDebugLevel),
-        _cfgtc(_typePimaxConfig, cfg.src()), _config(), _iConfigCameraFail(0)
+    PicamConfigAction(PicamManager& manager, PicamConfig* config, bool bDelayMode, int iDebugLevel) :
+        _manager(manager), _config(config), _occPool(sizeof(UserMessage),2), _bDelayMode(bDelayMode), _iDebugLevel(iDebugLevel),
+        _iConfigCameraFail(0)
     {}
 
     virtual Transition* fire(Transition* tr)
     {
-      int iConfigSize = _cfg.fetch(*tr, _typePimaxConfig, &_config, sizeof(_config));
+      _iConfigCameraFail = _config->fetch(tr);
 
-      if ( iConfigSize == 0 ) // no config data is found in the database.
-      {
-        printf( "PimaxConfigAction::fire(): No config data is loaded. Will use default values for configuring the camera.\n" );
-        _config = PimaxConfigType(
-          16,     // Width
-          16,     // Height
-          0,      // OrgX
-          0,      // OrgX
-          1,      // BinX
-          1,      // BinX
-          0.001,  // Exposure time
-          25.0f,  // Cooling temperature
-          2,      // Readout speed (MHz)
-          1,      // gain index
-          1,      // Intensifier Gain
-          250.0,  // Gate delay (ns)
-          1.0e6,  // Gate Width (ns)
-          0,      // Masked Height
-          0,      // Kinetic Height
-          0.0f,   // Vertical Shift Speed
-          1,      // Info report interval
-          1,      // Redout event code
-          1       // number integration shots
-        );
-      }
-
-      if ( iConfigSize != 0 && iConfigSize != sizeof(_config) )
-      {
-        printf( "PimaxConfigAction::fire(): Config data has incorrect size (%d B). Should be %d B.\n",
-          iConfigSize, (int) sizeof(_config) );
-
-        _config       = PimaxConfigType();
-        _iConfigCameraFail  = 1;
-      }
-
-      printf( "PimaxConfigAction::fire(): Temperature = %g C\n",  (double) _config.coolingTemp());
+      printf( "PicamConfigAction::fire(): Temperature = %g C\n",  (double) _config->coolingTemp());
       string sConfigWarning;
       _iConfigCameraFail = _manager.config(_config, sConfigWarning);
       if (sConfigWarning.size() != 0)
@@ -122,64 +87,44 @@ public:
 
     virtual InDatagram* fire(InDatagram* in)
     {
-        if (_iDebugLevel>=1) printf("\n\n===== Writing Configs =====\n" );
-        if (_iDebugLevel>=2) printDataTime(in);
+      if (_iDebugLevel>=1) printf("\n\n===== Writing Configs =====\n" );
+      if (_iDebugLevel>=2) printDataTime(in);
 
-        static bool bConfigAllocated = false;
-        if ( !bConfigAllocated )
-        {
-          // insert assumes we have enough space in the memory pool for in datagram
-          _cfgtc.alloc( sizeof(_config) );
-          bConfigAllocated = true;
-        }
+      _config->insert(in);
 
-        in->insert(_cfgtc, &_config);
+      if ( _iConfigCameraFail != 0 )
+        in->datagram().xtc.damage.increase(Pds::Damage::UserDefined);
 
-        if ( _iConfigCameraFail != 0 )
-          in->datagram().xtc.damage.increase(Pds::Damage::UserDefined);
+      if (_iDebugLevel>=2) /*printf( "Pimax Config data:\n"
+        "  Width %d Height %d  Org X %d Y %d  Bin X %d Y %d\n"
+        "  Cooling Temperature %.1f C  Readout Speed %g MHz  Gain Index %d\n"
+        "  IntGain %d  Gate delay %g ns  width %g ns\n"
+        "  InfoRepInt %d  Readout Event %d  Num Integration Shots %d\n",
+        _config.width(), _config->height(),
+        _config.orgX(), _config->orgY(),
+        _config.binX(), _config.binY(),
+        _config.coolingTemp(), _config.readoutSpeed(), _config.gainIndex(),
+        _config.intensifierGain(), _config.gateDelay(), _config.gateWidth(),
+        _config.infoReportInterval(), _config.exposureEventCode(), _config.numIntegrationShots() //CHANGETODO
+        );*/
+      if (_iDebugLevel>=1) printf( "\nOutput payload size = %d\n", in->datagram().xtc.sizeofPayload());
 
-        if (_iDebugLevel>=2) printf( "Pimax Config data:\n"
-          "  Width %d Height %d  Org X %d Y %d  Bin X %d Y %d\n"
-          "  Cooling Temperature %.1f C  Readout Speed %g MHz  Gain Index %d\n"
-          "  IntGain %d  Gate delay %g ns  width %g ns\n"
-          "  InfoRepInt %d  Readout Event %d  Num Integration Shots %d\n",
-          _config.width(), _config.height(),
-          _config.orgX(), _config.orgY(),
-          _config.binX(), _config.binY(),
-          _config.coolingTemp(), _config.readoutSpeed(), _config.gainIndex(),
-          _config.intensifierGain(), _config.gateDelay(), _config.gateWidth(),
-          _config.infoReportInterval(), _config.exposureEventCode(), _config.numIntegrationShots()
-          );
-        if (_iDebugLevel>=1) printf( "\nOutput payload size = %d\n", in->datagram().xtc.sizeofPayload());
-
-        return in;
+      return in;
     }
 
-private:
-    PimaxManager&   _manager;
-    CfgClientNfs&       _cfg;
+protected:
+    PicamManager&       _manager;
+    PicamConfig*        _config;
     GenericPool         _occPool;
     bool                _bDelayMode;
     const int           _iDebugLevel;
-    Xtc                 _cfgtc;
-    PimaxConfigType _config;
     int                 _iConfigCameraFail;
-
-    /*
-     * private static consts
-     */
-    static const TypeId _typePimaxConfig;
 };
 
-/*
- * Definition of private static consts
- */
-const TypeId PimaxConfigAction::_typePimaxConfig = TypeId(TypeId::Id_PimaxConfig, PimaxConfigType::Version);
-
-class PimaxUnconfigAction : public Action
+class PicamUnconfigAction : public Action
 {
 public:
-    PimaxUnconfigAction(PimaxManager& manager, int iDebugLevel) : _manager(manager), _iDebugLevel(iDebugLevel),
+    PicamUnconfigAction(PicamManager& manager, int iDebugLevel) : _manager(manager), _iDebugLevel(iDebugLevel),
      _iUnConfigCameraFail(0)
     {}
 
@@ -200,15 +145,15 @@ public:
       return in;
     }
 private:
-    PimaxManager& _manager;
+    PicamManager&     _manager;
     int               _iDebugLevel;
     int               _iUnConfigCameraFail;
 };
 
-class PimaxBeginRunAction : public Action
+class PicamBeginRunAction : public Action
 {
 public:
-    PimaxBeginRunAction(PimaxManager& manager, int iDebugLevel) : _manager(manager), _iDebugLevel(iDebugLevel),
+    PicamBeginRunAction(PicamManager& manager, int iDebugLevel) : _manager(manager), _iDebugLevel(iDebugLevel),
      _iBeginRunCameraFail(0)
     {}
 
@@ -229,15 +174,15 @@ public:
       return in;
     }
 private:
-    PimaxManager& _manager;
+    PicamManager&     _manager;
     int               _iDebugLevel;
     int               _iBeginRunCameraFail;
 };
 
-class PimaxEndRunAction : public Action
+class PicamEndRunAction : public Action
 {
 public:
-    PimaxEndRunAction(PimaxManager& manager, int iDebugLevel) : _manager(manager), _iDebugLevel(iDebugLevel),
+    PicamEndRunAction(PicamManager& manager, int iDebugLevel) : _manager(manager), _iDebugLevel(iDebugLevel),
      _iEndRunCameraFail(0)
     {}
 
@@ -258,15 +203,15 @@ public:
       return in;
     }
 private:
-    PimaxManager& _manager;
+    PicamManager&     _manager;
     int               _iDebugLevel;
     int               _iEndRunCameraFail;
 };
 
-class PimaxL1AcceptAction : public Action
+class PicamL1AcceptAction : public Action
 {
 public:
-    PimaxL1AcceptAction(PimaxManager& manager, CfgClientNfs& cfg, bool bDelayMode, int iDebugLevel) :
+    PicamL1AcceptAction(PicamManager& manager, CfgClientNfs& cfg, bool bDelayMode, int iDebugLevel) :
         _manager(manager), _cfg(cfg), _bDelayMode(bDelayMode), _iDebugLevel(iDebugLevel)
         //, _poolFrameData(1024*1024*8 + 1024, 16) // pool for debug
     {
@@ -364,9 +309,9 @@ public:
         if ( xtcData.sizeofPayload() != 0 )
         {
           printf( "Frame  payload size = %d\n", xtcFrame.sizeofPayload());
-          PimaxDataType& frameData = *(PimaxDataType*) xtcFrame.payload();
-          printf( "Frame  Id 0x%05x  ReadoutTime %.2fs\n", frameData.shotIdStart(),
-           frameData.readoutTime() );
+          //PimaxDataType& frameData = *(PimaxDataType*) xtcFrame.payload();//CHANGETODO
+          //printf( "Frame  Id 0x%05x  ReadoutTime %.2fs\n", frameData.shotIdStart(),
+          // frameData.readoutTime() );
         }
       }
 
@@ -390,17 +335,17 @@ public:
     }
 
 private:
-    PimaxManager&   _manager;
+    PicamManager&       _manager;
     CfgClientNfs&       _cfg;
     bool                _bDelayMode;
     int                 _iDebugLevel;
     //GenericPool         _poolFrameData; // pool for debug
 };
 
-class PimaxBeginCalibCycleAction : public Action
+class PicamBeginCalibCycleAction : public Action
 {
 public:
-    PimaxBeginCalibCycleAction(PimaxManager& manager, int iDebugLevel) :
+    PicamBeginCalibCycleAction(PicamManager& manager, int iDebugLevel) :
      _manager(manager), _iDebugLevel(iDebugLevel),
      _iBeginCalibCycleCameraFail(0)
     {}
@@ -424,15 +369,15 @@ public:
     }
 
 private:
-    PimaxManager& _manager;
+    PicamManager&     _manager;
     int               _iDebugLevel;
     int               _iBeginCalibCycleCameraFail;
 };
 
-class PimaxEndCalibCycleAction : public Action
+class PicamEndCalibCycleAction : public Action
 {
 public:
-    PimaxEndCalibCycleAction(PimaxManager& manager, int iDebugLevel) :
+    PicamEndCalibCycleAction(PicamManager& manager, int iDebugLevel) :
      _manager(manager), _iDebugLevel(iDebugLevel),
      _iEndCalibCycleCameraFail(0)
     {}
@@ -456,15 +401,15 @@ public:
     }
 
 private:
-    PimaxManager& _manager;
+    PicamManager&     _manager;
     int               _iDebugLevel;
     int               _iEndCalibCycleCameraFail;
 };
 
-class PimaxEnableAction : public Action
+class PicamEnableAction : public Action
 {
 public:
-    PimaxEnableAction(PimaxManager& manager, int iDebugLevel) :
+    PicamEnableAction(PicamManager& manager, int iDebugLevel) :
      _manager(manager), _iDebugLevel(iDebugLevel),
      _iEnableCameraFail(0)
     {}
@@ -488,15 +433,15 @@ public:
     }
 
 private:
-    PimaxManager& _manager;
+    PicamManager& _manager;
     int         _iDebugLevel;
     int         _iEnableCameraFail;
 };
 
-class PimaxDisableAction : public Action
+class PicamDisableAction : public Action
 {
 public:
-    PimaxDisableAction(PimaxManager& manager, int iDebugLevel) :
+    PicamDisableAction(PicamManager& manager, int iDebugLevel) :
      _manager(manager), _occPool(sizeof(UserMessage),2), _iDebugLevel(iDebugLevel),
      _iDisableCameraFail(0)
     {}
@@ -530,9 +475,9 @@ public:
         if ( xtcData.sizeofPayload() != 0 )
         {
           printf( "Frame  payload size = %d\n", xtcFrame.sizeofPayload());
-          PimaxDataType& frameData = *(PimaxDataType*) xtcFrame.payload();
-          printf( "Frame Id Start %d ReadoutTime %f\n", frameData.shotIdStart(),
-           frameData.readoutTime() );
+          //PicamDataType& frameData = *(PicamDataType*) xtcFrame.payload();
+          //printf( "Frame Id Start %d ReadoutTime %f\n", frameData.shotIdStart(),
+          // frameData.readoutTime() ); //CHANGETODO
         }
       }
 
@@ -552,7 +497,7 @@ public:
     }
 
 private:
-    PimaxManager& _manager;
+    PicamManager& _manager;
     GenericPool       _occPool;
     int               _iDebugLevel;
     int               _iDisableCameraFail;
@@ -561,9 +506,9 @@ private:
 //
 //  **weaver
 //
-class PimaxResponse : public Response {
+class PicamResponse : public Response {
 public:
-  PimaxResponse(PimaxManager& mgr, int iDebugLevel) :
+  PicamResponse(PicamManager& mgr, int iDebugLevel) :
     _manager(mgr), _iDebugLevel(iDebugLevel)
   {
   }
@@ -583,38 +528,29 @@ public:
     return 0;
   }
 private:
-  PimaxManager& _manager;
+  PicamManager&     _manager;
   int               _iDebugLevel;
 };
 
-PimaxManager::PimaxManager(CfgClientNfs& cfg, int iCamera, bool bDelayMode, bool bInitTest,
+PicamManager::PicamManager(CfgClientNfs& cfg, PicamConfig* pConfig, int iCamera, bool bDelayMode, bool bInitTest,
   string sConfigDb, int iSleepInt, int iDebugLevel) :
   _iCamera(iCamera), _bDelayMode(bDelayMode), _bInitTest(bInitTest),
   _sConfigDb(sConfigDb), _iSleepInt(iSleepInt),
-  _iDebugLevel(iDebugLevel), _pServer(NULL), _uNumShotsInCycle(0)
+  _iDebugLevel(iDebugLevel), _pServer(NULL), _pConfig(pConfig), _uNumShotsInCycle(0)
 {
-  _pActionMap             = new PimaxMapAction      (*this, cfg, _iDebugLevel);
-  _pActionConfig          = new PimaxConfigAction   (*this, cfg, _bDelayMode, _iDebugLevel);
-  _pActionUnconfig        = new PimaxUnconfigAction (*this, _iDebugLevel);
-  _pActionBeginRun        = new PimaxBeginRunAction (*this, _iDebugLevel);
-  _pActionEndRun          = new PimaxEndRunAction   (*this, _iDebugLevel);
-  _pActionBeginCalibCycle = new PimaxBeginCalibCycleAction
+  _pActionMap             = new PicamMapAction      (*this, cfg, _iDebugLevel);
+  _pActionConfig          = new PicamConfigAction   (*this, _pConfig, _bDelayMode, _iDebugLevel);
+  _pActionUnconfig        = new PicamUnconfigAction (*this, _iDebugLevel);
+  _pActionBeginRun        = new PicamBeginRunAction (*this, _iDebugLevel);
+  _pActionEndRun          = new PicamEndRunAction   (*this, _iDebugLevel);
+  _pActionBeginCalibCycle = new PicamBeginCalibCycleAction
                                                         (*this, _iDebugLevel);
-  _pActionEndCalibCycle   = new PimaxEndCalibCycleAction
+  _pActionEndCalibCycle   = new PicamEndCalibCycleAction
                                                         (*this, _iDebugLevel);
-  _pActionEnable          = new PimaxEnableAction   (*this, _iDebugLevel);
-  _pActionDisable         = new PimaxDisableAction  (*this, _iDebugLevel);
-  _pActionL1Accept        = new PimaxL1AcceptAction (*this, cfg, _bDelayMode, _iDebugLevel);
-  _pResponse              = new PimaxResponse       (*this, _iDebugLevel);
-
-  try
-  {
-  _pServer = new PimaxServer(_iCamera, _bDelayMode, _bInitTest, cfg.src(), _sConfigDb, _iSleepInt, _iDebugLevel);
-  }
-  catch ( PimaxServerException& eServer )
-  {
-    throw PimaxManagerException( "PimaxManager::PimaxManager(): Server Initialization Failed" );
-  }
+  _pActionEnable          = new PicamEnableAction   (*this, _iDebugLevel);
+  _pActionDisable         = new PicamDisableAction  (*this, _iDebugLevel);
+  _pActionL1Accept        = new PicamL1AcceptAction (*this, cfg, _bDelayMode, _iDebugLevel);
+  _pResponse              = new PicamResponse       (*this, _iDebugLevel);
 
   _pFsm = new Fsm();
   _pFsm->callback(TransitionId::Map,              _pActionMap);
@@ -630,11 +566,12 @@ PimaxManager::PimaxManager(CfgClientNfs& cfg, int iCamera, bool bDelayMode, bool
   _pFsm->callback(OccurrenceId::EvrCommand,       _pResponse);
 }
 
-PimaxManager::~PimaxManager()
+PicamManager::~PicamManager()
 {
   delete _pFsm;
 
-  delete _pServer;
+  if (_pServer)
+    delete _pServer;
 
   delete _pResponse;
   delete _pActionL1Accept;
@@ -645,63 +582,71 @@ PimaxManager::~PimaxManager()
   delete _pActionUnconfig;
   delete _pActionConfig;
   delete _pActionMap;
+
+  if (_pConfig)
+    delete _pConfig;
 }
 
-int PimaxManager::initServer()
+void PicamManager::setServer(PicamServer* pServer)
+{
+  _pServer = pServer;
+}
+
+int PicamManager::initServer()
 {
   return _pServer->initSetup();
 }
 
-int PimaxManager::map(const Allocation& alloc)
+int PicamManager::map(const Allocation& alloc)
 {
   return _pServer->map();
 }
 
-int PimaxManager::config(PimaxConfigType& config, std::string& sConfigWarning)
+int PicamManager::config(PicamConfig* config, std::string& sConfigWarning)
 {
   if ( !_bDelayMode )
-    Pds::PimaxConfig::setNumIntegrationShots(config,0);
+    config->setNumIntegrationShots(0);
 
   return _pServer->config(config, sConfigWarning);
 }
 
-int PimaxManager::unconfig()
+int PicamManager::unconfig()
 {
   return _pServer->unconfig();
 }
 
-int PimaxManager::beginRun()
+int PicamManager::beginRun()
 {
   return _pServer->beginRun();
 }
 
-int PimaxManager::endRun()
+int PicamManager::endRun()
 {
   return _pServer->endRun();
 }
 
-int PimaxManager::beginCalibCycle()
+int PicamManager::beginCalibCycle()
 {
   _uNumShotsInCycle = 0;
   return _pServer->beginCalibCycle();
 }
 
-int PimaxManager::endCalibCycle()
+int PicamManager::endCalibCycle()
 {
   return _pServer->endCalibCycle();
 }
 
-int PimaxManager::enable()
+int PicamManager::enable()
 {
   return _pServer->enable();
 }
 
-int PimaxManager::disable()
+int PicamManager::disable()
 {
   return _pServer->disable();
 }
 
-int PimaxManager::l1Accept(bool& bWait)
+int PicamManager::l1Accept(bool& bWait)
 {
   if (!_pServer->IsCapturingData())
   {
@@ -714,33 +659,33 @@ int PimaxManager::l1Accept(bool& bWait)
   if (!_bDelayMode)
     bWait = false;
   else
-    bWait = (_uNumShotsInCycle>= _pServer->config().numIntegrationShots());
+    bWait = (_uNumShotsInCycle>= _pServer->config()->numIntegrationShots());
   return 0;
 }
 
-int PimaxManager::startExposure()
+int PicamManager::startExposure()
 {
   return _pServer->startExposure();
 }
 
 /* !! recover from delay mode
-int PimaxManager::startExposurePrompt(int iShotId, InDatagram* in, InDatagram*& out)
+int PicamManager::startExposurePrompt(int iShotId, InDatagram* in, InDatagram*& out)
 {
   return _pServer->startExposurePrompt(iShotId, in, out);
 }
 
-int PimaxManager::startExposureDelay(int iShotId, InDatagram* in)
+int PicamManager::startExposureDelay(int iShotId, InDatagram* in)
 {
   return _pServer->startExposureDelay(iShotId, in);
 }
 */
 
-int PimaxManager::getData(InDatagram* in, InDatagram*& out)
+int PicamManager::getData(InDatagram* in, InDatagram*& out)
 {
   return _pServer->getData(in, out);
 }
 
-int PimaxManager::waitData(InDatagram* in, InDatagram*& out)
+int PicamManager::waitData(InDatagram* in, InDatagram*& out)
 {
   int iFail = _pServer->waitData(in, out);
 
@@ -750,9 +695,9 @@ int PimaxManager::waitData(InDatagram* in, InDatagram*& out)
   return iFail;
 }
 
-int PimaxManager::checkExposureEventCode(unsigned code)
+int PicamManager::checkExposureEventCode(unsigned code)
 {
-  return (code == _pServer->config().exposureEventCode());
+  return (code == _pServer->config()->exposureEventCode());
 }
 
 /*

@@ -1,12 +1,11 @@
-#ifndef PIMAX_MANAGER_HH
-#define PIMAX_MANAGER_HH
+#ifndef PICAM_MANAGER_HH
+#define PICAM_MANAGER_HH
 
 #include <string>
 #include <stdexcept>
 
 #include "pdsdata/xtc/Src.hh"
 #include "pdsdata/xtc/TypeId.hh"
-#include "pds/config/PimaxConfigType.hh"
 #include "pds/client/Fsm.hh"
 
 namespace Pds
@@ -18,20 +17,21 @@ class CfgClientNfs;
 class Action;
 class Response;
 class GenericPool;
-class PimaxServer;
+class PicamServer;
+class PicamConfig;
 
-class PimaxManager
+class PicamManager
 {
 public:
-  PimaxManager(CfgClientNfs& cfg, int iCamera, bool bDelayMode, bool bInitTest, std::string sConfigDb, int iSleepInt, int iDebugLevel);
-  ~PimaxManager();
+  PicamManager(CfgClientNfs& cfg, PicamConfig* pConfig, int iCamera, bool bDelayMode, bool bInitTest, std::string sConfigDb, int iSleepInt, int iDebugLevel);
+  virtual ~PicamManager();
 
   Appliance&    appliance() { return *_pFsm; }
 
-  // Camera control: Gateway functions for accessing PimaxServer class
+  // Camera control: Gateway functions for accessing Picam:Server class
   int   initServer();
   int   map(const Allocation& alloc);
-  int   config(PimaxConfigType& config, std::string& sConfigWarning);
+  int   config(PicamConfig* config, std::string& sConfigWarning);
   int   unconfig();
   int   beginRun();
   int   endRun();
@@ -45,6 +45,9 @@ public:
   int   startExposure();
   int   getData (InDatagram* in, InDatagram*& out);
   int   waitData(InDatagram* in, InDatagram*& out);
+
+protected:
+  void setServer(PicamServer* pServer);
 
 private:
   const int           _iCamera;
@@ -67,14 +70,15 @@ private:
   Action*             _pActionL1Accept;
   Response*           _pResponse;
 
-  PimaxServer*        _pServer;
+  PicamServer*        _pServer;
+  PicamConfig*        _pConfig;
   unsigned int        _uNumShotsInCycle;
 };
 
-class PimaxManagerException : public std::runtime_error
+class PicamManagerException : public std::runtime_error
 {
 public:
-  explicit PimaxManagerException( const std::string& sDescription ) :
+  explicit PicamManagerException( const std::string& sDescription ) :
     std::runtime_error( sDescription )
   {}
 };

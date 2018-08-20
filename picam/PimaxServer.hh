@@ -14,14 +14,16 @@
 #include "pds/xtc/CDatagram.hh"
 #include "pds/service/GenericPool.hh"
 #include "pds/service/Routine.hh"
+#include "pds/picam/PicamServer.hh"
 
 namespace Pds
 {
 
 class Task;
-class PimaxServer;
+class PicamConfig;
+class PimaxConfigWrapper;
 
-class PimaxServer
+class PimaxServer : public PicamServer
 {
 public:
   PimaxServer(int iCamera, bool bUseCaptureTask, bool bInitTest, const Src& src, std::string sConfigDb, int iSleepInt, int iDebugLevel);
@@ -29,7 +31,7 @@ public:
 
   int   initSetup();
   int   map();
-  int   config(PimaxConfigType& config, std::string& sConfigWarning);
+  int   config(PicamConfig* config, std::string& sConfigWarning);
   int   unconfig();
   int   beginRun();
   int   endRun();
@@ -41,8 +43,7 @@ public:
   int   getData (InDatagram* in, InDatagram*& out);
   int   waitData(InDatagram* in, InDatagram*& out);
   bool  IsCapturingData();
-  PimaxConfigType&
-        config() { return _config; }
+  PicamConfig* config();
 
   enum  ErrorCodeEnum
   {
@@ -117,6 +118,7 @@ private:
   int   runCaptureTask();
 
   int   initCameraBeforeConfig();
+  int   configure(PimaxConfigType& config, std::string& sConfigWarning);
   int   configCamera(PimaxConfigType& config, std::string& sConfigWarning);
 
   int   initTest();
@@ -181,6 +183,7 @@ private:
    * Config data
    */
   PimaxConfigType _config;
+  PimaxConfigWrapper* _config_wrapper;
 
   /*
    * Per-frame data
@@ -231,14 +234,6 @@ private:
    * private static data
    */
   static pthread_mutex_t _mutexPlFuncs;
-};
-
-class PimaxServerException : public std::runtime_error
-{
-public:
-  explicit PimaxServerException( const std::string& sDescription ) :
-    std::runtime_error( sDescription )
-  {}
 };
 
 } //namespace Pds

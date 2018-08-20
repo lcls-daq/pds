@@ -16,8 +16,9 @@
 #include "pdsapp/config/Experiment.hh"
 #include "pdsapp/config/Table.hh"
 
-#include "PimaxServer.hh"
-#include "PiUtils.hh"
+#include "pds/picam/PimaxServer.hh"
+#include "pds/picam/PimaxConfigWrapper.hh"
+#include "pds/picam/PiUtils.hh"
 
 using std::string;
 using namespace PiUtils;
@@ -32,12 +33,13 @@ PimaxServer::PimaxServer(int iCamera, bool bDelayMode, bool bInitTest, const Src
  _iDetectorWidth(-1), _iDetectorHeight(-1), _iImageWidth(-1), _iImageHeight(-1),
  _fPrevReadoutTime(0), _bSequenceError(false), _clockPrevDatagram(0,0), _iNumExposure(0),
  _config(),
+ _config_wrapper(0),
  _fReadoutTime(0),
  _poolFrameData(_iMaxFrameDataSize, _iPoolDataCount), _pDgOut(NULL),
  _CaptureState(CAPTURE_STATE_IDLE), _pTaskCapture(NULL), _routineCapture(*this)
 {
   if ( initDevice() != 0 )
-    throw PimaxServerException( "PimaxServer::PimaxServer(): initPimax() failed" );
+    throw PicamServerException( "PimaxServer::PimaxServer(): initPimax() failed" );
 
   /*
    * Known issue:
@@ -307,7 +309,22 @@ int PimaxServer::map()
   return 0;
 }
 
-int PimaxServer::config(PimaxConfigType& config, std::string& sConfigWarning)
+int PimaxServer::config(PicamConfig* config, std::string& sConfigWarning)
+{
+  _config_wrapper = dynamic_cast<PimaxConfigWrapper*>(config);
+
+  if ( _config_wrapper )
+  {
+    return configure(_config_wrapper->config(), sConfigWarning);
+  } 
+  else
+  {
+    printf("PimaxServer::config(): Invalid configuration type!\n");
+    return ERROR_INVALID_CONFIG;
+  }
+}
+
+int PimaxServer::configure(PimaxConfigType& config, std::string& sConfigWarning)
 {
   if ( configCamera(config, sConfigWarning) != 0 )
     return ERROR_SERVER_INIT_FAIL;
@@ -1209,6 +1226,11 @@ int PimaxServer::waitForNewFrameAvailable()
       _fReadoutTime - _config.exposureTime());
 
   return 0;
+}
+
+PicamConfig* PimaxServer::config()
+{
+  return _config_wrapper;
 }
 
 int PimaxServer::processFrame()

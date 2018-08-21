@@ -1,4 +1,7 @@
-libnames := pdspicam
+libnames := pdspicam picamutils
+
+libsrcs_picamutils := PiUtils.cc
+libincs_picamutils := picam/include
 
 libsrcs_pdspicam := PicamManager.cc PiUtils.cc PimaxManager.cc PimaxServer.cc PimaxConfigWrapper.cc
 libincs_pdspicam := pdsdata/include ndarray/include boost/include picam/include

@@ -26,6 +26,7 @@
 #include "pds/config/FliConfigType.hh"
 #include "pds/config/AndorConfigType.hh"
 #include "pds/config/PimaxConfigType.hh"
+#include "pds/config/PixisConfigType.hh"
 #include "pds/config/UsdUsbConfigType.hh"
 #include "pds/config/UsdUsbFexConfigType.hh"
 #include "pds/config/OrcaConfigType.hh"
@@ -114,6 +115,7 @@ const Pds::TypeId* PdsDefs::typeId(ConfigType id)
   case Fli          : type = &_fliConfigType;       break;
   case Andor        : type = &_andorConfigType;     break;
   case Pimax        : type = &_pimaxConfigType;     break;
+  case Pixis        : type = &_pixisConfigType;     break;
   case UsdUsb       : type = &_usdusbConfigType;    break;
   case Orca         : type = &_orcaConfigType;      break;
   case Rayonix      : type = &_rayonixConfigType;   break;
@@ -176,6 +178,7 @@ const Pds::TypeId* PdsDefs::typeId(const UTypeName& name)
   test(_fliConfigType);    
   test(_andorConfigType);    
   test(_pimaxConfigType);    
+  test(_pixisConfigType);
   test(_usdusbConfigType);    
   test(_orcaConfigType);   
   test(_rayonixConfigType); 
@@ -239,6 +242,7 @@ const Pds::TypeId* PdsDefs::typeId(const QTypeName& name)
   test(_fliConfigType);    
   test(_andorConfigType);  
   test(_pimaxConfigType);      
+  test(_pixisConfigType);
   test(_usdusbConfigType); 
   test(_rayonixConfigType); 
   test(_epixSamplerConfigType);   

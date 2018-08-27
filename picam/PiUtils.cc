@@ -5,6 +5,7 @@
 #include <sstream>
 #include <vector>
 #include <stdio.h>
+#include <math.h>
 #include "PiUtils.hh"
 
 namespace PiUtils
@@ -630,6 +631,70 @@ int piGetEnum(PicamHandle hCam, PicamParameter parameter, string& sResult)
   Picam_DestroyString( strEnum );
 
   return 0;
+}
+
+int piSetParameterToIncrement(PicamHandle hCam, PicamParameter parameter, piflt value)
+{
+  const PicamRangeConstraint* range;
+  int iError = Picam_GetParameterRangeConstraint(hCam, parameter, PicamConstraintCategory_Required, &range);
+  if (!piIsFuncOk(iError)) {
+    printf("piSetParameterToIncrement(): Picam_GetParameterRangeConstraint() failed: %s\n", piErrorDesc(iError));
+    return iError;
+  }
+
+  // compute the rounded value
+  pi32u increments = (pi32u)(((value - range->minimum) / range->increment) + 0.5);
+  piflt rounded = increments * range->increment + range->minimum;
+
+  // clean up the range constraint
+  Picam_DestroyRangeConstraints(range);
+
+  iError = Picam_SetParameterFloatingPointValue(hCam, parameter, rounded);
+  if (!piIsFuncOk(iError)) {
+    printf("piSetParameterToIncrement(): Picam_SetParameterFloatingPointValue() failed: %s\n", piErrorDesc(iError));
+    return iError;
+  }
+
+  return PicamError_None;
+}
+
+int piSetParameterToCollection(PicamHandle hCam, PicamParameter parameter, piflt value)
+{
+  const PicamCollectionConstraint* collection;
+  int iError = Picam_GetParameterCollectionConstraint(hCam, parameter, PicamConstraintCategory_Required, &collection);
+  if (!piIsFuncOk(iError)) {
+    printf("piSetParameterToCollection(): Picam_GetParameterCollectionConstraint() failed: %s\n", piErrorDesc(iError));
+    return iError;
+  }
+
+  if (collection->values_count < 1) {
+    printf("piSetParameterToCollection(): collection->values_count < 1: %d\n", collection->values_count);
+    return PicamError_UnexpectedError;
+  }
+
+  // find the closest collection value
+  piint index = 0;
+  piflt min_delta = fabs(collection->values_array[0] - value);
+  for (piint i=1; i<collection->values_count; ++i) {
+    float delta = fabs(collection->values_array[i] - value);
+    if (delta < min_delta) {
+      index = i;
+      min_delta = delta;
+    }
+  }
+
+  piflt collection_value = collection->values_array[index];
+
+  // clean up the collection constraint
+  Picam_DestroyCollectionConstraints(collection);
+
+  iError = Picam_SetParameterFloatingPointValue(hCam, parameter, collection_value);
+  if (!piIsFuncOk(iError)) {
+    printf("piSetParameterToCollection(): Picam_SetParameterFloatingPointValue() failed: %s\n", piErrorDesc(iError));
+    return iError;
+  }
+
+  return PicamError_None;
 }
 
 int piCommitParameters(PicamHandle camera)

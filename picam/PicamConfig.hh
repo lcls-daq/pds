@@ -29,6 +29,7 @@ public:
   virtual float readoutSpeed() const = 0;
   virtual uint16_t gainIndex() const = 0;
 
+  virtual int16_t infoReportInterval() const = 0;
   virtual uint16_t exposureEventCode() const = 0;
   virtual uint32_t numIntegrationShots() const = 0;
   virtual void setNumIntegrationShots(unsigned n) = 0;

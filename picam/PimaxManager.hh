@@ -13,6 +13,9 @@ class PimaxManager : public PicamManager
 public:
   PimaxManager(CfgClientNfs& cfg, int iCamera, bool bDelayMode, bool bInitTest, std::string sConfigDb, int iSleepInt, int iDebugLevel);
   ~PimaxManager();
+
+  void printConfigInfo(PicamConfig* config) const;
+  void printFrameInfo(void* payload) const;
 };
 
 } // namespace Pds

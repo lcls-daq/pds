@@ -95,18 +95,7 @@ public:
       if ( _iConfigCameraFail != 0 )
         in->datagram().xtc.damage.increase(Pds::Damage::UserDefined);
 
-      if (_iDebugLevel>=2) /*printf( "Pimax Config data:\n"
-        "  Width %d Height %d  Org X %d Y %d  Bin X %d Y %d\n"
-        "  Cooling Temperature %.1f C  Readout Speed %g MHz  Gain Index %d\n"
-        "  IntGain %d  Gate delay %g ns  width %g ns\n"
-        "  InfoRepInt %d  Readout Event %d  Num Integration Shots %d\n",
-        _config.width(), _config->height(),
-        _config.orgX(), _config->orgY(),
-        _config.binX(), _config.binY(),
-        _config.coolingTemp(), _config.readoutSpeed(), _config.gainIndex(),
-        _config.intensifierGain(), _config.gateDelay(), _config.gateWidth(),
-        _config.infoReportInterval(), _config.exposureEventCode(), _config.numIntegrationShots() //CHANGETODO
-        );*/
+      if (_iDebugLevel>=2) _manager.printConfigInfo(_config);
       if (_iDebugLevel>=1) printf( "\nOutput payload size = %d\n", in->datagram().xtc.sizeofPayload());
 
       return in;
@@ -309,9 +298,7 @@ public:
         if ( xtcData.sizeofPayload() != 0 )
         {
           printf( "Frame  payload size = %d\n", xtcFrame.sizeofPayload());
-          //PimaxDataType& frameData = *(PimaxDataType*) xtcFrame.payload();//CHANGETODO
-          //printf( "Frame  Id 0x%05x  ReadoutTime %.2fs\n", frameData.shotIdStart(),
-          // frameData.readoutTime() );
+          _manager.printFrameInfo(xtcFrame.payload());
         }
       }
 
@@ -475,9 +462,7 @@ public:
         if ( xtcData.sizeofPayload() != 0 )
         {
           printf( "Frame  payload size = %d\n", xtcFrame.sizeofPayload());
-          //PicamDataType& frameData = *(PicamDataType*) xtcFrame.payload();
-          //printf( "Frame Id Start %d ReadoutTime %f\n", frameData.shotIdStart(),
-          // frameData.readoutTime() ); //CHANGETODO
+          _manager.printFrameInfo(xtcFrame.payload());
         }
       }
 

@@ -13,6 +13,9 @@ class PixisManager : public PicamManager
 public:
   PixisManager(CfgClientNfs& cfg, int iCamera, bool bDelayMode, bool bInitTest, std::string sConfigDb, int iSleepInt, int iDebugLevel);
   ~PixisManager();
+
+  void printConfigInfo(PicamConfig* config) const;
+  void printFrameInfo(void* payload) const;
 };
 
 } // namespace Pds

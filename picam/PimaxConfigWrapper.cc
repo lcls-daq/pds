@@ -129,6 +129,11 @@ uint16_t PimaxConfigWrapper::gainIndex() const
   return _config.gainIndex();
 }
 
+int16_t PimaxConfigWrapper::infoReportInterval() const
+{
+  return _config.infoReportInterval();
+}
+
 uint16_t PimaxConfigWrapper::exposureEventCode() const
 {
   return _config.exposureEventCode();
@@ -167,6 +172,21 @@ uint32_t PimaxConfigWrapper::numPixelsY() const
 uint32_t PimaxConfigWrapper::numPixels() const
 {
   return _config.numPixels();
+}
+
+uint16_t PimaxConfigWrapper::intensifierGain() const
+{
+  return _config.intensifierGain();
+}
+
+double PimaxConfigWrapper::gateDelay() const
+{
+  return _config.gateDelay();
+}
+
+double PimaxConfigWrapper::gateWidth() const
+{
+  return _config.gateWidth();
 }
 
 } //namespace Pds

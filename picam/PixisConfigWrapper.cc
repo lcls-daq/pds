@@ -138,6 +138,11 @@ uint16_t PixisConfigWrapper::gainIndex() const
   return _config.gainMode();
 }
 
+int16_t PixisConfigWrapper::infoReportInterval() const
+{
+  return _config.infoReportInterval();
+}
+
 uint16_t PixisConfigWrapper::exposureEventCode() const
 {
   return _config.exposureEventCode();
@@ -176,6 +181,21 @@ uint32_t PixisConfigWrapper::numPixelsY() const
 uint32_t PixisConfigWrapper::numPixels() const
 {
   return _config.numPixels();
+}
+
+uint16_t PixisConfigWrapper::adcMode() const
+{
+  return _config.adcMode();
+}
+
+uint16_t PixisConfigWrapper::triggerMode() const
+{
+  return _config.triggerMode();
+}
+
+double PixisConfigWrapper::vsSpeed() const
+{
+  return _config.vsSpeed();
 }
 
 } //namespace Pds

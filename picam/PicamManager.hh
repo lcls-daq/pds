@@ -46,6 +46,9 @@ public:
   int   getData (InDatagram* in, InDatagram*& out);
   int   waitData(InDatagram* in, InDatagram*& out);
 
+  virtual void  printConfigInfo(PicamConfig* config) const = 0;
+  virtual void  printFrameInfo(void* payload) const = 0;
+
 protected:
   void setServer(PicamServer* pServer);
 

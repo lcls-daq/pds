@@ -33,6 +33,7 @@ public:
   float readoutSpeed() const;
   uint16_t gainIndex() const;
 
+  int16_t infoReportInterval() const;
   uint16_t exposureEventCode() const;
   uint32_t numIntegrationShots() const;
   void setNumIntegrationShots(unsigned n);
@@ -42,6 +43,11 @@ public:
   uint32_t numPixelsX() const;
   uint32_t numPixelsY() const;
   uint32_t numPixels() const;
+
+  /* Camera specific configs */
+  uint16_t adcMode() const;
+  uint16_t triggerMode() const;
+  double vsSpeed() const;
 
 private:
   CfgClientNfs&       _cfg;

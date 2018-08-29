@@ -45,11 +45,13 @@ namespace Pds {
       uint32_t               _Length[NCHANNELS];
       int32_t                _Offset[NCHANNELS];
       char *                 _ConfigBuff;
+      char *                 _raw_pvname;
       ConfigMonitor*         _configMonitor;
       unsigned               _nprint;
       ClockTime              _last;
       unsigned               _wrp;
       std::vector<char*>     _pool;
+      ca_client_context*     _context;
     };
   };
 };

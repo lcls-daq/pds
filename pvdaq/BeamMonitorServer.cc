@@ -23,6 +23,7 @@
 //
 
 static const unsigned NPRINT=20;
+static const unsigned PV_LEN=64;
 static const unsigned _API_VERSION=0;
 
 using namespace Pds::PvDaq;
@@ -59,17 +60,19 @@ BeamMonitorServer::BeamMonitorServer(const char*         pvbase,
   _configured (false),
   _chan_mask  (0),
   _ConfigBuff (0),
+  _raw_pvname (new char[PV_LEN]),
   _configMonitor(new ConfigMonitor(*this)),
   _nprint     (NPRINT),
   _wrp        (0),
-  _pool       (8)
+  _pool       (8),
+  _context    (ca_current_context())
 {
   _xtc = Xtc(_data_type, info);
 
   //
   //  Create PvServers for fetching configuration data
   //
-  char pvname[64];
+  char pvname[PV_LEN];
   sprintf(pvname,"%s:ChanEnable",pvbase);
   _chan_enable = new PvServer(pvname);
 
@@ -93,8 +96,8 @@ BeamMonitorServer::BeamMonitorServer(const char*         pvbase,
   //
   //  Create EpicsCA for monitoring event data
   //
-  sprintf(pvname,"%s:RAW",pvbase);
-  _raw = new Pds_Epics::EpicsCA(pvname,this);
+  // don't connect the monitor until config
+  sprintf(_raw_pvname,"%s:RAW",pvbase);
   sprintf(pvname,"%s:RAW.NORD",pvbase);
   _raw_nord = new PvServer(pvname);
 
@@ -137,6 +140,7 @@ BeamMonitorServer::~BeamMonitorServer()
     delete _offset_pvs[i];
   delete _api_version;
   delete _ioc_version;
+  delete _raw_pvname;
 }
 
 //
@@ -345,6 +349,15 @@ Pds::InDatagram* BeamMonitorServer::fire(Pds::InDatagram* dg)
     }
     printf("Exp nord %u\n",_exp_nord);
 
+    // fetch this since NORD does not post monitors
+    _raw_nord->update();
+
+    if (!_raw) {
+      if (ca_current_context() == NULL) ca_attach_context(_context);
+      printf("Creating EpicsCA(%s)\n", _raw_pvname);
+      _raw = new Pds_Epics::EpicsCA(_raw_pvname,this,_exp_nord);
+    }
+
     //_xtc.extent = sizeof(Pds::Xtc) + 8*_len_125*sizeof(uint16_t) + 8*_len_5*sizeof(uint32_t);
 
     int config_size = G1DConfig(nch, 0, 0, 0, 0)._sizeof();
@@ -378,6 +391,12 @@ Pds::InDatagram* BeamMonitorServer::fire(Pds::InDatagram* dg)
         umsg->append(msg.c_str());
         sendOcc(umsg);
         dg->datagram().xtc.damage.increase(Pds::Damage::UserDefined);
+    }
+  } else if (dg->seq.service()==Pds::TransitionId::Unconfigure) {
+    if (_raw) {
+      if (ca_current_context() == NULL) ca_attach_context(_context);
+      delete _raw;
+      _raw = 0;
     }
   }
 

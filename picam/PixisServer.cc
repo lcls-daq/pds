@@ -893,10 +893,10 @@ int PixisServer::setupCooling(double fCoolingTemperature)
   printf("Temperature Before cooling: %g C  Status %s\n", fTemperature, sTemperatureStatus.c_str());
 
 
-  iError = Picam_SetParameterFloatingPointValue(_hCam, PicamParameter_SensorTemperatureSetPoint, fCoolingTemperature);
+  iError = piSetParameterToIncrement(_hCam, PicamParameter_SensorTemperatureSetPoint, fCoolingTemperature);
   if (!piIsFuncOk(iError))
   {
-    printf("PixisServer::setupCooling(): Picam_SetParameterFloatingPointValue(PicamParameter_SensorTemperatureSetPoint, %g) failed: %s\n",
+    printf("PixisServer::setupCooling(): piSetParameterToIncrement(PicamParameter_SensorTemperatureSetPoint, %g) failed: %s\n",
            fCoolingTemperature, piErrorDesc(iError));
     return ERROR_SDK_FUNC_FAIL;
   }

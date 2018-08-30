@@ -7,7 +7,7 @@ namespace PiUtils
 const char* piErrorDesc(int iError);
 const char* piCameraDesc(const PicamCameraID& piCameraId);
 int         piGetEnum(PicamHandle hCam, PicamParameter parameter, std::string& sResult);
-int         piSetParameterToIncrement(PicamHandle hCam, PicamParameter parameter, piflt value);
+int         piSetParameterToIncrement(PicamHandle hCam, PicamParameter parameter, piflt value, bool bounded=false);
 int         piSetParameterToCollection(PicamHandle hCam, PicamParameter parameter, piflt value);
 int         piReadTemperature(PicamHandle hCam, float& fTemperature, std::string& sTemperatureStatus);
 void        piPrintAllParameters(PicamHandle camera);

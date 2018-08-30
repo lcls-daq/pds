@@ -56,7 +56,7 @@ int PixisConfigWrapper::fetch(Transition* tr)
       512,    // Clean Final Height Count
       0,      // Masked Height
       0,      // Kinetic Height
-      30.2f,  // Vertical Shift Speed
+      48.2f,  // Vertical Shift Speed
       1,      // Info report interval
       1,      // Redout event code
       1       // number integration shots

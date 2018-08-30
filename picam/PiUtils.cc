@@ -633,7 +633,7 @@ int piGetEnum(PicamHandle hCam, PicamParameter parameter, string& sResult)
   return 0;
 }
 
-int piSetParameterToIncrement(PicamHandle hCam, PicamParameter parameter, piflt value)
+int piSetParameterToIncrement(PicamHandle hCam, PicamParameter parameter, piflt value, bool bounded)
 {
   const PicamRangeConstraint* range;
   int iError = Picam_GetParameterRangeConstraint(hCam, parameter, PicamConstraintCategory_Required, &range);
@@ -642,16 +642,27 @@ int piSetParameterToIncrement(PicamHandle hCam, PicamParameter parameter, piflt 
     return iError;
   }
 
-  // compute the rounded value
-  pi32u increments = (pi32u)(((value - range->minimum) / range->increment) + 0.5);
-  piflt rounded = increments * range->increment + range->minimum;
+  piflt rounded = 0.0;
+  if (value < range->minimum) {
+    printf("piSetParameterToIncrement(): requested value (%g) is below the minimum of the range: %g\n", value, range->minimum);
+    if (bounded) return PicamError_InvalidParameterValues;
+    rounded = range->minimum;
+  } else if (value > range->maximum) {
+    printf("piSetParameterToIncrement(): requested value (%g) is above the maximum of the range: %g\n", value, range->maximum);
+    if (bounded) return PicamError_InvalidParameterValues;
+    rounded = range->maximum;
+  } else {
+    // compute the rounded value
+    pi32u increments = (pi32u)(((value - range->minimum) / range->increment) + 0.5);
+    rounded = increments * range->increment + range->minimum;
+  }
 
   // clean up the range constraint
   Picam_DestroyRangeConstraints(range);
 
   iError = Picam_SetParameterFloatingPointValue(hCam, parameter, rounded);
   if (!piIsFuncOk(iError)) {
-    printf("piSetParameterToIncrement(): Picam_SetParameterFloatingPointValue() failed: %s\n", piErrorDesc(iError));
+    printf("piSetParameterToIncrement(): Picam_SetParameterFloatingPointValue() to %g failed: %s\n", rounded, piErrorDesc(iError));
     return iError;
   }
 

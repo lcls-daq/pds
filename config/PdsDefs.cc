@@ -39,6 +39,7 @@
 #include "pds/config/Generic1DConfigType.hh"
 #include "pds/config/ArchonConfigType.hh"
 #include "pds/config/JungfrauConfigType.hh"
+#include "pds/config/UxiConfigType.hh"
 //#include "pds/config/ProjectionConfigType.hh"
 //#include "pds/config/SeqConfigType.hh"
 #include "pds/config/QuadAdcConfigType.hh"
@@ -134,6 +135,7 @@ const Pds::TypeId* PdsDefs::typeId(ConfigType id)
   case QuadAdc      : type = &_QuadAdcConfigType;   break;
   case Zyla         : type = &_zylaConfigType;      break;
   case EpicsCam     : type = &_epicsCamConfigType;  break;
+  case Uxi          : type = &_uxiConfigType;       break;
     //  case Projection   : type = &_projectionConfigType; break;
   default: 
     printf("PdsDefs::typeId id %d not found\n",unsigned(id));
@@ -197,6 +199,7 @@ const Pds::TypeId* PdsDefs::typeId(const UTypeName& name)
   test(_QuadAdcConfigType);
   test(_zylaConfigType);
   test(_epicsCamConfigType);
+  test(_uxiConfigType);
   //  test(_projectionConfigType);    
 #undef test
   //  database-only types
@@ -260,6 +263,7 @@ const Pds::TypeId* PdsDefs::typeId(const QTypeName& name)
   test(_QuadAdcConfigType);
   test(_zylaConfigType);
   test(_epicsCamConfigType);
+  test(_uxiConfigType);
   //  test(_projectionConfigType);    
 #undef test
   //  database-only types

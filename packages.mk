@@ -23,7 +23,7 @@ packages += gsc16ai
 packages += quadadc
 
 ifneq ($(findstring x86_64,$(tgt_arch)),)
-  packages += firewire jungfrau
+  packages += firewire jungfrau uxi
 ##  No DDL
 #  packages += phasics
 else

@@ -51,11 +51,12 @@ namespace Pds {
 
   class Allocation {
   public:
-    enum { ShapeTmo       =1,
-           ShortDisableTmo=2,
-           L3Tag          =4,
-           L3Veto         =8,
-           LongDisableTmo =16 };
+    enum { ShapeTmo         =1,
+           ShortDisableTmo  =2,
+           L3Tag            =4,
+           L3Veto           =8,
+           LongDisableTmo   =16,
+           ExtremeDisableTmo=32 };
     Allocation();
     Allocation(const char* partition,
                const char* dbpath,

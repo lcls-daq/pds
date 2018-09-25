@@ -136,7 +136,7 @@ namespace Pds {
             _data_ts  = data->timestamp();
           } else {
             const double clkratio  = 360.0; // clkratio = 360/1 since the detector clock is in seconds
-            const double tolerance = 0.003; // AC line rate jitter and Jungfrau clock drift
+            const double tolerance = 0.55; // the uxi timer only has 1 second resolution
             const unsigned maxdfid = 21600; // if there is more than 1 minute between triggers
             const unsigned maxunsync = 240;
 

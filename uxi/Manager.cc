@@ -136,12 +136,13 @@ namespace Pds {
             _data_ts  = data->timestamp();
           } else {
             const double clkratio  = 360.0; // clkratio = 360/1 since the detector clock is in seconds
-            const double tolerance = 0.55; // the uxi timer only has 1 second resolution
+            const double tolerance = 1.1; // the uxi timer only has 1 second resolution
             const unsigned maxdfid = 21600; // if there is more than 1 minute between triggers
             const unsigned maxunsync = 240;
 
-            double fdelta = double(data->timestamp() - _data_ts)*clkratio/double(_nfid) - 1;
-            if (fabs(fdelta) > tolerance && (_nfid < maxdfid || !_synced)) {
+            double rate = clkratio/double(_nfid);
+            double fdelta = double(data->timestamp() - _data_ts)*rate - 1;
+            if (fabs(fdelta) > (tolerance * rate) && (_nfid < maxdfid || !_synced)) {
               unsigned nfid = unsigned(double(data->timestamp() - _data_ts)*clkratio + 0.5);
               printf("  timestep error for acq_count %u: fdelta %f  dfid %d  tds %u,%u [%d]\n",
                      data->acquisitionCount(), fdelta, _nfid, data->timestamp(), _data_ts, nfid);
@@ -296,7 +297,7 @@ namespace Pds {
               ndarray<const double, 1> pots = _config.pots();
               for (unsigned ipot=0; ipot<UxiConfigNumberOfPots; ipot++) {
                 if (!_config.potIsReadOnly(ipot)) {
-                  if (!_detector.set_pot(ipot+1, pots[ipot])) {
+                  if (!_detector.set_pot(ipot+1, pots[ipot], _config.potIsTuned(ipot))) {
                     printf("ConfigAction: failed to configure pot %u of the detector!\n", ipot+1);
                     _error = true;
                   }
@@ -309,7 +310,7 @@ namespace Pds {
               } else {
                 if (_detector.commit()) {
                   for (unsigned ipot=0; ipot<UxiConfigNumberOfPots; ipot++) {
-                    if (!_detector.get_pot(ipot+1, &pots_rbv[ipot])) {
+                    if (!_detector.get_mon(ipot+1, &pots_rbv[ipot])) {
                       printf("ConfigAction: failed to readback the value of pot %u of the detector!\n", ipot+1);
                       _error = true;
                     }

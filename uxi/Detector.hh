@@ -27,8 +27,9 @@ namespace Pds {
       bool num_pixels(uint32_t* num_pixels);
       bool frame_size(uint32_t* frame_size);
       bool num_pots(uint32_t* num_pots);
+      bool get_mon(unsigned pot, double* value);
       bool get_pot(unsigned pot, double* value);
-      bool set_pot(unsigned pot, double value);
+      bool set_pot(unsigned pot, double value, bool tune=false);
       bool set_timing_all(unsigned ton, unsigned toff, unsigned delay=0);
       bool set_timing(char side, unsigned ton, unsigned toff, unsigned delay=0);
       bool get_timing(char side, unsigned* ton, unsigned* toff, unsigned* delay=NULL);

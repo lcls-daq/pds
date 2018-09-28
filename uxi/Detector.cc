@@ -26,6 +26,11 @@ struct uxi_timing {
   uint32_t toff;
   uint32_t tdel;
 };
+
+struct uxi_pots {
+  double voltage;
+  uint32_t tune;
+};
 #pragma pack(pop)
 
 using namespace Pds::Uxi;
@@ -235,6 +240,13 @@ bool Detector::num_pots(uint32_t* num_pots)
   return get_uint32("NPOTS?", num_pots);
 }
 
+bool Detector::get_mon(unsigned pot, double* value)
+{
+  char cmd[CMD_SIZE];
+  snprintf(cmd, sizeof(cmd), "MON%d?", pot);
+  return get_double(cmd, value);
+}
+
 bool Detector::get_pot(unsigned pot, double* value)
 {
   char cmd[CMD_SIZE];
@@ -242,11 +254,12 @@ bool Detector::get_pot(unsigned pot, double* value)
   return get_double(cmd, value);
 }
 
-bool Detector::set_pot(unsigned pot, double value)
+bool Detector::set_pot(unsigned pot, double value, bool tune)
 {
+  struct uxi_pots pot_value = { value, tune ? 1u : 0u };
   char cmd[CMD_SIZE];
   snprintf(cmd, sizeof(cmd), "POT%d", pot);
-  return put_command(cmd, &value, sizeof(double));
+  return put_command(cmd, &pot_value, sizeof(pot_value));
 }
 
 bool Detector::get_timing(char side, unsigned* ton, unsigned* toff, unsigned* delay)

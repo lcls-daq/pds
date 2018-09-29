@@ -310,7 +310,7 @@ namespace Pds {
               } else {
                 if (_detector.commit()) {
                   for (unsigned ipot=0; ipot<UxiConfigNumberOfPots; ipot++) {
-                    if (!_detector.get_mon(ipot+1, &pots_rbv[ipot])) {
+                    if (!_detector.get_pot(ipot+1, &pots_rbv[ipot])) {
                       printf("ConfigAction: failed to readback the value of pot %u of the detector!\n", ipot+1);
                       _error = true;
                     }

@@ -46,8 +46,6 @@ Detector::Detector(const char* host, unsigned comm_port, unsigned data_port) :
   _data(0)
 {
   _context = zmq_ctx_new();
-  _data = zmq_socket(_context, ZMQ_SUB);
-  _comm = zmq_socket(_context, ZMQ_REQ);
   connect();
 }
 

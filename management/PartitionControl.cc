@@ -459,7 +459,7 @@ bool PartitionControl::set_partition(const char* name,
     disable_tmo.tv_nsec=500000000;
   }
   else if (options&Allocation::ExtremeDisableTmo) {
-    disable_tmo.tv_sec =1;
+    disable_tmo.tv_sec =2;
     disable_tmo.tv_nsec=0;
   }
   else {

@@ -4,7 +4,6 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -28,7 +27,12 @@ static long long int diff_ms(timespec* end, timespec* start) {
 
 using namespace Pds::Archon;
 
-OutputParser::OutputParser()
+OutputParser::OutputParser() :
+  _delimeters(" ")
+{}
+
+OutputParser::OutputParser(const char* delimeters) :
+  _delimeters(delimeters)
 {}
 
 OutputParser::~OutputParser()
@@ -42,7 +46,7 @@ int OutputParser::parse(char* buffer)
   // Remove trailing line feed from buffer
   if (buffer[strlen(buffer)-1] == '\n')
     buffer[strlen(buffer)-1] = 0;
-  char* entry = strtok(buffer, " ");
+  char* entry = strtok(buffer, _delimeters);
   while (entry != NULL) {
         char* val = strchr(entry, '=');
         if (val != NULL) {
@@ -52,7 +56,7 @@ int OutputParser::parse(char* buffer)
           _data[key] = value;
           nparse++;
         }
-        entry = strtok(NULL, " ");
+        entry = strtok(NULL, _delimeters);
   }
   return nparse;
 }
@@ -112,6 +116,10 @@ void OutputParser::dump() const
   }
 }
 
+size_t OutputParser::size() const
+{
+  return _data.size();
+}
 
 BufferInfo::BufferInfo(unsigned nbuffers) :
   _nbuffers(nbuffers),
@@ -428,6 +436,125 @@ double Status::backplane_temp() const
   return get_value_as_double("BACKPLANE_TEMP");
 }
 
+Config::Config() :
+  OutputParser("\n")
+{}
+
+Config::~Config()
+{}
+
+int Config::num_config_lines() const
+{
+  return size();
+}
+
+uint32_t Config::active_taplines() const
+{
+  char buffer[32];
+  uint32_t active = 0;
+  uint32_t num = get_value_as_uint32("TAPLINES");
+  for (unsigned i=0; i<num; i++) {
+    snprintf(buffer, sizeof(buffer), "TAPLINE%u", i);
+    std::string tapcfg = get_value(buffer);
+    if (!tapcfg.empty())
+      active++;
+  }
+  return active;
+}
+
+uint32_t Config::taplines() const
+{
+  return get_value_as_uint32("TAPLINES");
+}
+
+uint32_t Config::linecount() const
+{
+  return get_value_as_uint32("LINECOUNT");
+}
+
+uint32_t Config::pixelcount() const
+{
+  return get_value_as_uint32("PIXELCOUNT");
+}
+
+uint32_t Config::samplemode() const
+{
+  return get_value_as_uint32("SAMPLEMODE");
+}
+
+uint32_t Config::bytes_per_pixel() const
+{
+  uint32_t nbytes;
+  switch(samplemode()) {
+  case 0:
+    nbytes = 2;
+    break;
+  case 1:
+    nbytes = 4;
+    break;
+  default:
+    nbytes = 0;
+    break;
+  }
+
+  return nbytes;
+}
+
+uint32_t Config::pixels_per_line() const
+{
+  return active_taplines() * pixelcount();
+}
+
+uint32_t Config::total_pixels() const
+{
+  return pixels_per_line() * linecount();
+}
+
+uint32_t Config::frame_size() const
+{
+  return total_pixels() * bytes_per_pixel();
+}
+
+std::string Config::line(unsigned num) const
+{
+  char line_name[32];
+  snprintf(line_name, sizeof(line_name), "LINE%u", num);
+  return get_value(line_name);
+}
+
+std::string Config::constant(const char* name) const
+{
+  return extract_sub_key("CONSTANTS", "CONSTANT%u", name);
+}
+
+uint32_t Config::parameter(const char* name) const
+{
+  return strtoul(extract_sub_key("PARAMETERS", "PARAMETER%u", name).c_str(), NULL, 0);
+}
+
+bool Config::update(char* buffer)
+{
+  return parse(buffer) > 0;
+}
+
+std::string Config::extract_sub_key(const char* num_entries, const char* entry_fmt, const char* key) const
+{
+  char buffer[32];
+  char search[strlen(key) + 2];
+  std::string result;
+  snprintf(search, sizeof(search), "%s=", key);
+  uint32_t num = get_value_as_uint32(num_entries);
+  for (unsigned i=0; i<num; i++) {
+    snprintf(buffer, sizeof(buffer), entry_fmt, i);
+    std::string value = get_value(buffer);
+    if(!strncmp(search, value.c_str(), strlen(search))) {
+      const char* val = strchr(value.c_str(), '=');
+      result.assign(++val);
+      break;
+    }
+  }
+  return result;
+}
 
 FrameMetaData::FrameMetaData() :
   number(0),
@@ -509,6 +636,7 @@ void Driver::connect()
   }
 }
 
+
 bool Driver::configure(const char* filepath)
 {
   if (!_connected) {
@@ -523,56 +651,82 @@ bool Driver::configure(const char* filepath)
 
   FILE* f = fopen(filepath, "r");
   if (f) {
-    int linenum = 0;
-    bool is_conf = false;
-    size_t line_sz = 2048;
-    size_t hdr_sz = MSG_HEADER_LEN;
-    char* hdr  = (char *)malloc(hdr_sz);
-    char* reply = (char *)malloc(line_sz+hdr_sz);
-    char* line = (char *)malloc(line_sz);
-
-    command("POLLOFF");
-    command("CLEARCONFIG");
-
-    while (getline(&line, &line_sz, f) != -1) {
-      if (!strncmp(line, "[SYSTEM]", 8)) {
-        is_conf = false;
-        continue;
-      } else if (!strncmp(line, "[CONFIG]", 8)) {
-        is_conf = true;
-        continue;
-      }
-      if (is_conf && strcmp(line, "\n")) {
-        for(char* p = line; (p = strchr(p, '\\')); ++p) {
-          *p = '/';
-        }
-        char *pr = line, *pw = line;
-        while (*pr) {
-          *pw = *pr++;
-          pw += (*pw != '"');
-        }
-        *pw = '\0';
-        if (!wr_config_line(linenum, line)) {
-          fprintf(stderr, "Error writing configuration line %d: %s\n", linenum, line);
-          command("POLLON");
-          return false;
-        }
-        linenum++;
-      }
-    }
-    if (line) {
-      free(hdr);
-      free(reply);
-      free(line);
-    }
-    fclose(f);
-
-    command("POLLON");
-    return command("APPLYALL");
+    return load_config_file(f);
   } else {
     fprintf(stderr, "Error opening %s\n", filepath);
     return false;
   }
+}
+
+bool Driver::configure(void* buffer, size_t size)
+{
+  if (!_connected) {
+    connect();
+    if (!_connected) {
+      fprintf(stderr, "Error: unable to load Archon configuration file: controller is not connected!\n");
+      return false;
+    }
+  }
+
+  printf("Attempting to load Archon configuration file from memory\n");
+
+  FILE* f = fmemopen(buffer, size, "r");
+  if (f) {
+    return load_config_file(f);
+  } else {
+    fprintf(stderr, "Error opening in memory file!\n");
+    return false;
+  }
+}
+
+bool Driver::load_config_file(FILE* f)
+{
+  int linenum = 0;
+  bool is_conf = false;
+  size_t line_sz = 2048;
+  size_t hdr_sz = MSG_HEADER_LEN;
+  char* hdr  = (char *)malloc(hdr_sz);
+  char* reply = (char *)malloc(line_sz+hdr_sz);
+  char* line = (char *)malloc(line_sz);
+
+  command("POLLOFF");
+  command("CLEARCONFIG");
+
+  while (getline(&line, &line_sz, f) != -1) {
+    if (!strncmp(line, "[SYSTEM]", 8)) {
+      is_conf = false;
+      continue;
+    } else if (!strncmp(line, "[CONFIG]", 8)) {
+      is_conf = true;
+      continue;
+    }
+    if (is_conf && strcmp(line, "\n")) {
+      for(char* p = line; (p = strchr(p, '\\')); ++p) {
+        *p = '/';
+      }
+      char *pr = line, *pw = line;
+      while (*pr) {
+        *pw = *pr++;
+        pw += (*pw != '"');
+      }
+      *pw = '\0';
+      if (!wr_config_line(linenum, line)) {
+        fprintf(stderr, "Error writing configuration line %d: %s\n", linenum, line);
+        command("POLLON");
+        return false;
+      }
+      linenum++;
+    }
+  }
+  if (line) {
+    free(hdr);
+    free(reply);
+    free(line);
+  }
+  fclose(f);
+
+  command("POLLON");
+  return command("APPLYALL");
 }
 
 bool Driver::fetch_frame(uint32_t frame_number, void* data, FrameMetaData* frame_meta, bool need_fetch)
@@ -681,9 +835,48 @@ bool Driver::stop_acquisition()
   return status;
 }
 
-bool Driver::set_preframe_clear(bool enable)
+bool Driver::power_on()
 {
-  return load_parameter("SweepCount", enable ? 1 : 0);
+  return command("POWERON");
+}
+
+bool Driver::power_off()
+{
+  return command("POWEROFF");
+}
+
+bool Driver::set_number_of_lines(unsigned num_lines, bool reload)
+{
+  if (edit_config_line("LINECOUNT", num_lines)) {
+    if (reload) {
+      if (!command("APPLYCDS"))
+        return false;
+    }
+
+    return load_parameter("Lines", num_lines);
+  } else {
+    return false;
+  }
+}
+
+bool Driver::set_vertical_binning(unsigned binning)
+{
+  return load_parameter("VerticalBinning", binning);
+}
+
+bool Driver::set_horizontal_binning(unsigned binning)
+{
+  return load_parameter("HorizontalBinning", binning);
+}
+
+bool Driver::set_preframe_clear(unsigned num_lines)
+{
+  return load_parameter("PreSweepCount", num_lines);
+}
+
+bool Driver::set_idle_clear(unsigned num_lines)
+{
+  return load_parameter("IdleSweepCount", num_lines);
 }
 
 bool Driver::set_integration_time(unsigned milliseconds)
@@ -694,6 +887,26 @@ bool Driver::set_integration_time(unsigned milliseconds)
 bool Driver::set_non_integration_time(unsigned milliseconds)
 {
   return load_parameter("NoIntMS", milliseconds);
+}
+
+bool Driver::set_external_trigger(bool enable)
+{
+  return load_parameter("ExternalTrigger", enable ? 1 : 0);
+}
+
+bool Driver::set_clock_at(unsigned ticks)
+{
+  return load_parameter("AT", ticks);
+}
+
+bool Driver::set_clock_st(unsigned ticks)
+{
+  return load_parameter("ST", ticks);
+}
+
+bool Driver::set_clock_stm1(unsigned ticks)
+{
+  return load_parameter("STM1", ticks);
 }
 
 void Driver::set_frame_poll_interval(unsigned microseconds)
@@ -769,6 +982,12 @@ bool Driver::command(const char* cmd)
   int len;
   char buf[16];
   char cmdstr[strlen(cmd) + MSG_HEADER_LEN + 1];
+
+  if (!_connected) {
+    fprintf(stderr, "Error: unable to send command to Archon: controller is not connected!\n");
+    return false;
+  }
+
   sprintf(cmdstr, ">%02X%s\n", _msgref, cmd);
   sprintf(buf, "<%02X", _msgref);
   ::write(_socket, cmdstr, strlen(cmdstr));
@@ -801,23 +1020,110 @@ bool Driver::load_parameter(const char* param, unsigned value, bool fast)
     return false;
   }
 
-  if (fast)
+  if (fast) {
     snprintf(_writebuf, BUFFER_SIZE, "FASTLOADPARAM %s %u", param, value);
-  else
-    snprintf(_writebuf, BUFFER_SIZE, "LOADPARAM %s %u", param, value);
+  } else {
+    replace_param_line(param, value);
+    snprintf(_writebuf, BUFFER_SIZE, "LOADPARAM %s", param);
+  }
 
   return command(_writebuf);
 }
 
-bool Driver::wr_config_line(unsigned num, const char* line)
+const char* Driver::rd_config_line(unsigned num)
+{
+  snprintf(_writebuf, BUFFER_SIZE, "RCONFIG%04X", num);
+  if (command(_writebuf)) {
+    char* msg_ptr = _message + strlen(_message) - 1;
+    if (*msg_ptr == '\n')
+      *msg_ptr = 0;
+  } else {
+    *_message = 0;
+  }
+
+  return _message; 
+}
+
+bool Driver::wr_config_line(unsigned num, const char* line, bool cache)
 {
   if (strlen(line) > MAX_CONFIG_LINE) {
     fprintf(stderr, "Configuration line %d is longer than controller max of %d\n", num, MAX_CONFIG_LINE);
     return false;
   }
 
-  snprintf(_writebuf, BUFFER_SIZE, "WCONFIG%04d%s", num, line);
+  if (cache) {
+    char buffer[strlen(line)+1];
+    strcpy(buffer, line);
+    _config.update(buffer);
+  }
+  snprintf(_writebuf, BUFFER_SIZE, "WCONFIG%04X%s", num, line);
   return command(_writebuf);
+}
+
+bool Driver::replace_param_line(const char* param, unsigned value)
+{
+  char* par = NULL;
+  int line_num = -1;
+  char newline[MAX_CONFIG_LINE];
+  char search[strlen(param) + 2];
+  snprintf(search, sizeof(search), "%s=", param);
+  for (int l=0; l < MAX_CONFIG_LINE; l++) {
+    strncpy(newline, rd_config_line(l), MAX_CONFIG_LINE);
+    if (!strncmp("PARAMETER", newline, 9)) {
+      par = strchr(newline, '=');
+      if (!strncmp(search, ++par, strlen(search))) {
+        line_num = l;
+        break;
+      }
+    }
+  }
+
+  if (line_num < 0) {
+    fprintf(stderr, "No configuration parameter line found matching '%s'\n", param);
+    return false;
+  } else {
+    snprintf(par, MAX_CONFIG_LINE - (par-newline), "%s=%u", param, value);
+    return wr_config_line(line_num, newline);
+  }
+}
+
+bool Driver::replace_config_line(const char* key, const char* newline)
+{
+  int num = find_config_line(key);
+  if (num < 0) {
+    fprintf(stderr, "No configuration line found matching '%s'\n", key);
+    return false;
+  } else {
+    return wr_config_line(num, newline);
+  }
+}
+
+bool Driver::edit_config_line(const char* key, const char* value)
+{
+  char newline[MAX_CONFIG_LINE];
+  snprintf(newline, MAX_CONFIG_LINE, "%s=%s", key, value);
+  return replace_config_line(key, newline);
+}
+
+bool Driver::edit_config_line(const char* key, unsigned value)
+{
+  char newline[MAX_CONFIG_LINE];
+  snprintf(newline, MAX_CONFIG_LINE, "%s=%u", key, value);
+  return replace_config_line(key, newline);
+}
+
+bool Driver::edit_config_line(const char* key, signed value)
+{
+  char newline[MAX_CONFIG_LINE];
+  snprintf(newline, MAX_CONFIG_LINE, "%s=%d", key, value);
+  return replace_config_line(key, newline);
+}
+
+bool Driver::edit_config_line(const char* key, double value)
+{
+  char newline[MAX_CONFIG_LINE];
+  snprintf(newline, MAX_CONFIG_LINE, "%s=%.3f", key, value);
+  return replace_config_line(key, newline);
 }
 
 bool Driver::fetch_system()
@@ -842,6 +1148,33 @@ bool Driver::fetch_buffer_info()
     return _buffer_info.update(_message);
   }
   return false;
+}
+
+bool Driver::fetch_config()
+{
+  char buffer[MAX_CONFIG_LINE+1];
+  buffer[MAX_CONFIG_LINE] = 0;
+  for (unsigned i=0;i<MAX_CONFIG_LINE;i++) {
+    strncpy(buffer, rd_config_line(i), MAX_CONFIG_LINE);
+    _config.update(buffer);
+  }
+
+  return true;
+}
+
+int Driver::find_config_line(const char* line)
+{
+  int line_num = -1;
+  char search[strlen(line) + 2];
+  snprintf(search, sizeof(search), "%s=", line);
+  for (int l=0; l < MAX_CONFIG_LINE; l++) {
+    if (!strncmp(search, rd_config_line(l), strlen(search))) {
+      line_num = l;
+      break;
+    }
+  }
+
+  return line_num;
 }
 
 int Driver::_recv(char* buf, unsigned bufsz)
@@ -906,6 +1239,11 @@ const Status& Driver::status() const
 const BufferInfo& Driver::buffer_info() const
 {
   return _buffer_info;
+}
+
+const Config& Driver::config() const
+{
+  return _config;
 }
 
 bool Driver::lock_buffer(unsigned buffer_idx)

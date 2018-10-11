@@ -1,6 +1,7 @@
 #ifndef Pds_Archon_Driver_hh
 #define Pds_Archon_Driver_hh
 
+#include <stdio.h>
 #include <stdint.h>
 #include <unistd.h>
 #include <string>
@@ -16,6 +17,7 @@ namespace Pds {
     class OutputParser {
       public:
         OutputParser();
+        OutputParser(const char* delimeters);
         virtual ~OutputParser();
         int parse(char* buffer);
         std::string get_value(std::string key) const;
@@ -28,7 +30,10 @@ namespace Pds {
         double get_value_as_double(std::string key) const;
         virtual bool update(char* buffer) = 0;
         void dump() const;
+      protected:
+        size_t size() const;
       private:
+        const char* _delimeters;
         std::map<std::string, std::string> _data;
     };
 
@@ -115,6 +120,28 @@ namespace Pds {
         int _num_module_entries;
     };
 
+    class Config : public OutputParser {
+      public:
+        Config();
+        ~Config();
+        int num_config_lines() const;
+        uint32_t active_taplines() const;
+        uint32_t taplines() const;
+        uint32_t linecount() const;
+        uint32_t pixelcount() const;
+        uint32_t samplemode() const;
+        uint32_t bytes_per_pixel() const;
+        uint32_t pixels_per_line() const;
+        uint32_t total_pixels() const;
+        uint32_t frame_size() const;
+        std::string line(unsigned num) const;
+        std::string constant(const char* name) const;
+        uint32_t parameter(const char* name) const;
+        bool update(char* buffer);
+      private:
+        std::string extract_sub_key(const char* num_entries, const char* entry_fmt, const char* key) const;
+    };
+
     class FrameMetaData {
       public:
         FrameMetaData();
@@ -132,30 +159,52 @@ namespace Pds {
         ~Driver();
         void connect();
         bool configure(const char* filepath);
+        bool configure(void* buffer, size_t size);
         bool command(const char* cmd);
         bool load_parameter(const char* param, unsigned value, bool fast=true);
-        bool wr_config_line(unsigned num, const char* line);
+        bool wr_config_line(unsigned num, const char* line, bool cache=true);
+        bool edit_config_line(const char* key, const char* value);
+        bool edit_config_line(const char* key, unsigned value);
+        bool edit_config_line(const char* key, signed value);
+        bool edit_config_line(const char* key, double value);
         bool fetch_system();
         bool fetch_status();
         bool fetch_buffer_info();
+        bool fetch_config();
         bool fetch_frame(uint32_t frame_number, void* data, FrameMetaData* frame_meta=NULL, bool need_fetch=true);
         bool wait_frame(void* data, FrameMetaData* frame_meta=NULL, int timeout=0);
         bool start_acquisition(uint32_t num_frames=0);
         bool stop_acquisition();
-        bool set_preframe_clear(bool enable);
+        bool power_on();
+        bool power_off();
+        bool set_number_of_lines(unsigned num_lines, bool reload=true);
+        bool set_vertical_binning(unsigned binning);
+        bool set_horizontal_binning(unsigned binning);
+        bool set_preframe_clear(unsigned num_lines);
+        bool set_idle_clear(unsigned num_lines=1);
         bool set_integration_time(unsigned milliseconds);
         bool set_non_integration_time(unsigned milliseconds);
+        bool set_external_trigger(bool enable);
+        bool set_clock_at(unsigned ticks);
+        bool set_clock_st(unsigned ticks);
+        bool set_clock_stm1(unsigned ticks);
+        int find_config_line(const char* line);
         void set_frame_poll_interval(unsigned microseconds);
         const unsigned long long time();
+        const char* rd_config_line(unsigned num);
         const char* command_output(const char* cmd, char delim='\n');
         const char* message() const;
         AcqMode acquisition_mode() const;
         const System& system() const;
         const Status& status() const;
         const BufferInfo& buffer_info() const;
+        const Config& config() const;
       private:
         ssize_t fetch_buffer(unsigned buffer_idx, void* data);
         bool lock_buffer(unsigned buffer_idx);
+        bool replace_param_line(const char* param, unsigned value);
+        bool replace_config_line(const char* key, const char* newline);
+        bool load_config_file(FILE* f);
       private:
         int           _recv(char* buf, unsigned bufsz);
         const char*   _host;
@@ -174,6 +223,7 @@ namespace Pds {
         System        _system;
         Status        _status;
         BufferInfo    _buffer_info;
+        Config        _config;
     };
   }
 }

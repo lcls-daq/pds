@@ -33,16 +33,19 @@ namespace Pds {
 
       unsigned count() const;
       void resetCount();
+      void setFrame(uint32_t);
 
-      void post(char*, unsigned);
+      void post(uint32_t, const void*);
 
       void set_frame_sz(unsigned);
 
     private:
       Xtc _xtc;
-      unsigned _count;
-      unsigned _framesz;
-      int _pfd[2];
+      unsigned  _count;
+      unsigned  _framesz;
+      uint32_t  _last_frame;
+      bool      _first_frame;
+      int       _pfd[4];
     };
   }
 }

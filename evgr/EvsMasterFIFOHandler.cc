@@ -33,7 +33,7 @@ void EvsMasterFIFOHandler::fifo_event(const FIFOEvent& fe)
     /*
      * Determine if we need to start L1Accept
      *
-     * Rule: If we have got an readout event before, and get the terminator event now,
+     * Rule: If we have got an readout event before,
      *    then we will start L1Accept
      */
 

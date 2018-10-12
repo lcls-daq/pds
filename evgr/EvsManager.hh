@@ -16,7 +16,7 @@ namespace Pds {
 
   class EvsManager {
   public:  
-    EvsManager(EvgrBoardInfo<Evr>& erInfo, CfgClientNfs& cfg);
+    EvsManager(EvgrBoardInfo<Evr>& erInfo, CfgClientNfs& cfg, bool lInternal=true);
     ~EvsManager();
 
     // SIGINT handler

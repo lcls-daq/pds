@@ -130,7 +130,7 @@ static unsigned int evrConfigSize(unsigned maxNumEventCodes, unsigned maxNumPuls
 class EvsConfigManager
 {
 public:
-  EvsConfigManager(Evr & er, CfgClientNfs & cfg, Appliance& app):
+  EvsConfigManager(Evr & er, CfgClientNfs & cfg, Appliance& app, bool lInternal):
     _er (er),
     _cfg(cfg),
     _cfgtc(_evsConfigType, cfg.src()),
@@ -140,6 +140,7 @@ public:
     _end_config(0),
     _occPool   (new GenericPool(sizeof(UserMessage),1)),
     _app       (app),
+    _lInternal (lInternal),
     _changed   (false)
   {
   }
@@ -296,7 +297,7 @@ public:
 	    }
 	}
 
-      if (eventCode.period()) {
+      if (_lInternal) {
 	_er.InternalSequenceSetCode    ( eventCode.code() );
 	_er.InternalSequenceSetPrescale( eventCode.period()-1 );
 	_er.InternalSequenceEnable     (1);
@@ -304,6 +305,7 @@ public:
       }
       else {
 	_er.ExternalSequenceSetCode    ( eventCode.code() );
+	_er.InternalSequenceSetPrescale( eventCode.period()-1 );
 	_er.ExternalSequenceEnable     (1);
 	_er.InternalSequenceEnable     (0);
       }
@@ -314,6 +316,12 @@ public:
 	     eventCode.maskTriggerR(),
 	     eventCode.readoutGroup());       
     }
+
+    uint32_t* preg = reinterpret_cast<uint32_t*>(&_er);
+    printf("intEventEn %c\nintEventCount %08x\nintEventCode %d\n",
+           preg[0xa0>>2], preg[0xa4>>2], preg[0xa8>>2]);
+    printf("extEventEn %c\nextEventCode %d\n",
+           preg[0xac>>2], preg[0xb0>>2]);
 
     for(unsigned ram=0; ram<2; ram++)
       _er.DumpMapRam(ram);
@@ -408,6 +416,7 @@ private:
   const char*          _end_config;
   GenericPool*         _occPool;
   Appliance&           _app;
+  bool                 _lInternal;
   bool                 _changed;
 };
 
@@ -558,12 +567,12 @@ Server& EvsManager::server()
   return *_server;
 }
 
-EvsManager::EvsManager(EvgrBoardInfo < Evr > &erInfo, CfgClientNfs & cfg) :
+EvsManager::EvsManager(EvgrBoardInfo < Evr > &erInfo, CfgClientNfs & cfg, bool lInternal) :
   _er(erInfo.board()), _fsm(*new Fsm),
   _server(new EvrFifoServer(cfg.src())),
   _vmon  (new VmonEvr(cfg.src()))
 {
-  EvsConfigManager* cmgr = new EvsConfigManager(_er, cfg, _fsm);
+  EvsConfigManager* cmgr = new EvsConfigManager(_er, cfg, _fsm, lInternal);
 
   _fsm.callback(TransitionId::Map            , new EvsAllocAction     (cfg,_er,_fsm, *cmgr, *_server, *_vmon));
   _fsm.callback(TransitionId::Unmap          , new EvsShutdownAction);

@@ -43,15 +43,15 @@ namespace Pds {
         ~DataImportFrame() {};
 
       public:
-        unsigned vc()                { return first.vc; }
-        unsigned lane()              { return first.lane; }
-        unsigned elementId()         { return second.elementID; }
-        unsigned acqCount()          { return second.acqCount; }
-        unsigned opCode()            { return second.opCode; }
-        unsigned frameNumber()       { return (unsigned) _frameNumber; }
-        uint32_t ticks()             { return _ticks; }
-        uint32_t fiducials()         { return _fiducials; }
-        uint32_t frameType()         { return _frameType; }
+        unsigned vc()          const { return first.vc; }
+        unsigned lane()        const { return first.lane; }
+        unsigned elementId()   const { return second.elementID; }
+        unsigned acqCount()    const { return second.acqCount; }
+        unsigned opCode()      const { return second.opCode; }
+        unsigned frameNumber() const { return (unsigned) _frameNumber; }
+        uint32_t ticks()       const { return _ticks; }
+        uint32_t fiducials()   const { return _fiducials; }
+        uint32_t frameType()   const { return _frameType; }
 
       public:
         FirstWordBits         first;         // 0

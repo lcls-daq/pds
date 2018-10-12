@@ -27,10 +27,14 @@ CPPFLAGS += -D_LINUX
 #tgtsrcs_cxistat := cxistat.cc
 
 
+#ignore_src := SrpV3.cc
+ignore_src := 
+
 libnames := pgp
 
-libsrcs_pgp := $(wildcard *.cc)
+libsrcs_pgp := $(filter-out $(ignore_src),$(wildcard *.cc))
 #libsinc_pgp := 
-libincs_pgp := pgpcard aesdriver/include
+libincs_pgp := pgpcard aesdriver/include boost/include
+liblibs_pgp := boost/boost_thread
 CPPFLAGS += -fno-strict-aliasing
 

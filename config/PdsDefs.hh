@@ -33,7 +33,7 @@ namespace Pds_ConfigDb {
                       Timepix, Cspad2x2, OceanOptics, Fli, Andor, UsdUsb, Orca, Imp,
                       Rayonix, EpixSampler, Epix, Pimax, Epix10k, Epix100a, GenericPgp,
                       TimeTool, Andor3d, UsdUsbFex, Generic1D, Archon, Jungfrau, QuadAdc,
-                      Zyla, EpicsCam, Epix10ka, Pixis, Uxi,
+                      Zyla, EpicsCam, Epix10ka, Pixis, Uxi, Epix10ka2M,
 #ifdef BUILD_EXTRA
                       Phasics, Xamps, Fexamp,
 #endif

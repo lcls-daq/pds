@@ -17,6 +17,7 @@
 #define BUFFER_SIZE 8192
 #define BURST_LEN 1024
 #define LOAD_PARAM_MAX 1000000
+#define XV_MOD_TYPE 12
 
 static const char* PowerModeStrings[] = {"Unknown", "Not Configured", "Off", "Intermediate", "On", "Standby"};
 
@@ -333,7 +334,7 @@ uint16_t System::present() const
 bool System::module_present(unsigned mod) const
 {
   if (mod < (unsigned) _num_modules) {
-    return ((1U<<mod) & present());
+    return ((1U<<(mod-1)) & present());
   } else {
     return false;
   }
@@ -527,9 +528,39 @@ std::string Config::constant(const char* name) const
   return extract_sub_key("CONSTANTS", "CONSTANT%u", name);
 }
 
+int Config::get_cache(std::string key) const
+{
+  int value = -1;
+  std::map<std::string,unsigned>::const_iterator it;
+
+  it = _config_cache.find(key);
+  if (it != _config_cache.end())
+    value = it->second;
+
+  return value;
+}
+
 uint32_t Config::parameter(const char* name) const
 {
   return strtoul(extract_sub_key("PARAMETERS", "PARAMETER%u", name).c_str(), NULL, 0);
+}
+
+bool Config::cache(const char* line, unsigned num)
+{
+  if (line != NULL) {
+    std::string key;
+    char buffer[strlen(line) + 1];
+    strcpy(buffer, line);
+    char* div = strchr(buffer, '=');
+    if (div != NULL)
+      *div = 0;
+    key.assign(buffer);
+    _config_cache[key] = num;
+
+    return true;
+  } else {
+    return false;
+  }
 }
 
 bool Config::update(char* buffer)
@@ -577,6 +608,7 @@ Driver::Driver(const char* host, unsigned port) :
   _port(port),
   _socket(-1),
   _connected(false),
+  _timeout_req(false),
   _acq_mode(Stopped),
   _msgref(0),
   _readbuf_sz(BUFFER_SIZE),
@@ -591,15 +623,12 @@ Driver::Driver(const char* host, unsigned port) :
   _readbuf = new char[_readbuf_sz];
   _writebuf = new char[_writebuf_sz];
   _message = &_readbuf[MSG_HEADER_LEN];
-  _socket = ::socket(AF_INET, SOCK_STREAM, 0);
   connect();
 }
 
 Driver::~Driver()
 {
-  if (_socket >= 0) {
-    ::close(_socket);
-  }
+  disconnect();
   if (_readbuf) {
     delete[] _readbuf;
   }
@@ -616,6 +645,9 @@ AcqMode Driver::acquisition_mode() const
 void Driver::connect()
 {
   if (!_connected) {
+    if (_socket < 0) {
+      _socket = ::socket(AF_INET, SOCK_STREAM, 0);
+    }
     hostent* entries = gethostbyname(_host);
     if (entries) {
       unsigned addr = htonl(*(in_addr_t*)entries->h_addr_list[0]);
@@ -636,6 +668,14 @@ void Driver::connect()
   }
 }
 
+void Driver::disconnect()
+{
+  _connected = false;
+  if (_socket >= 0) {
+    ::close(_socket);
+    _socket = -1;
+  }
+}
 
 bool Driver::configure(const char* filepath)
 {
@@ -771,7 +811,7 @@ bool Driver::wait_frame(void* data, FrameMetaData* frame_meta, int timeout)
   timespec start_time;
   timespec current_time;
   clock_gettime(CLOCK_REALTIME, &start_time);
-  while((_acq_mode != Stopped) && waiting && fetch_buffer_info()) {
+  while((_acq_mode != Stopped) && !_timeout_req && waiting && fetch_buffer_info()) {
     newest_frame = _buffer_info.frame_num();
     if (newest_frame > _last_frame) {
       // We have seen at least one new frame
@@ -835,6 +875,29 @@ bool Driver::stop_acquisition()
   return status;
 }
 
+bool Driver::wait_power_mode(PowerMode mode, int timeout)
+{
+  bool waiting = true;
+
+  timespec start_time;
+  timespec current_time;
+  clock_gettime(CLOCK_REALTIME, &start_time);
+  while(!_timeout_req && waiting && fetch_status()) {
+    if (mode == _status.power()) {
+      waiting = false;
+    } else {
+      clock_gettime(CLOCK_REALTIME, &current_time);
+      if ((timeout > 0) && (diff_ms(&current_time, &start_time) > timeout)) {
+        printf("wait_power mode timed out after %d ms!\n", timeout);
+        break;
+      }
+      nanosleep(&_sleep_time, NULL);
+    }
+  }
+
+  return !waiting;
+}
+
 bool Driver::power_on()
 {
   return command("POWERON");
@@ -854,6 +917,20 @@ bool Driver::set_number_of_lines(unsigned num_lines, bool reload)
     }
 
     return load_parameter("Lines", num_lines);
+  } else {
+    return false;
+  }
+}
+
+bool Driver::set_number_of_pixels(unsigned num_pixels, bool reload)
+{
+  if (edit_config_line("PIXELCOUNT", num_pixels)) {
+    if (reload) {
+      if (!command("APPLYCDS"))
+        return false;
+    }
+
+    return load_parameter("Pixels", num_pixels);
   } else {
     return false;
   }
@@ -889,9 +966,18 @@ bool Driver::set_non_integration_time(unsigned milliseconds)
   return load_parameter("NoIntMS", milliseconds);
 }
 
-bool Driver::set_external_trigger(bool enable)
+bool Driver::set_external_trigger(bool enable, bool reload)
 {
-  return load_parameter("ExternalTrigger", enable ? 1 : 0);
+  if (edit_config_line("TRIGINENABLE", enable ? 1 : 0)) {
+    if (reload) {
+      if (!command("APPLYSYSTEM"))
+        return false;
+    }
+
+    return load_parameter("ExternalTrigger", enable ? 1 : 0);
+  } else {
+    return false;
+  }
 }
 
 bool Driver::set_clock_at(unsigned ticks)
@@ -907,6 +993,49 @@ bool Driver::set_clock_st(unsigned ticks)
 bool Driver::set_clock_stm1(unsigned ticks)
 {
   return load_parameter("STM1", ticks);
+}
+
+bool Driver::set_bias(bool enabled, int channel, float voltage)
+{
+  char buffer[32];
+  int module = -1;
+  size_t base_len;
+  char* modify = buffer;
+
+  if (fetch_system()) {
+    for (int i=0; i<_system.num_modules(); i++) {
+      if (_system.module_type(i) == XV_MOD_TYPE) {
+        module = i;
+        break;
+      }
+    }
+
+    if (module > 0) {
+      snprintf(buffer, sizeof(buffer), "MOD%d/XV%s_", module, channel>0 ? "P" : "N");
+      base_len = strlen(buffer);
+      modify += base_len;
+
+      snprintf(modify, sizeof(buffer) - base_len, "V%d", abs(channel));
+      if (!edit_config_line(buffer, voltage)) {
+        return false;
+      }
+
+      snprintf(modify, sizeof(buffer) - base_len, "ENABLE%d", abs(channel));
+      if (!edit_config_line(buffer, enabled)) {
+        return false;
+      }
+
+      snprintf(buffer, sizeof(buffer), "APPLYMOD%02X", module);
+      return command(buffer);
+    }
+  }
+
+  return false;
+}
+
+void Driver::timeout_waits(bool request_timeout)
+{
+  _timeout_req = request_timeout;
 }
 
 void Driver::set_frame_poll_interval(unsigned microseconds)
@@ -1055,6 +1184,7 @@ bool Driver::wr_config_line(unsigned num, const char* line, bool cache)
     char buffer[strlen(line)+1];
     strcpy(buffer, line);
     _config.update(buffer);
+    _config.cache(buffer, num);
   }
   snprintf(_writebuf, BUFFER_SIZE, "WCONFIG%04X%s", num, line);
   return command(_writebuf);
@@ -1162,15 +1292,19 @@ bool Driver::fetch_config()
   return true;
 }
 
-int Driver::find_config_line(const char* line)
+int Driver::find_config_line(const char* line, bool use_cache)
 {
   int line_num = -1;
-  char search[strlen(line) + 2];
-  snprintf(search, sizeof(search), "%s=", line);
-  for (int l=0; l < MAX_CONFIG_LINE; l++) {
-    if (!strncmp(search, rd_config_line(l), strlen(search))) {
-      line_num = l;
-      break;
+  if (use_cache) {
+    line_num = _config.get_cache(line);
+  } else {
+    char search[strlen(line) + 2];
+    snprintf(search, sizeof(search), "%s=", line);
+    for (int l=0; l < MAX_CONFIG_LINE; l++) {
+      if (!strncmp(search, rd_config_line(l), strlen(search))) {
+        line_num = l;
+        break;
+      }
     }
   }
 
@@ -1267,3 +1401,4 @@ bool Driver::lock_buffer(unsigned buffer_idx)
 #undef BUFFER_SIZE
 #undef BURST_LEN
 #undef LOAD_PARAM_MAX
+#undef XV_MOD_TYPE

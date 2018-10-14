@@ -35,7 +35,7 @@ namespace Pds {
       void resetCount();
       void setFrame(uint32_t);
 
-      void post(uint32_t, const void*);
+      void post(uint32_t, const void*, const void*);
 
       void set_frame_sz(unsigned);
 

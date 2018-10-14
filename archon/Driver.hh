@@ -136,10 +136,13 @@ namespace Pds {
         uint32_t frame_size() const;
         std::string line(unsigned num) const;
         std::string constant(const char* name) const;
+        int get_cache(std::string key) const;
         uint32_t parameter(const char* name) const;
+        bool cache(const char* line, unsigned num);
         bool update(char* buffer);
       private:
         std::string extract_sub_key(const char* num_entries, const char* entry_fmt, const char* key) const;
+        std::map<std::string, unsigned> _config_cache;
     };
 
     class FrameMetaData {
@@ -158,6 +161,7 @@ namespace Pds {
         Driver(const char* host, unsigned port);
         ~Driver();
         void connect();
+        void disconnect();
         bool configure(const char* filepath);
         bool configure(void* buffer, size_t size);
         bool command(const char* cmd);
@@ -175,20 +179,24 @@ namespace Pds {
         bool wait_frame(void* data, FrameMetaData* frame_meta=NULL, int timeout=0);
         bool start_acquisition(uint32_t num_frames=0);
         bool stop_acquisition();
+        bool wait_power_mode(PowerMode mode, int timeout=0);
         bool power_on();
         bool power_off();
         bool set_number_of_lines(unsigned num_lines, bool reload=true);
+        bool set_number_of_pixels(unsigned num_pixels, bool reload=true);
         bool set_vertical_binning(unsigned binning);
         bool set_horizontal_binning(unsigned binning);
         bool set_preframe_clear(unsigned num_lines);
         bool set_idle_clear(unsigned num_lines=1);
         bool set_integration_time(unsigned milliseconds);
         bool set_non_integration_time(unsigned milliseconds);
-        bool set_external_trigger(bool enable);
+        bool set_external_trigger(bool enable, bool reload=true);
         bool set_clock_at(unsigned ticks);
         bool set_clock_st(unsigned ticks);
         bool set_clock_stm1(unsigned ticks);
-        int find_config_line(const char* line);
+        bool set_bias(bool enabled, int channel, float voltage);
+        int find_config_line(const char* line, bool use_cache=true);
+        void timeout_waits(bool request_timeout=true);
         void set_frame_poll_interval(unsigned microseconds);
         const unsigned long long time();
         const char* rd_config_line(unsigned num);
@@ -211,6 +219,7 @@ namespace Pds {
         unsigned      _port;
         int           _socket;
         bool          _connected;
+        bool          _timeout_req;
         AcqMode       _acq_mode;
         unsigned char _msgref;
         unsigned      _readbuf_sz;

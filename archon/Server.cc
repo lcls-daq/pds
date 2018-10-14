@@ -9,6 +9,7 @@
 
 struct server_post {
   uint32_t frame;
+  const void* header;
   const void* data;
 };
 
@@ -43,7 +44,8 @@ int Server::fetch( char* payload, int flags )
     return -1;
   }
 
-  memcpy(xtc.payload(), info.data, sizeof(ArchonDataType) + _framesz);
+  memcpy(xtc.payload(), info.header, sizeof(ArchonDataType));
+  memcpy(xtc.payload() + sizeof(ArchonDataType), info.data, _framesz);
 
   // Check that the frame count is sequential
   if (_first_frame) {
@@ -81,10 +83,10 @@ void Server::setFrame(uint32_t frame)
   _first_frame = false;
 }
 
-void Server::post(uint32_t frame, const void* ptr)
+void Server::post(uint32_t frame, const void* hdr, const void* ptr)
 {
   void* ret_ptr;
-  struct server_post info = { frame, ptr };
+  struct server_post info = { frame, hdr, ptr };
   ::write(_pfd[1], &info, sizeof(info));
   // wait for the reciever to finish using the posted buffer
   ::read(_pfd[2], &ret_ptr, sizeof(ret_ptr));

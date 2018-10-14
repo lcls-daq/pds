@@ -160,17 +160,9 @@ namespace Pds {
 
           // Power on/off the CCD
           if (config->power() == ArchonConfigType::On) {
-            if (!_driver.power_on())
-                  _error = true;
+            _driver.power_on();
           } else {
-            if (!_driver.power_off())
-              _error = true;
-          }
-
-          if (_error) {
-            UserMessage* msg = new (&_occPool) UserMessage;
-            msg->append("Archon Config Error: failed to apply ccd power configuration.\n");
-            _mgr.appliance().post(msg);
+            _driver.power_off();
           }
 
           if (!_error) {
@@ -228,10 +220,10 @@ namespace Pds {
               if (!_driver.set_bias(config->bias(), config->biasChan(), config->biasVoltage())) {
                 printf("ConfigAction: failed to set sensor bias parameters!\n");
                 _error = true;
-              } else if (!_driver.set_vertical_binning(config->horizontalBinning())) {
+              } else if (!_driver.set_vertical_binning(config->verticalBinning())) {
                 printf("ConfigAction: failed to set vertical_binning parameter!\n");
                 _error = true;
-              } else if (!_driver.set_vertical_binning(config->horizontalBinning())) {
+              } else if (!_driver.set_horizontal_binning(config->horizontalBinning())) {
                 printf("ConfigAction: failed to set horizontal_binning parameter!\n");
                 _error = true;
               } else if (!_driver.set_number_of_lines(config->lines())) {

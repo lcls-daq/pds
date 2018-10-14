@@ -135,12 +135,14 @@ namespace Pds {
         uint32_t total_pixels() const;
         uint32_t frame_size() const;
         std::string line(unsigned num) const;
+        std::string parameter(const char* name) const;
         std::string constant(const char* name) const;
+        int get_parameter_num(const char* name) const;
         int get_cache(std::string key) const;
-        uint32_t parameter(const char* name) const;
         bool cache(const char* line, unsigned num);
         bool update(char* buffer);
       private:
+        int extract_sub_key_index(const char* num_entries, const char* entry_fmt, const char* key) const;
         std::string extract_sub_key(const char* num_entries, const char* entry_fmt, const char* key) const;
         std::map<std::string, unsigned> _config_cache;
     };
@@ -210,7 +212,7 @@ namespace Pds {
       private:
         ssize_t fetch_buffer(unsigned buffer_idx, void* data);
         bool lock_buffer(unsigned buffer_idx);
-        bool replace_param_line(const char* param, unsigned value);
+        bool replace_param_line(const char* param, unsigned value, bool use_cache=true);
         bool replace_config_line(const char* key, const char* newline);
         bool load_config_file(FILE* f);
       private:

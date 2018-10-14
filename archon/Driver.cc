@@ -540,9 +540,14 @@ int Config::get_cache(std::string key) const
   return value;
 }
 
-uint32_t Config::parameter(const char* name) const
+std::string Config::parameter(const char* name) const
 {
-  return strtoul(extract_sub_key("PARAMETERS", "PARAMETER%u", name).c_str(), NULL, 0);
+  return extract_sub_key("PARAMETERS", "PARAMETER%u", name);
+}
+
+int Config::get_parameter_num(const char* name) const
+{
+  return extract_sub_key_index("PARAMETERS", "PARAMETER%u", name);
 }
 
 bool Config::cache(const char* line, unsigned num)
@@ -566,6 +571,23 @@ bool Config::cache(const char* line, unsigned num)
 bool Config::update(char* buffer)
 {
   return parse(buffer) > 0;
+}
+
+int Config::extract_sub_key_index(const char* num_entries, const char* entry_fmt, const char* key) const
+{
+  char buffer[32];
+  char search[strlen(key) + 2];
+  int result = -1;
+  snprintf(search, sizeof(search), "%s=", key);
+  uint32_t num = get_value_as_uint32(num_entries);
+  for (unsigned i=0; i<num; i++) {
+    snprintf(buffer, sizeof(buffer), entry_fmt, i);
+    std::string value = get_value(buffer);
+    if(!strncmp(search, value.c_str(), strlen(search))) {
+      result = i;
+    }
+  }
+  return result;
 }
 
 std::string Config::extract_sub_key(const char* num_entries, const char* entry_fmt, const char* key) const
@@ -1190,20 +1212,27 @@ bool Driver::wr_config_line(unsigned num, const char* line, bool cache)
   return command(_writebuf);
 }
 
-bool Driver::replace_param_line(const char* param, unsigned value)
+bool Driver::replace_param_line(const char* param, unsigned value, bool use_cache)
 {
   char* par = NULL;
   int line_num = -1;
   char newline[MAX_CONFIG_LINE];
-  char search[strlen(param) + 2];
-  snprintf(search, sizeof(search), "%s=", param);
-  for (int l=0; l < MAX_CONFIG_LINE; l++) {
-    strncpy(newline, rd_config_line(l), MAX_CONFIG_LINE);
-    if (!strncmp("PARAMETER", newline, 9)) {
-      par = strchr(newline, '=');
-      if (!strncmp(search, ++par, strlen(search))) {
-        line_num = l;
-        break;
+  if (use_cache) {
+    snprintf(newline, sizeof(newline), "PARAMETER%d", _config.get_parameter_num(param));
+    line_num = _config.get_cache(newline);
+    par = newline + strlen(newline);
+    *par++ = '=';
+  } else {
+    char search[strlen(param) + 2];
+    snprintf(search, sizeof(search), "%s=", param);
+    for (int l=0; l < MAX_CONFIG_LINE; l++) {
+      strncpy(newline, rd_config_line(l), MAX_CONFIG_LINE);
+      if (!strncmp("PARAMETER", newline, 9)) {
+        par = strchr(newline, '=');
+        if (!strncmp(search, ++par, strlen(search))) {
+          line_num = l;
+          break;
+        }
       }
     }
   }

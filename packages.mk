@@ -18,12 +18,11 @@ packages += udpcam
 packages += lecroy
 packages += pvdaq
 packages += monreq
-packages += archon
 packages += gsc16ai
 packages += quadadc
 
 ifneq ($(findstring x86_64,$(tgt_arch)),)
-  packages += firewire jungfrau uxi
+  packages += firewire jungfrau uxi archon
 ##  No DDL
 #  packages += phasics
 else
@@ -35,7 +34,7 @@ endif
 #  packages += fexamp
 
 ifneq ($(findstring x86_64-rhel7,$(tgt_arch)),)
-  packages += zyla picam
+  packages += zyla picam archon
 endif
 
 

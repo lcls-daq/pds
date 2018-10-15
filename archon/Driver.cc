@@ -938,7 +938,7 @@ bool Driver::set_number_of_lines(unsigned num_lines, bool reload)
         return false;
     }
 
-    return load_parameter("Lines", num_lines);
+    return load_parameter("Lines", num_lines + 1);
   } else {
     return false;
   }
@@ -952,7 +952,7 @@ bool Driver::set_number_of_pixels(unsigned num_pixels, bool reload)
         return false;
     }
 
-    return load_parameter("Pixels", num_pixels);
+    return load_parameter("Pixels", num_pixels + 1);
   } else {
     return false;
   }

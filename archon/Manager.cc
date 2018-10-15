@@ -11,6 +11,7 @@
 #include "pds/service/GenericPool.hh"
 #include "pds/service/Task.hh"
 
+#include <math.h>
 
 namespace Pds {
   namespace Archon {
@@ -113,7 +114,11 @@ namespace Pds {
         _config_version(0),
         _config_max_size(0),
         _occPool(sizeof(UserMessage),1),
-        _error(false) {
+        _error(false),
+        _bias_cache(false),
+        _bias_cache_voltage(0.0),
+        _bias_cache_channel(ArchonConfigType::NV1)
+      {
         ArchonConfigType ac_max(ArchonConfigMaxFileLength);
         _config_max_size = ac_max._sizeof();
         _config_buf = new char[_config_max_size];
@@ -158,13 +163,6 @@ namespace Pds {
             }
           }
 
-          // Power on/off the CCD
-          if (config->power() == ArchonConfigType::On) {
-            _driver.power_on();
-          } else {
-            _driver.power_off();
-          }
-
           if (!_error) {
             const Pds::Archon::System& system = _driver.system();
             const Pds::Archon::Status& status = _driver.status();
@@ -199,6 +197,10 @@ namespace Pds {
                 printf("Power is good: %s\n", status.is_power_good() ? "yes" : "no");
                 printf("Overheated: %s\n", status.is_overheated() ? "yes" : "no");
                 printf("Backplane temp: %.3f\n", status.backplane_temp());
+                // Check the detector bias readback
+                float voltage, current;
+                if (_driver.get_bias(config->biasChan(), &voltage, &current))
+                  printf("Detector bias readback: %.1f V, %.3f mA\n", voltage, current);
               } else {
                 printf("Invalid status returned by controller!\n");
                 status.dump();
@@ -217,45 +219,64 @@ namespace Pds {
               UserMessage* msg = new (&_occPool) UserMessage("Archon Config Error: unable to retrieve controller status!\n");
               _mgr.appliance().post(msg);
             } else {
-              if (!_driver.set_bias(config->bias(), config->biasChan(), config->biasVoltage())) {
+              if ((_bias_cache != config->bias()) ||
+                  (_bias_cache_channel != config->biasChan()) ||
+                  (fabs(_bias_cache_voltage - config->biasVoltage()) > 0.05)) {
+                printf("Bias configuration changed - need to power off controller!\n");
+                _driver.power_off();
+              }
+              // Update the cached values
+              _bias_cache = config->bias();
+              _bias_cache_voltage = config->biasVoltage();
+              _bias_cache_channel = config->biasChan();
+              if (!_driver.set_bias(config->biasChan(), config->bias(), config->biasVoltage())) {
                 printf("ConfigAction: failed to set sensor bias parameters!\n");
                 _error = true;
-              } else if (!_driver.set_vertical_binning(config->verticalBinning())) {
-                printf("ConfigAction: failed to set vertical_binning parameter!\n");
-                _error = true;
-              } else if (!_driver.set_horizontal_binning(config->horizontalBinning())) {
-                printf("ConfigAction: failed to set horizontal_binning parameter!\n");
-                _error = true;
-              } else if (!_driver.set_number_of_lines(config->lines())) {
-                printf("ConfigAction: failed to set lines parameter!\n");
-                _error = true;
-              } else if (!_driver.set_number_of_pixels(config->pixels())) {
-                printf("ConfigAction: failed to set pixels parameter!\n");
-                _error = true;
-              } else if (!_driver.set_preframe_clear(config->preFrameSweepCount())) {
-                printf("ConfigAction: failed to set preframe_clear parameter!\n");
-                _error = true;
-              } else if (!_driver.set_integration_time(config->integrationTime())) {
-                printf("ConfigAction: failed to set integration_time parameter!\n");
-                _error = true;
-              } else if (!_driver.set_non_integration_time(config->nonIntegrationTime())) {
-                printf("ConfigAction: failed to set non_integration_time parameter!\n");
-                _error = true;
-              } else if (!_driver.set_idle_clear(config->idleSweepCount())) {
-                printf("ConfigAction: failed to set idle_clear parameter!\n");
-                _error = true;
-              } else if (!_driver.set_external_trigger(config->readoutMode() == ArchonConfigType::Triggered)) {
-                printf("ConfigAction: failed to set external_trigger parameter!\n");
-                _error = true;
-              } else if (!_driver.set_clock_at(config->at())) {
-                printf("ConfigAction: failed to set clock_at parameter!\n");
-                _error = true;
-              } else if (!_driver.set_clock_st(config->st())) {
-                printf("ConfigAction: failed to set clock_st parameter!\n");
-                _error = true;
-              } else if (!_driver.set_clock_stm1(config->stm1())) {
-                printf("ConfigAction: failed to set clock_stm1 parameter!\n");
-                _error = true;
+              } else {
+                // Power on/off the CCD
+                if (config->power() == ArchonConfigType::On) {
+                  _driver.power_on();
+                } else {
+                  _driver.power_off();
+                }
+
+                if (!_driver.set_vertical_binning(config->verticalBinning())) {
+                  printf("ConfigAction: failed to set vertical_binning parameter!\n");
+                  _error = true;
+                } else if (!_driver.set_horizontal_binning(config->horizontalBinning())) {
+                  printf("ConfigAction: failed to set horizontal_binning parameter!\n");
+                  _error = true;
+                } else if (!_driver.set_number_of_lines(config->lines())) {
+                  printf("ConfigAction: failed to set lines parameter!\n");
+                  _error = true;
+                } else if (!_driver.set_number_of_pixels(config->pixels())) {
+                  printf("ConfigAction: failed to set pixels parameter!\n");
+                  _error = true;
+                } else if (!_driver.set_preframe_clear(config->preFrameSweepCount())) {
+                  printf("ConfigAction: failed to set preframe_clear parameter!\n");
+                  _error = true;
+                } else if (!_driver.set_integration_time(config->integrationTime())) {
+                  printf("ConfigAction: failed to set integration_time parameter!\n");
+                  _error = true;
+                } else if (!_driver.set_non_integration_time(config->nonIntegrationTime())) {
+                  printf("ConfigAction: failed to set non_integration_time parameter!\n");
+                  _error = true;
+                } else if (!_driver.set_idle_clear(config->idleSweepCount())) {
+                  printf("ConfigAction: failed to set idle_clear parameter!\n");
+                  _error = true;
+                } else if (!_driver.set_external_trigger(config->readoutMode() == ArchonConfigType::Triggered)) {
+                  printf("ConfigAction: failed to set external_trigger parameter!\n");
+                  _error = true;
+                } else if (!_driver.set_clock_at(config->at())) {
+                  printf("ConfigAction: failed to set clock_at parameter!\n");
+                  _error = true;
+                } else if (!_driver.set_clock_st(config->st())) {
+                  printf("ConfigAction: failed to set clock_st parameter!\n");
+                  _error = true;
+                } else if (!_driver.set_clock_stm1(config->stm1())) {
+                  printf("ConfigAction: failed to set clock_stm1 parameter!\n");
+                  _error = true;
+                }
               }
 
               if (_error) {
@@ -263,17 +284,59 @@ namespace Pds {
                 _mgr.appliance().post(msg);
               } else {
                 _reader.set_frame(config_rbv.pixels_per_line(), config_rbv.linecount(), config_rbv.bytes_per_pixel()*8, 0);
-                // Waiting for ccd power to come on - timeout after 2000 ms
-                if(config->power() == ArchonConfigType::On) {
-                  printf("Waiting for the CCD to finish powering on\n");
-                  if(!_driver.wait_power_mode(Pds::Archon::On, 2000)) {
-                    printf("ConfigAction: CCD power not on but was requested!\n");
+                // Waiting for ccd power tp reach desired state - timeout after 2000 ms
+                switch (config->power()) {
+                  case ArchonConfigType::On:
+                    printf("Waiting for the CCD to finish powering on\n");
+                    if(!_driver.wait_power_mode(Pds::Archon::On, 2000)) {
+                      printf("ConfigAction: CCD power not on but was requested!\n");
+                      _error = true;
+
+                      UserMessage* msg = new (&_occPool) UserMessage("Archon Config Error: CCD power not on!\n");
+                      _mgr.appliance().post(msg);
+                    }
+                    break;
+                  case ArchonConfigType::Off:
+                    printf("Waiting for the CCD to finish powering off\n");
+                    if(!_driver.wait_power_mode(Pds::Archon::Off, 2500)) {
+                      printf("ConfigAction: CCD power not off but was requested!\n");
+                      _error = true;
+
+                      UserMessage* msg = new (&_occPool) UserMessage("Archon Config Error: CCD power not off!\n");
+                      _mgr.appliance().post(msg);
+                    }
+                    break;
+                  default:
+                    printf("ConfigAction: unknown power state requested!\n");
                     _error = true;
 
-                    UserMessage* msg = new (&_occPool) UserMessage("Archon Config Error: CCD power not on!\n");
+                    UserMessage* msg = new (&_occPool) UserMessage("Archon Config Error: unknown CCD power state requested!\n");
                     _mgr.appliance().post(msg);
-                  }
+                    break;
                 }
+              }
+            }
+            // Poll the contoller one last time for status
+            if (_driver.fetch_status()) {
+              if(status.is_valid()) {
+                printf("Valid status returned by controller\n");
+                printf("Number of module entries: %d\n", status.num_module_entries());
+                printf("System status update count: %u\n", status.count());
+                printf("Power status: %s\n", status.power_str());
+                printf("Power is good: %s\n", status.is_power_good() ? "yes" : "no");
+                printf("Overheated: %s\n", status.is_overheated() ? "yes" : "no");
+                printf("Backplane temp: %.3f\n", status.backplane_temp());
+                // Check the detector bias readback
+                float voltage, current;
+                if (_driver.get_bias(config->biasChan(), &voltage, &current))
+                  printf("Detector bias readback: %.1f V, %.3f mA\n", voltage, current);
+              } else {
+                printf("Invalid status returned by controller!\n");
+                status.dump();
+                _error = true;
+
+                UserMessage* msg = new (&_occPool) UserMessage("Archon Config Error: unable to retrieve controller status!\n");
+                _mgr.appliance().post(msg);
               }
             }
           }
@@ -298,6 +361,9 @@ namespace Pds {
       unsigned          _config_max_size;
       GenericPool       _occPool;
       bool              _error;
+      bool              _bias_cache;
+      float             _bias_cache_voltage;
+      ArchonConfigType::BiasChannelId  _bias_cache_channel;
     };
 
     class EnableAction : public Action {

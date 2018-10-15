@@ -437,6 +437,23 @@ double Status::backplane_temp() const
   return get_value_as_double("BACKPLANE_TEMP");
 }
 
+double Status::get_module_voltage(unsigned module_num, const char* module_name, int channel) const
+{
+  return get_module_readback(module_num, module_name, channel, "V");
+}
+
+double Status::get_module_current(unsigned module_num, const char* module_name, int channel) const
+{
+  return get_module_readback(module_num, module_name, channel, "I");
+}
+
+double Status::get_module_readback(unsigned module_num, const char* module_name, int channel, const char* type) const
+{
+  char buffer[32];
+  snprintf(buffer, sizeof(buffer), "MOD%d/%s_%s%d", module_num, module_name, type, abs(channel));
+  return get_value_as_double(buffer);
+}
+
 Config::Config() :
   OutputParser("\n")
 {}
@@ -922,12 +939,26 @@ bool Driver::wait_power_mode(PowerMode mode, int timeout)
 
 bool Driver::power_on()
 {
-  return command("POWERON");
+  if (fetch_status()) {
+    if (_status.power() == Pds::Archon::On)
+      return true;
+    else
+      return command("POWERON");
+  } else {
+    return false;
+  }
 }
 
 bool Driver::power_off()
 {
-  return command("POWEROFF");
+  if (fetch_status()) {
+    if (_status.power() == Pds::Archon::Off)
+      return true;
+    else
+      return command("POWEROFF");
+  } else {
+    return false;
+  }
 }
 
 bool Driver::set_number_of_lines(unsigned num_lines, bool reload)
@@ -938,7 +969,7 @@ bool Driver::set_number_of_lines(unsigned num_lines, bool reload)
         return false;
     }
 
-    return load_parameter("Lines", num_lines + 1);
+    return load_parameter("Lines", num_lines);
   } else {
     return false;
   }
@@ -1017,14 +1048,14 @@ bool Driver::set_clock_stm1(unsigned ticks)
   return load_parameter("STM1", ticks);
 }
 
-bool Driver::set_bias(bool enabled, int channel, float voltage)
+bool Driver::set_bias(int channel, bool enabled, float voltage, bool fetch)
 {
   char buffer[32];
   int module = -1;
   size_t base_len;
   char* modify = buffer;
 
-  if (fetch_system()) {
+  if (!fetch || fetch_system()) {
     for (int i=0; i<_system.num_modules(); i++) {
       if (_system.module_type(i) == XV_MOD_TYPE) {
         module = i;
@@ -1049,6 +1080,31 @@ bool Driver::set_bias(bool enabled, int channel, float voltage)
 
       snprintf(buffer, sizeof(buffer), "APPLYMOD%02X", module);
       return command(buffer);
+    }
+  }
+
+  return false;
+}
+
+bool Driver::get_bias(int channel, float* voltage, float* current, bool fetch)
+{
+  char buffer[32];
+  int module = -1;
+  if (!fetch || (fetch_system() && fetch_status())) {
+    for (int i=0; i<_system.num_modules(); i++) {
+      if (_system.module_type(i) == XV_MOD_TYPE) {
+        module = i;
+        break;
+      }
+    }
+
+    if (module > 0) {
+      snprintf(buffer, sizeof(buffer), "XV%s", channel>0 ? "P" : "N");
+      if (voltage)
+        *voltage = _status.get_module_voltage(module, buffer, abs(channel));
+      if (current)
+        *current = _status.get_module_current(module, buffer, abs(channel));
+      return true;
     }
   }
 

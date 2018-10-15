@@ -111,12 +111,15 @@ namespace Pds {
         PowerMode power() const;
         const char* power_str() const;
         double backplane_temp() const;
+        double get_module_voltage(unsigned module_num, const char* module_name, int channel) const;
+        double get_module_current(unsigned module_num, const char* module_name, int channel) const;
         bool is_power_good() const;
         bool is_overheated() const;
         bool update(char* buffer);
       protected:
         static const int NUM_ENTRIES = 31;
       private:
+        double get_module_readback(unsigned module_num, const char* module_name, int channel, const char* type) const;
         int _num_module_entries;
     };
 
@@ -196,7 +199,8 @@ namespace Pds {
         bool set_clock_at(unsigned ticks);
         bool set_clock_st(unsigned ticks);
         bool set_clock_stm1(unsigned ticks);
-        bool set_bias(bool enabled, int channel, float voltage);
+        bool set_bias(int channel, bool enabled, float voltage, bool fetch=false);
+        bool get_bias(int channel, float* voltage, float* current, bool fetch=false);
         int find_config_line(const char* line, bool use_cache=true);
         void timeout_waits(bool request_timeout=true);
         void set_frame_poll_interval(unsigned microseconds);

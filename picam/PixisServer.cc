@@ -1292,6 +1292,10 @@ int PixisServer::waitForNewFrameAvailable()
     return ERROR_SDK_FUNC_FAIL;
   }
 
+  // Data returned by Picam_WaitForAcquisitionUpdate is only valid until the next call, so memcpy the data first!
+  uint8_t* pImage = (uint8_t*) _pDgOut + _iFrameHeaderSize;
+  memcpy(pImage, pData, _iImageWidth*_iImageHeight * 2);
+
   // another wait to clean the acquisition status (for PI-CAM library)
   unsigned char* pDummyData;
   iError = piWaitAcquisitionUpdate(_hCam, _iMaxReadoutTime, true, true, &pDummyData);
@@ -1303,9 +1307,6 @@ int PixisServer::waitForNewFrameAvailable()
 
     return ERROR_SDK_FUNC_FAIL;
   }
-
-  uint8_t* pImage = (uint8_t*) _pDgOut + _iFrameHeaderSize;
-  memcpy(pImage, pData, _iImageWidth*_iImageHeight * 2);
 
   timespec tsWaitEnd;
   clock_gettime( CLOCK_REALTIME, &tsWaitEnd );

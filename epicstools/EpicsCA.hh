@@ -32,7 +32,8 @@ namespace Pds_Epics {
     EpicsCAChannel(const char* channelName,
                    bool        monitor,
                    EpicsCA&    proxy,
-                   const int   maxElements=0);
+                   const int   maxElements=0,
+                   bool        useStrEnum=false);
     ~EpicsCAChannel();
     
     void connect        (void);
@@ -58,13 +59,14 @@ namespace Pds_Epics {
     ConnStatus  _connected;
     bool        _monitor;
     bool        _monitored;
+    bool        _useStrEnum;
     EpicsCA&    _proxy;
   };
 
   //==============================================================================
   class EpicsCA {
   public:
-    EpicsCA(const char *channelName, PVMonitorCb*, const int maxElements=0);
+    EpicsCA(const char *channelName, PVMonitorCb*, const int maxElements=0, bool useStrEnum=false);
     virtual ~EpicsCA();
   public:  
     virtual void  connected(bool);

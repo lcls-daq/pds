@@ -55,8 +55,9 @@ using namespace Pds_Epics;
 
 EpicsCA::EpicsCA(const char*   channelName,
                  PVMonitorCb*  monitor,
-                 const int maxElements) :
-  _channel(channelName,monitor!=0,*this,maxElements),
+                 const int     maxElements,
+                 bool          useStrEnum) :
+  _channel(channelName,monitor!=0,*this,maxElements,useStrEnum),
   _monitor(monitor),
   _pvdata(new char[1]),
   _pvsiz(0),
@@ -126,11 +127,13 @@ void  EpicsCA::putStatus   (bool s) {}
 EpicsCAChannel::EpicsCAChannel(const char* channelName,
                                bool        monitor,
                                EpicsCA&    proxy,
-                               const int   maxElements) :
+                               const int   maxElements,
+                               bool        useStrEnum) :
   _maxElements(maxElements),
   _connected  (NotConnected),
   _monitor    (monitor),
   _monitored  (false),
+  _useStrEnum (useStrEnum),
   _proxy      (proxy)
 {
   snprintf(_epicsName, 64, channelName);
@@ -211,7 +214,7 @@ void EpicsCAChannel::connStatusCallback(struct connection_handler_args chArgs)
 
     int dbrType = dbf_type_to_DBR_TIME(dbfType);
     if (dbr_type_is_ENUM(dbrType))
-      dbrType = DBR_TIME_INT;
+      dbrType = _useStrEnum ? DBR_TIME_STRING : DBR_TIME_INT;
     
     _type = dbrType;
     _nelements = ca_element_count(_epicsChanID);

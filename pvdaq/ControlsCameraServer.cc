@@ -2,6 +2,7 @@
 #include "pds/pvdaq/ConfigMonitor.hh"
 #include "pds/pvdaq/CamPvServer.hh"
 #include "pds/config/RayonixConfigType.hh"
+#include "pds/config/StreakConfigType.hh"
 #include "pds/config/EpicsCamConfigType.hh"
 #include "pds/config/EpicsCamDataType.hh"
 #include "pds/config/FrameFexConfigType.hh"
@@ -14,6 +15,7 @@
 static const unsigned EB_EVT_EXTRA = 0x10000;
 static const unsigned NPRINT = 20;
 static const unsigned PV_LEN = 64;
+static const unsigned STRK_FPATH_LEN = 10000;
 
 #define CREATE_PV_NAME(pvname, fmt, ...)                \
   snprintf(pvname, PV_LEN, fmt, pvbase, ##__VA_ARGS__);
@@ -24,18 +26,31 @@ static const unsigned PV_LEN = 64;
   pv = new ConfigServer(pvname, _configMonitor);        \
   _config_pvs.push_back(pv);
 
+#define CREATE_ENUM_PV(pv, fmt, ...)                    \
+  snprintf(pvname, PV_LEN, fmt, pvbase, ##__VA_ARGS__); \
+  printf("Creating EpicsCA(%s)\n",pvname);              \
+  pv = new ConfigServer(pvname, _configMonitor, true);  \
+  _config_pvs.push_back(pv);
+
 #define CHECK_PV(pv, val)                                         \
   if ((!pv->connected()) || (pv->fetch(&val, sizeof(val)) < 0)) { \
     printf("Error retrieving value of PV: %s\n", pv->name());     \
     error = true;                                                 \
   }
 
-#define CHECK_STR_PV(pv, str, len)                              \
-    if ((!pv->connected()) || (pv->fetch_str(str, len) < 0)) {  \
-      printf("Error retrieving value of PV: %s\n", pv->name()); \
-      str[0] = '\0';                                            \
-      error = true;                                             \
-    }
+#define CHECK_LONG_STR_PV(pv, str, len)                       \
+  if ((!pv->connected()) || (pv->fetch(str, len) < 0)) {      \
+    printf("Error retrieving value of PV: %s\n", pv->name()); \
+    str[0] = '\0';                                            \
+    error = true;                                             \
+  }
+
+#define CHECK_STR_PV(pv, str, len)                            \
+  if ((!pv->connected()) || (pv->fetch_str(str, len) < 0)) {  \
+    printf("Error retrieving value of PV: %s\n", pv->name()); \
+    str[0] = '\0';                                            \
+    error = true;                                             \
+  }
 
 using namespace Pds::PvDaq;
 
@@ -64,13 +79,21 @@ ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
   _rnx_bin    (0),
   _rnx_trig   (0),
   _rnx_mode   (0),
+  _strk_time  (0),
+  _strk_mode  (0),
+  _strk_gate  (0),
+  _strk_shut  (0),
+  _strk_trig  (0),
+  _strk_fto   (0),
+  _strk_path  (0),
   _rnx_bin_val(0),
   _rnx_trig_val(0),
   _rnx_mode_val(0),
+  _strk_fto_val(0),
   _width      (0),
   _height     (0),
   _depth      (0),
-  _offset     (32),
+  _offset     (0),
   _roi_x_org  (0),
   _roi_x_len  (0),
   _roi_x_end  (0),
@@ -84,6 +107,12 @@ ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
   _manufacturer_str (new char[EpicsCamConfigType::DESC_CHAR_MAX]),
   _model_str        (new char[EpicsCamConfigType::DESC_CHAR_MAX]),
   _image_pvname     (new char[PV_LEN]),
+  _strk_time_str    (new char[PV_LEN]),
+  _strk_mode_str    (new char[PV_LEN]),
+  _strk_gate_str    (new char[PV_LEN]),
+  _strk_shut_str    (new char[PV_LEN]),
+  _strk_trig_str    (new char[PV_LEN]),
+  _strk_path_str    (new char[STRK_FPATH_LEN]),
   _enabled    (false),
   _configured (false),
   _scale      (flags & (1<<SCALEPV)),
@@ -176,6 +205,28 @@ ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
       CREATE_PV(_rnx_trig, "%s:TriggerMode");
       // Rayonix readout mode pv
       CREATE_PV(_rnx_mode, "%s:ReadoutMode");
+    } else if (info.device() == Pds::DetInfo::StreakC7700) {
+      // Streak camera time range pv
+      CREATE_ENUM_PV(_strk_time, "%s:TimeRange_RBV");
+      // Streak camera mode pv
+      CREATE_ENUM_PV(_strk_mode, "%s:TriggerMode_RBV");
+      // Streak camera gate mode pv
+      CREATE_ENUM_PV(_strk_gate, "%s:GateMode_RBV");
+      // Streak camera shutter mode pv
+      CREATE_ENUM_PV(_strk_shut, "%s:Shutter_RBV");
+      // Streak camera tigger mode pv
+      CREATE_ENUM_PV(_strk_trig, "%s:ImageMode_RBV");
+      // Streak camera focus time over pv
+      CREATE_PV(_strk_fto, "%s:FocusTimeOver_RBV");
+      // Streak camera configuration filepath pv
+      CREATE_PV(_strk_path, "%s:ScalingFilePath");
+    }
+
+    if (_scale) {
+      // xscale config pv
+      CREATE_PV(_xscale, "%s:ScaleX_RBV");
+      // yscale config pv
+      CREATE_PV(_yscale, "%s:ScaleY_RBV");
     }
   }
 
@@ -192,6 +243,12 @@ ControlsCameraServer::~ControlsCameraServer()
   delete[] _manufacturer_str;
   delete[] _model_str;
   delete[] _image_pvname;
+  delete[] _strk_time_str;
+  delete[] _strk_mode_str;
+  delete[] _strk_path_str;
+  delete[] _strk_gate_str;
+  delete[] _strk_shut_str;
+  delete[] _strk_trig_str;
   if (_image)
     delete _image;
   if (_nrows)
@@ -224,6 +281,20 @@ ControlsCameraServer::~ControlsCameraServer()
     delete _rnx_trig;
   if (_rnx_mode)
     delete _rnx_mode;
+  if (_strk_time)
+    delete _strk_time;
+  if (_strk_mode)
+    delete _strk_mode;
+  if (_strk_gate)
+    delete _strk_gate;
+  if (_strk_shut)
+    delete _strk_shut;
+  if (_strk_trig)
+    delete _strk_trig;
+  if (_strk_fto)
+    delete _strk_fto;
+  if (_strk_path)
+    delete _strk_path;
   for(unsigned i=0; i<_pool.size(); i++) {
     if (_pool[i])
       delete[] _pool[i];
@@ -347,7 +418,15 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
                                                          TimeStamp(0,0,0,0));
     bool error = false;
     uint32_t rnx_trig_ddl = 0;
+    uint64_t strk_time_ddl = 0;
+    double calib[StreakConfigType::NumCalibConstants];
+    memset(calib, 0, sizeof(calib));
     RayonixConfigType::ReadoutMode rnx_mode_ddl = RayonixConfigType::Unknown;
+    StreakConfigType::DeviceMode strk_mode_ddl = StreakConfigType::Focus;
+    StreakConfigType::GateMode strk_gate_ddl = StreakConfigType::Normal;
+    StreakConfigType::ShutterMode strk_shut_ddl = StreakConfigType::Closed;
+    StreakConfigType::TriggerMode strk_trig_ddl = StreakConfigType::Single;
+    StreakConfigType::CalibScale strk_scale_ddl = StreakConfigType::Seconds;
     printf("Retrieving camera configuration information from epics...\n");
     CHECK_PV(_ncols,    _width);
     CHECK_PV(_nrows,    _height);
@@ -398,6 +477,131 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
           break;
       }
     }
+    if (_strk_time) { // Not all cameras have this!
+      CHECK_STR_PV(_strk_time, _strk_time_str, EpicsCamConfigType::DESC_CHAR_MAX);
+      char* unit;
+      double time_val = strtod(_strk_time_str, &unit);
+      if (unit) {
+        unit++;
+        if (!strcmp(unit, "ns")) {
+          strk_time_ddl = (uint64_t) (time_val * 1e3);
+        } else if (!strcmp(unit, "us")) {
+          strk_time_ddl = (uint64_t) (time_val * 1e6);
+        } else if (!strcmp(unit, "ms")) {
+          strk_time_ddl = (uint64_t) (time_val * 1e9);
+        } else if (!strcmp(unit, "s")) {
+          strk_time_ddl = (uint64_t) (time_val * 1e12);
+        } else {
+          printf("Error: failed to parse streak camera time range units: %s\n", _strk_time_str);
+          error = true;
+        }
+      } else {
+        printf("Error: failed to parse streak camera time range: %s\n", _strk_time_str);
+        error = true;
+      }
+    }
+    if (_strk_mode) { // Not all cameras have this!
+      CHECK_STR_PV(_strk_mode, _strk_mode_str, EpicsCamConfigType::DESC_CHAR_MAX);
+      // Convert to DDL value scheme
+      if (!strcmp(_strk_mode_str, "Focus")) {
+        strk_mode_ddl = StreakConfigType::Focus;
+      } else if (!strcmp(_strk_mode_str, "Operate")) {
+        strk_mode_ddl = StreakConfigType::Operate;
+      } else {
+        printf("Error: failed to parse streak camera mode enum value: %s\n", _strk_mode_str);
+        error = true;
+      }
+    }
+    if (_strk_gate) { // Not all cameras have this!
+      CHECK_STR_PV(_strk_gate, _strk_gate_str, EpicsCamConfigType::DESC_CHAR_MAX);
+      // Convert to DDL value scheme
+      if (!strcmp(_strk_gate_str, "Normal")) {
+        strk_gate_ddl = StreakConfigType::Normal;
+      } else if (!strcmp(_strk_gate_str, "Gate")) {
+        strk_gate_ddl = StreakConfigType::Gate;
+      } else if (!strcmp(_strk_gate_str, "Open Fixed")) {
+        strk_gate_ddl = StreakConfigType::OpenFixed;
+      } else {
+        printf("Error: failed to parse streak camera gate enum value: %s\n", _strk_gate_str);
+        error = true;
+      }
+    }
+    if (_strk_shut) { // Not all cameras have this!
+      CHECK_STR_PV(_strk_shut, _strk_shut_str, EpicsCamConfigType::DESC_CHAR_MAX);
+      // Convert to DDL value scheme
+      if (!strcmp(_strk_shut_str, "Closed")) {
+        strk_shut_ddl = StreakConfigType::Closed;
+      } else if (!strcmp(_strk_shut_str, "Open")) {
+        strk_shut_ddl = StreakConfigType::Open;
+      } else {
+        printf("Error: failed to parse streak camera shutter enum value: %s\n", _strk_shut_str);
+        error = true;
+      }
+    }
+    if (_strk_trig) { // Not all cameras have this!
+      CHECK_STR_PV(_strk_trig, _strk_trig_str, EpicsCamConfigType::DESC_CHAR_MAX);
+      // Convert to DDL value scheme
+      if (!strcmp(_strk_trig_str, "Single")) {
+        strk_trig_ddl = StreakConfigType::Single;
+      } else if (!strcmp(_strk_trig_str, "Continuous")) {
+        strk_trig_ddl = StreakConfigType::Continuous;
+      } else {
+        printf("Error: failed to parse streak camera trigger enum value: %s\n", _strk_shut_str);
+        error = true;
+      }
+    }
+    if (_strk_fto) { // Not all cameras have this!
+      CHECK_PV(_strk_fto, _strk_fto_val);
+    }
+    if (_strk_path) { // Not all cameras have this!
+      CHECK_LONG_STR_PV(_strk_path, _strk_path_str, STRK_FPATH_LEN);
+      FILE* f = fopen(_strk_path_str, "r");
+      if (f) {
+        bool failed = true;
+        int skip = 3;
+        size_t line_sz = 1024;
+        char* line = (char *)malloc(line_sz);
+
+        while (getline(&line, &line_sz, f) != -1) {
+          if (skip) {
+            skip--;
+          } else {
+            char* token = strtok(line, ",");
+            if (token && !strcmp(token, _strk_time_str)) {
+              int pos = 0;
+              token = strtok(NULL, ",");
+              while (token != NULL) {
+                if (pos == 0) {
+                  if (!strcmp(token, "ns"))
+                    strk_scale_ddl = StreakConfigType::Nanoseconds;
+                  else if (!strcmp(token, "us"))
+                    strk_scale_ddl = StreakConfigType::Microseconds;
+                  else if (!strcmp(token, "ms"))
+                    strk_scale_ddl = StreakConfigType::Milliseconds;
+                  else if (!strcmp(token, "s"))
+                    strk_scale_ddl = StreakConfigType::Seconds;
+                } else if((pos > 1) && (pos < (StreakConfigType::NumCalibConstants + 2))) {
+                  calib[pos - 2] = strtod(token, NULL);
+                }
+                token = strtok(NULL, ",");
+                pos++;
+              }
+              failed = (pos != (StreakConfigType::NumCalibConstants + 2));
+            }
+          }
+        }
+
+        if (failed) {
+          printf("Error: failed to parse streak camera calibration file: %s\n", _strk_path_str);
+          error = true;
+        }
+
+        if (line) free(line);
+      } else {
+        printf("Error: failed to open streak camera calibration file: %s\n", _strk_path_str);
+        error = true;
+      }
+    }
 
     CHECK_STR_PV(_model,        _model_str,         EpicsCamConfigType::DESC_CHAR_MAX);
     CHECK_STR_PV(_manufacturer, _manufacturer_str,  EpicsCamConfigType::DESC_CHAR_MAX);
@@ -437,36 +641,55 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
              "  yscale:           %f\n",
              _xscale_val, _yscale_val);
     }
+    if (_info.device() == Pds::DetInfo::StreakC7700) {
+      printf("  time range:       %s\n"
+             "  calib scale:      %d\n"
+             "  calib constants: ",
+             _strk_time_str,
+             strk_scale_ddl);
+      for (int i=0; i<StreakConfigType::NumCalibConstants; i++) {
+        printf(" %g", calib[i]);
+      }
+      printf("\n");
+    }
 
     Pds::Camera::FrameCoord roi_beg(_roi_x_org, _roi_x_end);
     Pds::Camera::FrameCoord roi_end(_roi_y_org, _roi_y_end);
 
+    Pds::Xtc* xtc;
+
     if (_info.device() == Pds::DetInfo::Rayonix) {
-      Pds::Xtc* xtc = new ((char*)dg->xtc.next())
+      xtc = new ((char*)dg->xtc.next())
         Pds::Xtc(_rayonixConfigType, _xtc.src );
       new (xtc->alloc(sizeof(RayonixConfigType)))
         RayonixConfigType((uint8_t) _rnx_bin_val, (uint8_t) _rnx_bin_val, 0, (uint32_t) _exposure_val, rnx_trig_ddl, 0, 0, rnx_mode_ddl, _model_str);
       dg->xtc.alloc(xtc->extent);
+    } else if (_info.device() == Pds::DetInfo::StreakC7700) {
+      xtc = new ((char*)dg->xtc.next())
+        Pds::Xtc(_streakConfigType, _xtc.src );
+      new (xtc->alloc(sizeof(StreakConfigType)))
+        StreakConfigType(strk_time_ddl, strk_mode_ddl, strk_gate_ddl, (uint32_t) _gain_val, strk_shut_ddl, strk_trig_ddl, _strk_fto_val, _exposure_val, strk_scale_ddl, calib);
+      dg->xtc.alloc(xtc->extent);
     } else {
-      Pds::Xtc* xtc = new ((char*)dg->xtc.next())
+      xtc = new ((char*)dg->xtc.next())
         Pds::Xtc(_epicsCamConfigType, _xtc.src );
       new (xtc->alloc(sizeof(EpicsCamConfigType)))
         EpicsCamConfigType(_width, _height, _depth, EpicsCamConfigType::Mono, _exposure_val, _gain_val, _manufacturer_str, _model_str);
       dg->xtc.alloc(xtc->extent);
+    }
 
+    xtc = new ((char*)dg->xtc.next())
+      Pds::Xtc(_frameFexConfigType, _xtc.src);
+    new (xtc->alloc(sizeof(FrameFexConfigType)))
+      FrameFexConfigType(FrameFexConfigType::FullFrame, 1, FrameFexConfigType::NoProcessing, roi_beg, roi_end, 0, 0, 0);
+    dg->xtc.alloc(xtc->extent);
+
+    if (_scale) {
       xtc = new ((char*)dg->xtc.next())
-        Pds::Xtc(_frameFexConfigType, _xtc.src);
-      new (xtc->alloc(sizeof(FrameFexConfigType)))
-        FrameFexConfigType(FrameFexConfigType::FullFrame, 1, FrameFexConfigType::NoProcessing, roi_beg, roi_end, 0, 0, 0);
+        Pds::Xtc(_pimImageConfigType, _xtc.src );
+      new (xtc->alloc(sizeof(PimImageConfigType)))
+        PimImageConfigType(_xscale_val, _yscale_val);
       dg->xtc.alloc(xtc->extent);
-
-      if (_scale) {
-        xtc = new ((char*)dg->xtc.next())
-          Pds::Xtc(_pimImageConfigType, _xtc.src );
-        new (xtc->alloc(sizeof(PimImageConfigType)))
-          PimImageConfigType(_xscale_val, _yscale_val);
-        dg->xtc.alloc(xtc->extent);
-      }
     }
 
     _frame_sz = _width * _height * ((_depth+7)/8);
@@ -514,5 +737,7 @@ void ControlsCameraServer::config_updated()
 
 #undef CREATE_PV_NAME
 #undef CREATE_PV
+#undef CREATE_ENUM_PV
 #undef CHECK_PV
+#undef CHECK_LONG_STR_PV
 #undef CHECK_STR_PV

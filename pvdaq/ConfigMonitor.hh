@@ -20,6 +20,7 @@ namespace Pds {
     class ConfigServer: public Pds_Epics::EpicsCA {
     public:
       ConfigServer(const char*, ConfigMonitor*);
+      ConfigServer(const char*, ConfigMonitor*, bool);
       ~ConfigServer();
     public:
       const char* name() const;

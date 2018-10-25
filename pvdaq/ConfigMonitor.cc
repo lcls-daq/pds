@@ -35,6 +35,13 @@ ConfigServer::ConfigServer(const char* name, ConfigMonitor* cfgmon) :
   strcpy(_name, name);
 }
 
+ConfigServer::ConfigServer(const char* name, ConfigMonitor* cfgmon, bool is_enum) :
+  Pds_Epics::EpicsCA (name, cfgmon, 0, is_enum),
+  _name(new char[strlen(name)+1])
+{
+  strcpy(_name, name);
+}
+
 ConfigServer::~ConfigServer()
 {
   delete[] _name;

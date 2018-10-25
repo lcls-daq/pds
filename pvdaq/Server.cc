@@ -80,6 +80,7 @@ Server* Server::lookup(const char*    pvbase,
   case Pds::DetInfo::Quartz4A150:
   case Pds::DetInfo::Rayonix:
   case Pds::DetInfo::ControlsCamera:
+  case Pds::DetInfo::StreakC7700:
     s = new ControlsCameraServer(pvbase,pvbase_alt,info,max_event_size,flags);
     break;
   default:

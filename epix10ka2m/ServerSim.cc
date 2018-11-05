@@ -1,6 +1,7 @@
 #include "pds/epix10ka2m/ServerSim.hh"
 #include "pds/epix10ka2m/Configurator.hh"
 #include "pds/pgp/DataImportFrame.hh"
+#include "pds/xtc/InDatagram.hh"
 
 using namespace Pds::Epix10ka2m;
 
@@ -59,7 +60,7 @@ void     ServerSim::allocated  (const Allocate& a)
 { if (_hdw) _hdw->allocated(a); }
 
 unsigned ServerSim::configure(const Pds::Epix::PgpEvrConfig& evr,
-                              const Epix10kaQuadConfigType& cfg, 
+                              const Epix10kaQuadConfig& cfg, 
                               Pds::Epix::Config10ka* elem,
                               bool forceConfig)
 {
@@ -87,4 +88,10 @@ void     ServerSim::post(char* payload, int payloadSize)
 {
   write(_pfd[1], &payload    , sizeof(payload));
   write(_pfd[1], &payloadSize, sizeof(payloadSize));
+}
+
+void ServerSim::recordExtraConfig(InDatagram* in) const
+{
+  // if (_samplerConfig)
+  //   in->insert(_xtcConfig, _samplerConfig);
 }

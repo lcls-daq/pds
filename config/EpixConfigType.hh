@@ -46,11 +46,16 @@ static Pds::TypeId _epix10kaConfigType(Pds::TypeId::Id_Epix10kaConfig,
                                     Epix10kaConfigType::Version);
 
 typedef Pds::Epix::Config10ka2MV1   Epix10ka2MConfigType;
-typedef Pds::Epix::Config10kaQuadV1 Epix10kaQuadConfigType;
+typedef Pds::Epix::Config10kaQuad   Epix10kaQuadConfig;
 typedef Pds::Epix10ka2m::ConfigV1   Epix10ka2MConfigShadow;
 
 static Pds::TypeId _epix10ka2MConfigType(Pds::TypeId::Id_Epix10ka2MConfig,
                                          Epix10ka2MConfigType::Version);
+
+typedef Pds::Epix::Config10kaQuadV1   Epix10kaQuadConfigType;
+
+static Pds::TypeId _epix10kaQuadConfigType(Pds::TypeId::Id_Epix10kaQuadConfig,
+                                           Epix10kaQuadConfigType::Version);
 
 
 #endif

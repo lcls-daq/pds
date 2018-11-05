@@ -170,9 +170,9 @@ void  Epix10ka2m::ServerSequence::setFd( int f, unsigned lane ) {
 }
 
 unsigned Epix10ka2m::ServerSequence::configure(const Epix::PgpEvrConfig&     evr,
-                                       const Epix::Config10kaQuadV1& quad,
-                                       Epix::Config10ka*             elems,
-                                       bool                          forceConfig) {
+                                               const Epix10kaQuadConfig&     quad,
+                                               Epix::Config10ka*             elems,
+                                               bool                          forceConfig) {
   unsigned firstConfig = _resetOnEveryConfig || forceConfig;
   if (_firstconfig == true) {
     _firstconfig = false;
@@ -191,41 +191,40 @@ unsigned Epix10ka2m::ServerSequence::configure(const Epix::PgpEvrConfig&     evr
     _payloadSize = 1095232;  // need to understand this
     _xtcEpix.extent = _payloadSize + sizeof(Xtc);
     _xtcTop.extent += _xtcEpix.extent;
-    /*
-    if ((_scopeEnabled = config->scopeEnable())) {
+
+    if (_samplerConfig) {
+      delete(_samplerConfig);
+      _samplerConfig = 0;
+    }
+    _xtcSamplr.extent = 0;
+    if (_scopeBuffer) {
+      free(_scopeBuffer);
+      _scopeBuffer = 0;
+    }
+
+    if ((_scopeEnabled = quad.scopeEnable())) {
       _samplerConfig = new EpixSamplerConfigType(
           1,  // version
-          config->epixRunTrigDelay(),
-          config->epixRunTrigDelay() + 20,
-          config->dacSetting(),
-          config->adcClkHalfT(),
-          config->adcPipelineDelay0(),
-          config->digitalCardId0(),
-          config->digitalCardId1(),
-          config->analogCardId0(),
-          config->analogCardId1(),
+          0, // config->epixRunTrigDelay(),
+          0, // config->epixRunTrigDelay() + 20,
+          0, // config->dacSetting(),
+          quad.asicRoClkHalfT(),
+          0, // config->adcPipelineDelay0(),
+          elems[0].carrierId0(),
+          elems[0].carrierId1(),
+          0, // config->analogCardId0(),
+          0, // config->analogCardId1(),
           2,  // number of Channels
-          config->scopeTraceLength(),
-          config->baseClockFrequency(),
+          quad.scopeTraceLength(),
+          quad.baseClockFrequency(),
           0  // testPatterEnable
       );
       _xtcSamplr.extent = EpixSamplerDataType::_sizeof(*_samplerConfig) + sizeof(Xtc);
       _xtcTop.extent += _xtcSamplr.extent;
       _xtcConfig.extent = sizeof( EpixSamplerConfigType) + sizeof(Xtc);
-      if (!_scopeBuffer) _scopeBuffer = (unsigned*)calloc(_xtcSamplr.sizeofPayload(), 1);
-      } else
-    */
-    {
-      if (_samplerConfig) {
-        delete(_samplerConfig);
-        _samplerConfig = 0;
-      }
-      _xtcSamplr.extent = 0;
-      if (_scopeBuffer) {
-        free(_scopeBuffer);
-        _scopeBuffer = 0;
-      }
+      _scopeBuffer = (unsigned*)calloc(_xtcSamplr.sizeofPayload(), 1);
     }
+
     if  (_syncSlave == 0) {
       _syncSlave = new Pds::Epix10ka2m::SyncSlave(_partition, _sync_task, this);
     }
@@ -339,7 +338,6 @@ int Epix10ka2m::ServerSequence::fetch( char* payload, int flags ) {
      if (pgpCardRx.error&DMA_ERR_BUS)   damageMask |= 8;
    }
 
-   /*
    if (pgpGetVc(pgpCardRx.dest) == Epix10ka::Epix10kaDestination::Oscilloscope) {
      if (damageMask) {
        _xtcSamplr.damage.increase(Damage::UserDefined);
@@ -349,7 +347,7 @@ int Epix10ka2m::ServerSequence::fetch( char* payload, int flags ) {
      }
      if (scopeEnabled())  {
        if (_scopeBuffer) {
-         memcpy(_scopeBuffer, _processorBuffer, _xtcSamplr.sizeofPayload());
+         memcpy(_scopeBuffer, (char*)pgpCardRx.data, _xtcSamplr.sizeofPayload());
          _scopeHasArrived = true;
        }
      } else {
@@ -357,7 +355,6 @@ int Epix10ka2m::ServerSequence::fetch( char* payload, int flags ) {
      }
      return Ignore;
    }
-   */
 
    Pds::Pgp::DataImportFrame* data = reinterpret_cast<Pds::Pgp::DataImportFrame*>(payload+offset);
 
@@ -435,26 +432,22 @@ int Epix10ka2m::ServerSequence::fetch( char* payload, int flags ) {
        memcpy(&_lastTime, &_thisTime, sizeof(timespec));
      }
      _lastOpCode = data->opCode();
-     /*
-     offset = sizeof(Xtc);
+
+     offset += ret;
+
      if (_scopeHasArrived) {
        memcpy(payload + offset, &_xtcSamplr, sizeof(Xtc));
        offset += sizeof(Xtc);
        memcpy(payload + offset, _scopeBuffer, _xtcSamplr.sizeofPayload());
        offset += _xtcSamplr.sizeofPayload();
+       reinterpret_cast<Xtc*>(payload)->extent += _xtcSamplr.extent;
        _scopeHasArrived = false;
      }
-     memcpy(payload + offset, &_xtcEpix, sizeof(Xtc));
-     offset += sizeof(Xtc);
-     process(payload + offset);
-     _xtcTop.extent = offset + _payloadSize;
-     memcpy(payload, &_xtcTop, sizeof(Xtc));
-     */
    } else {  // wrong vc for us
      return Ignore;
    }
    if (ret > 0) {
-     ret += offset;
+     ret = offset;
    }
    if (_debug & 5) printf(" returned %d\n", ret);
    return ret;
@@ -525,3 +518,8 @@ void Epix10ka2m::ServerSequence::printHisto(bool c) {
   histoSum = 0;
 }
 
+void Epix10ka2m::ServerSequence::recordExtraConfig(InDatagram* in) const
+{
+  if (_samplerConfig)
+    in->insert(_xtcConfig, _samplerConfig);
+}

@@ -48,7 +48,7 @@ Reg::operator unsigned() const {
   uint32_t v;
   if (_pgp->readRegister(_dest, addr, _tid++, &v)!=Pgp::Pgp::Success) {
     std::stringstream o;
-    o << "Pgp::Reg read error @ address " << std::hex << addr;
+    o << "Pgp::Reg read error @ address " << std::hex << addr << " [" << v << "]";
     printf("Reg::unsigned: %s\n",o.str().c_str());
     throw o.str();
   }

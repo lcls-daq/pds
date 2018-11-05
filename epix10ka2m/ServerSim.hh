@@ -58,7 +58,7 @@ namespace Pds {
 
       void     allocated  (const Allocate& a);
       unsigned configure(const Pds::Epix::PgpEvrConfig&,
-                         const Epix10kaQuadConfigType&, 
+                         const Epix10kaQuadConfig&, 
                          Pds::Epix::Config10ka*,
                          bool forceConfig = false);
       unsigned unconfigure(void);
@@ -70,7 +70,8 @@ namespace Pds {
       Configurator* configurator();
       void          dumpFrontEnd();
       void          die         ();
-      //
+      void     recordExtraConfig(InDatagram*) const;
+     //
       void     post(char*, int);
 
     private:

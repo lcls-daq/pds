@@ -73,6 +73,30 @@ namespace Pds {
       Reg adcTestFail;  // Test failed
       Reg adcChanFail[10]; // Which channels failed
     };
+    class VguardDac {
+    public:
+      uint32_t reserved_0xc0[0xc0>>2];
+      Reg dacRaw;  // raw = raw*((1<<16)-1)/(2.5*(1 + 845.0/3000))
+    };
+    class QuadMonitor {
+    public:
+      Reg monitorEn;
+      Reg monitorStreamEn;
+      Reg trigPrescaler;
+      //  Remainder are readonly
+      Reg shtError;
+      Reg shtHumRaw;
+      Reg shtTempRaw;
+      Reg nctError;
+      Reg nctLocTempRaw;
+      Reg nctRemTempLRaw;
+      Reg nctRemTempHRaw;
+      uint32_t reserved_0x100[54];
+      Reg ad7949DataRaw[8];
+      uint32_t reserved_0x200[56];
+      Reg sensorRegRaw[26];
+    public:
+    };
     class AcqCore {
     public:
       Reg acqCount;
@@ -168,24 +192,28 @@ namespace Pds {
     class Quad {
     public:
       Pds::Pgp::AxiVersion  _axiVersion;
-      uint32_t              _reserved_0x00100000[(0x00100000-sizeof(_axiVersion))>>2];
+      uint32_t              _reserved_0x00100000[(0x00100000-sizeof(Pds::Pgp::AxiVersion))>>2];
       SystemRegs            _systemRegs;
-      uint32_t              _reserved_0x01000000[(0x00f00000-sizeof(_systemRegs))>>2];
+      uint32_t              _reserved_0x00500000[(0x00400000-sizeof(SystemRegs))>>2];
+      VguardDac             _vguard_dac;
+      uint32_t              _reserved_0x00700000[(0x00200000-sizeof(VguardDac))>>2];
+      QuadMonitor           _quad_monitor;
+      uint32_t              _reserved_0x01000000[(0x00900000-sizeof(QuadMonitor))>>2];
       AcqCore               _acqCore;
-      uint32_t              _reserved_0x01100000[(0x00100000-sizeof(_acqCore))>>2];
+      uint32_t              _reserved_0x01100000[(0x00100000-sizeof(AcqCore))>>2];
       RdoutCore             _rdoutCore;
-      uint32_t              _reserved_0x01200000[(0x00100000-sizeof(_rdoutCore))>>2];
+      uint32_t              _reserved_0x01200000[(0x00100000-sizeof(RdoutCore))>>2];
       PseudoScopeCore       _scopeCore;
-      uint32_t              _reserved_0x02000000[(0x02000000-0x01200000-sizeof(_scopeCore))>>2];
+      uint32_t              _reserved_0x02000000[(0x02000000-0x01200000-sizeof(PseudoScopeCore))>>2];
       AdReadout             _adReadout[10];
       AdConfig              _adConfigA[4];
-      uint32_t              _reserved_0x02b00000[(0x02b00000-0x2a00000-sizeof(_adConfigA))>>2];
+      uint32_t              _reserved_0x02b00000[(0x02b00000-0x2a00000-4*sizeof(AdConfig))>>2];
       AdConfig              _adConfigB[4];
-      uint32_t              _reserved_0x02c00000[(0x02c00000-0x2b00000-sizeof(_adConfigB))>>2];
+      uint32_t              _reserved_0x02c00000[(0x02c00000-0x2b00000-4*sizeof(AdConfig))>>2];
       AdConfig              _adConfigC[2];
-      uint32_t              _reserved_0x02d00000[(0x02d00000-0x2c00000-sizeof(_adConfigC))>>2];
+      uint32_t              _reserved_0x02d00000[(0x02d00000-0x2c00000-2*sizeof(AdConfig))>>2];
       AdcTester             _adcTester;
-      uint32_t              _reserved_0x04000000[(0x04000000-0x2d00000-sizeof(_adcTester))>>2];
+      uint32_t              _reserved_0x04000000[(0x04000000-0x2d00000-sizeof(AdcTester))>>2];
       Epix10kaAsic          _asicSaci[16];
     public:
       static void dumpMap();
@@ -229,6 +257,8 @@ void Quad::dumpMap()
   printf("Quad map\n");
   printf("\tAxiVersion  @ %p\n", &q->_axiVersion);
   printf("\tSystemRegs  @ %p\n", &q->_systemRegs);
+  printf("\tVguardDac   @ %p\n", &q->_vguard_dac);
+  printf("\tQuadMonitor @ %p\n", &q->_quad_monitor);
   printf("\tAcqCore     @ %p\n", &q->_acqCore);
   printf("\tRdoutCore   @ %p\n", &q->_rdoutCore);
   printf("\tPseudoScope @ %p\n", &q->_scopeCore);
@@ -333,9 +363,18 @@ Configurator::Configurator(int f, unsigned lane, unsigned d) :
 {
   allocateVC(7,1<<lane);
   checkPciNegotiatedBandwidth();
-  _d.dest(Destination::Registers);  // Turn on monitoring immediately.
-  //  _pgp->writeRegister(&_d, 1, 1);
-  //  _pgp->writeRegister(&_d, MonitorEnableAddr, 1);
+
+  _d.dest(Destination::Registers);
+  Reg::setPgp(_pgp);
+  Reg::setDest(_d.dest());
+
+#if 1
+  Quad* q = 0;
+  q->_quad_monitor.monitorEn       = 1;
+  q->_quad_monitor.monitorStreamEn = 1;
+  //  q->_quad_monitor.trigPrescaler   = 1;
+#endif
+
   Quad::dumpMap();
 }
 
@@ -345,13 +384,17 @@ Configurator::~Configurator() {
 
 unsigned Configurator::_resetFrontEnd() {
 #if 0
+  unsigned monitorEnable = 0;
   try {
     Quad* q = 0;
+    monitorEnable = q->_quad_monitor.monitorEn & 0x1;
     q->_systemRegs.dcDcEnable = _q->dcdcEn   ();
     q->_systemRegs.asicAnaEn  = _q->asicAnaEn();
     q->_systemRegs.asicDigEn  = _q->asicDigEn();
     q->_systemRegs.ddrVttEn   = _q->ddrVttEn ();
     sleep(1);
+    q->_quad_monitor.monitorEn       = monitorEnable;
+    q->_quad_monitor.monitorStreamEn = monitorEnable;
   } 
   catch ( std::string& s) {
     printf("%s caught exception %s\n",
@@ -456,13 +499,10 @@ bool Configurator::_robustReadVersion(unsigned index) {
 }
 
 unsigned Configurator::configure( const Epix::PgpEvrConfig&     p,
-                                  const Epix10kaQuadConfigType& q,
+                                  const Epix10kaQuadConfig&     q,
                                   Epix::Config10ka*       a,
                                   unsigned first) {
   unsigned ret = 0;
-
-  Reg::setPgp(_pgp);
-  Reg::setDest(_d.dest());
 
 #if 1
   printf("%s with PgpEvrConfig %p  QuadConfig %p  Elem %p\n",__PRETTY_FUNCTION__,&p,&q,a);
@@ -605,9 +645,10 @@ unsigned Configurator::_writeConfig()
   unsigned ret = Success;
 
   Quad* q = 0;
-  q->_systemRegs.trigEn     = 0;
-  q->_systemRegs.autoTrigEn = 0;
-  q->_systemRegs.trigSrcSel = _q->trigSrcSel();
+  q->_systemRegs.trigEn          = 0;
+  q->_systemRegs.autoTrigEn      = 0;
+  q->_systemRegs.trigSrcSel      = _q->trigSrcSel();
+  q->_vguard_dac.dacRaw          = _q->vguardDac();
   q->_acqCore.acqToAsicR0Delay   = _q->acqToAsicR0Delay();
   q->_acqCore.asicR0Width        = _q->asicR0Width();
   q->_acqCore.asicR0ToAsicAcq    = _q->asicR0ToAsicAcq();

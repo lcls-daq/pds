@@ -199,7 +199,7 @@ namespace Pds {
       enum resultReturn {Success=0, Failure=1, Terminate=2};
 
       unsigned             configure(const Epix::PgpEvrConfig&,
-                                     const Epix10kaQuadConfigType&,
+                                     const Epix10kaQuadConfig&,
                                      Epix::Config10ka*,
                                      unsigned first=0);
       unsigned             unconfigure();
@@ -228,7 +228,7 @@ namespace Pds {
 
     private:
       enum {MicroSecondsSleepTime=50};
-      const Epix10kaQuadConfigType* _q;
+      const Epix10kaQuadConfig*     _q;
       Pds::Epix::Config10ka*        _e;
       Destination                   _d;
       unsigned*                     _rhisto;

@@ -2,7 +2,9 @@ libnames := epix10ka2m
 
 libsrcs_epix10ka2m := \
 		 Configurator.cc \
+		 ConfigCache.cc \
 		 Destination.cc \
+		 FrameBuilder.cc \
 		 Server.cc \
 		 ServerSim.cc \
 		 Manager.cc

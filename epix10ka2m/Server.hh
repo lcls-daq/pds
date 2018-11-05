@@ -43,6 +43,7 @@ namespace Pds {
   class Allocation;
   class Routine;
   class EvrSyncCallback;
+  class InDatagram;
 
   namespace Epix10ka2m {
     class Configurator;
@@ -54,7 +55,7 @@ namespace Pds {
       virtual ~Server() {}
       virtual void     allocated  (const Allocate& a) = 0;
       virtual unsigned configure  (const Pds::Epix::PgpEvrConfig&,
-                                   const Epix10kaQuadConfigType&, 
+                                   const Epix10kaQuadConfig&, 
                                    Pds::Epix::Config10ka*,
                                    bool forceConfig = false) = 0;
       virtual unsigned unconfigure(void) = 0;
@@ -66,6 +67,7 @@ namespace Pds {
       virtual Configurator* configurator() = 0;
       virtual void     dumpFrontEnd() = 0;
       virtual void     die         () = 0;
+      virtual void     recordExtraConfig(InDatagram*) const = 0;
     public:
       static Server* instance();
       static void    instance(Server*);
@@ -106,7 +108,7 @@ namespace Pds {
       void setFd( int fd, unsigned lane );
       
       unsigned configure(const Pds::Epix::PgpEvrConfig&,
-                         const Epix10kaQuadConfigType&, 
+                         const Epix10kaQuadConfig&, 
                          Pds::Epix::Config10ka*,
                          bool forceConfig = false);
       unsigned unconfigure(void);
@@ -120,6 +122,7 @@ namespace Pds {
       bool     ignoreFetch() { return _ignoreFetch; }
       void     ignoreFetch(bool b) { _ignoreFetch = b; }
       void     die();
+      void     recordExtraConfig(InDatagram*) const;
       void     dumpFrontEnd();
       void     printHisto(bool);
       void     clearHisto();
@@ -127,8 +130,6 @@ namespace Pds {
       bool     resetOnEveryConfig() { return _resetOnEveryConfig; }
       void     resetOnEveryConfig(bool r) { _resetOnEveryConfig = r; }
       bool     scopeEnabled() { return _scopeEnabled; }
-      EpixSampler::ConfigV1*  samplerConfig() { return _samplerConfig; }
-      const Xtc&      xtcConfig() { return _xtcConfig; }
       Configurator* configurator() {return _cnfgrtr;}
 
     protected:

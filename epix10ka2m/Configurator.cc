@@ -361,7 +361,6 @@ Configurator::Configurator(int f, unsigned lane, unsigned d) :
   _rhisto(0),
   _first(false)
 {
-  allocateVC(7,1<<lane);
   checkPciNegotiatedBandwidth();
 
   _d.dest(Destination::Registers);
@@ -670,6 +669,21 @@ unsigned Configurator::_writeConfig()
   q->_rdoutCore.adcPipelineDelay = _q->adcPipelineDelay();
   q->_rdoutCore.testData         = _q->testData();
 
+  q->_scopeCore.enable           = _q->scopeEnable();
+  // q->_scopeCore.arm              = 1;
+  // q->_scopeCore.trig             = 1;
+  q->_scopeCore.trigEdge         = _q->scopeTrigEdge();
+  q->_scopeCore.trigChannel      = _q->scopeTrigChan();
+  q->_scopeCore.trigMode         = _q->scopeTrigMode();
+  q->_scopeCore.trigAdcThreshold = _q->scopeADCThreshold();
+  q->_scopeCore.trigHoldoff      = _q->scopeTrigHoldoff();
+  q->_scopeCore.trigOffset       = _q->scopeTrigOffset();
+  q->_scopeCore.traceLength      = _q->scopeTraceLength();
+  q->_scopeCore.skipSamples      = _q->scopeADCsamplesToSkip();
+  q->_scopeCore.inChannelA       = _q->scopeChanAwaveformSelect();
+  q->_scopeCore.inChannelB       = _q->scopeChanBwaveformSelect();
+  q->_scopeCore.trigDelay        = _q->scopeTrigDelay();
+
   if (ret == Success)
     ret = _checkWrittenConfig(true);
   // if (ret == Success)
@@ -683,6 +697,12 @@ unsigned Configurator::_checkWrittenConfig(bool writeBack) {
 
   //  Readback configuration
   Quad* q = 0;
+  {
+    Epix10kaQuadConfig& c = *const_cast<Epix10kaQuadConfig*>(_q);
+    uint32_t* u = reinterpret_cast<uint32_t*>(&c);
+    u[3] = q->_axiVersion._deviceDna[0];
+    u[4] = q->_axiVersion._deviceDna[1];
+  }
   for(unsigned ia=0; ia<4; ia++)
     if (_e[ia].asicMask() & 0xf) {
       Epix::Config10ka& e = _e[ia];

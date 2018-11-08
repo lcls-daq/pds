@@ -105,7 +105,7 @@ namespace Pds {
       
       enum {DummySize = (1<<19)};
       
-      void setFd( int fd, unsigned lane );
+      void setFd( int fd, int fd2, unsigned lane );
       
       unsigned configure(const Pds::Epix::PgpEvrConfig&,
                          const Epix10kaQuadConfig&, 

@@ -163,10 +163,10 @@ Epix10ka2m::ServerSequence::ServerSequence( const Src& client, unsigned configMa
   _dummy = (unsigned*)malloc(DummySize);
 }
 
-void  Epix10ka2m::ServerSequence::setFd( int f, unsigned lane ) {
+void  Epix10ka2m::ServerSequence::setFd( int f, int f2, unsigned lane ) {
   _myfd = f;
   fd(f);
-  _cnfgrtr = new Epix10ka2m::Configurator(fd(), lane, _debug);
+  _cnfgrtr = new Epix10ka2m::Configurator(f2, lane, _debug);
 }
 
 unsigned Epix10ka2m::ServerSequence::configure(const Epix::PgpEvrConfig&     evr,
@@ -220,7 +220,7 @@ unsigned Epix10ka2m::ServerSequence::configure(const Epix::PgpEvrConfig&     evr
           0  // testPatterEnable
       );
       _xtcSamplr.extent = EpixSamplerDataType::_sizeof(*_samplerConfig) + sizeof(Xtc);
-      _xtcTop.extent += _xtcSamplr.extent;
+      //      _xtcTop.extent += _xtcSamplr.extent;
       _xtcConfig.extent = sizeof( EpixSamplerConfigType) + sizeof(Xtc);
       _scopeBuffer = (unsigned*)calloc(_xtcSamplr.sizeofPayload(), 1);
     }
@@ -339,6 +339,7 @@ int Epix10ka2m::ServerSequence::fetch( char* payload, int flags ) {
    }
 
    if (pgpGetVc(pgpCardRx.dest) == Epix10ka::Epix10kaDestination::Oscilloscope) {
+     
      if (damageMask) {
        _xtcSamplr.damage.increase(Damage::UserDefined);
        _xtcSamplr.damage.userBits(damageMask | 0xe0);
@@ -436,12 +437,21 @@ int Epix10ka2m::ServerSequence::fetch( char* payload, int flags ) {
      offset += ret;
 
      if (_scopeHasArrived) {
+       reinterpret_cast<Xtc*>(payload)->extent += _xtcSamplr.extent;
        memcpy(payload + offset, &_xtcSamplr, sizeof(Xtc));
        offset += sizeof(Xtc);
        memcpy(payload + offset, _scopeBuffer, _xtcSamplr.sizeofPayload());
        offset += _xtcSamplr.sizeofPayload();
-       reinterpret_cast<Xtc*>(payload)->extent += _xtcSamplr.extent;
        _scopeHasArrived = false;
+
+       if (_debug & 3) {
+         printf("Epix10ka2m::ServerSequence::fetch attached oscilloscope size %u\n", _xtcSamplr.sizeofPayload());
+         Xtc* x = reinterpret_cast<Xtc*>(payload);
+         printf(" xtcTop   @ %p  ctns [0x%x]  extent [0x%x]\n", x, x->contains.value(), x->extent); x++;
+         printf("  xtcEpix @ %p  ctns [0x%x]  extent [0x%x]\n", x, x->contains.value(), x->extent); x=x->next();
+         printf("  xtcSmpl @ %p  ctns [0x%x]  extent [0x%x]\n", x, x->contains.value(), x->extent);
+       }
+
      }
    } else {  // wrong vc for us
      return Ignore;

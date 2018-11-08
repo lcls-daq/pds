@@ -18,12 +18,16 @@ namespace Pds {
                    const Epix10ka2MConfigType&);
     public:
       int process(Xtc*);
+    public:
+      unsigned payloadSize() const { return _alloc; }
     private:
       Epix10kaDataArray*        _payload;
       ndarray<const uint16_t,3> _array;
       ndarray<const uint16_t,3> _calib;
       ndarray<const uint32_t,3> _env;
       //      ndarray<const uint16_t,2> _temp;
+      unsigned                  _alloc;
+      Xtc*                      _next;  // additional payload
     };
   };
 };

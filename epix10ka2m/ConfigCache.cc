@@ -64,21 +64,22 @@ int Epix10ka2m::ConfigCache::configure(const std::vector<Pds::Epix10ka2m::Server
   return _result;
 }
 
-void Epix10ka2m::ConfigCache::reformat(const Xtc* in, Xtc* out) const
+int  Epix10ka2m::ConfigCache::reformat(const Xtc* in, Xtc* out) const
 {
   const DetInfo& info = static_cast<const DetInfo&>(_config.src());
   switch(info.device()) {
   case DetInfo::Epix10ka2M:
-    { FrameBuilder(in, out,
-                   *reinterpret_cast<const Epix10ka2MConfigType*>(current()));
-    } break;
+    { FrameBuilder f(in, out,
+                     *reinterpret_cast<const Epix10ka2MConfigType*>(current()));
+      return f.payloadSize(); }
   case DetInfo::Epix10kaQuad:
-    { FrameBuilder(in, out,
-                   *reinterpret_cast<const Epix10kaQuadConfigType*>(current()));
-    } break;
+    { FrameBuilder f(in, out,
+                     *reinterpret_cast<const Epix10kaQuadConfigType*>(current()));
+      return f.payloadSize(); }
   default:
     break;
   }
+  return 0;
 }
 
 int  Epix10ka2m::ConfigCache::_size(void*) const { return __size(_config.src()); }

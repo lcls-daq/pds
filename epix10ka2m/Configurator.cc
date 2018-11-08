@@ -432,14 +432,16 @@ void Configurator::_resetSequenceCount() {
 
 uint32_t Configurator::_sequenceCount() {
   uint32_t count = -1U;
-  if (_pgp) count = reinterpret_cast<Quad*>(0)->_rdoutCore.seqCount;
+  Quad* q(0);
+  if (_pgp) count = q->_rdoutCore.seqCount;
   else printf("Configurator::_sequenceCount() found nil _pgp so not read\n");
   return (count);
 }
 
 uint32_t Configurator::_acquisitionCount() {
   uint32_t count = -1U;
-  if (_pgp) count = reinterpret_cast<Quad*>(0)->_acqCore.acqCount;
+  Quad* q(0);
+  if (_pgp) count = q->_acqCore.acqCount;
   else printf("Configurator::_acquisitionCount() found nil _pgp so not read\n");
   return (count);
 }
@@ -478,7 +480,8 @@ bool Configurator::_robustReadVersion(unsigned index) {
   printf("\n\t--flush-%u-", index);
   while (failCount<numberOfTries) {
     try {
-      version = reinterpret_cast<Quad*>(0)->_axiVersion._fwVersion;
+      Quad* q(0);
+      version = q->_axiVersion._fwVersion;
       printf("%s version(0x%x)\n\t", _d.name(), version);
       return false;
     }
@@ -615,7 +618,6 @@ unsigned Configurator::_G3config(const Pds::Epix::PgpEvrConfig& c) {
     }
   }
 
-  Quad* q = 0;
   _d.dest(Destination::Registers);
   if (evrEnabled() == false) {
     evrEnable(true);
@@ -632,6 +634,7 @@ unsigned Configurator::_G3config(const Pds::Epix::PgpEvrConfig& c) {
     microSpin(10);
     ret |=  waitForFiducialMode(true);
     printf("%s setting up fiber triggering on G3 pgpcard\n",__PRETTY_FUNCTION__);
+    //    Quad* q = 0;
     //    q->_systemRegs.trigEn = 1;
   } else {
     ret = 1;

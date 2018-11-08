@@ -1,6 +1,7 @@
 #include "pds/epix10ka2m/FrameBuilder.hh"
 #include "pds/pgp/DataImportFrame.hh"
 #include "pds/pgp/Pgp.hh"
+#include "pds/xtc/XtcType.hh"
 #include "pdsdata/xtc/Xtc.hh"
 
 using namespace Pds::Epix10ka2m;
@@ -15,9 +16,11 @@ FrameBuilder::FrameBuilder(const Xtc*                  in,
   _env    (_payload->environmentalRows(cfg))
   //  _temp   (_payload->temperatures     (cfg))
 {
-  iterate();
   unsigned sz = Epix10kaDataArray::_sizeof(cfg);
-  out->alloc(sz);
+  out->alloc(_alloc=sz);
+  _next = out->next();
+
+  iterate();
 }
 
 FrameBuilder::FrameBuilder(const Xtc*                    in, 
@@ -30,15 +33,24 @@ FrameBuilder::FrameBuilder(const Xtc*                    in,
   _env    (_payload->environmentalRows(cfg))
   //  _temp   (_payload->temperatures     (cfg))
 {
-  iterate();
   unsigned sz = Epix10kaDataArray::_sizeof(cfg);
-  out->alloc(sz);
+  out->alloc(_alloc=sz);
+  _next = out->next();
+
+  iterate();
 }
 
 int FrameBuilder::process(Xtc* xtc)
 {
-  if (xtc->contains.value() != _epix10kaDataType.value()) {
+  if (xtc->contains.id() == _xtcType.id()) {
     iterate(xtc);
+    return 1;
+  }
+
+  if (xtc->contains.value() != _epix10kaDataType.value()) {
+    memcpy((char*)_next, xtc, xtc->extent);
+    _alloc += xtc->extent;
+    _next = _next->next();
     return 1;
   }
 
@@ -73,6 +85,7 @@ int FrameBuilder::process(Xtc* xtc)
            const_cast<uint8_t*>(_payload),        \
            const_cast<const uint8_t*>(src)-u,sz);       \
     memcpy(dst,src,sz); }
+#undef MMCPY
 #define MMCPY(dst,src,sz) { memcpy(dst,src,sz); }
 
   // Frame data

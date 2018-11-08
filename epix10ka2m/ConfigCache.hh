@@ -12,7 +12,7 @@ namespace Pds {
       ConfigCache(const Src& src);
     public:
       int  configure(const std::vector<Pds::Epix10ka2m::Server*>&);
-      void reformat (const Xtc* in, Xtc* out) const;
+      int  reformat (const Xtc* in, Xtc* out) const;
       void printCurrent();
     private:
       int  _size(void*) const;

@@ -331,7 +331,8 @@ InDatagram* L1Action::fire(InDatagram* in) {
   printf("cdg %p  xtc.next %p  cxtx %p\n", 
          cdg, cdg->xtc.next(), cxtc);
 #endif  
-  cdg->xtc.alloc( _cfg.reformat(&dg.xtc, cxtc)+sizeof(Xtc) );
+  _cfg.reformat(&dg.xtc, cdg->xtc);
+  cdg->xtc.alloc(cxtc->extent);
 #ifdef DBUG
   printf("L1Action: outdg\n");
   _dump32(&cdg->datagram(), 32);

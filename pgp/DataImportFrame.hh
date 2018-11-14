@@ -52,6 +52,11 @@ namespace Pds {
         uint32_t ticks()       const { return _ticks; }
         uint32_t fiducials()   const { return _fiducials; }
         uint32_t frameType()   const { return _frameType; }
+     
+      void fixup() { //fix pgp header for v3 to v2
+	  unsigned lane = (reinterpret_cast<unsigned*>(this)[0] >> 5) & 0x7;
+	  first.lane = lane;
+	}
 
       public:
         FirstWordBits         first;         // 0

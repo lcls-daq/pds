@@ -359,6 +359,8 @@ int Epix10ka2m::ServerSequence::fetch( char* payload, int flags ) {
 
    Pds::Pgp::DataImportFrame* data = reinterpret_cast<Pds::Pgp::DataImportFrame*>(payload+offset);
 
+   data->fixup(); //fix pgp header for v3 to v2
+
    if (pgpGetVc(pgpCardRx.dest) == Epix10ka::Epix10kaDestination::Data) {
 
      if ((ret > 0) && (ret < (int)_payloadSize)) {

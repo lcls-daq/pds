@@ -186,7 +186,17 @@ namespace Pds {
 
     class Epix10kaAsic {
     public:
-      uint32_t reserved[0x00400000>>2];
+      Reg      reg[0x00100000];
+    public:
+      void clearMatrix() {
+        printf("PrepMulti [%p]\n",&reg[0x8000]);
+        reg[0x8000] = 0;
+        printf("WriteMatrixData [%p]\n",&reg[0x4000]);
+        reg[0x4000] = 0;
+        usleep(100000);
+        // printf("PrepRead [%p]\n",&_reg[0]);
+        reg[0] = 0;
+      }
     };
 
     class Quad {
@@ -268,6 +278,8 @@ void Quad::dumpMap()
   printf("\tAdConfigA[1]@ %p\n", &q->_adConfigA[1]);
   printf("\tAdConfigB[0]@ %p\n", &q->_adConfigB[0]);
   printf("\tAdcTester   @ %p\n", &q->_adcTester);
+  printf("\tasicSaci[0] @ %p\n", &q->_asicSaci[0]);
+  printf("\tasicSaci[1] @ %p\n", &q->_asicSaci[1]);
 }
 
 
@@ -325,7 +337,14 @@ static uint32_t configAddrs[Epix10ka2MConfigShadow::NumberOfValues][2] = {
 };
 */
 
-static uint32_t AconfigAddrs[Epix10kaASIC_ConfigShadow::NumberOfValues][2] = {
+struct AsicRegMode {
+  unsigned addr;
+  unsigned mode;
+};
+
+typedef struct AsicRegMode AsicRegMode_s;
+
+static AsicRegMode_s AconfigAddrs[Epix10kaASIC_ConfigShadow::NumberOfValues] = {
   {0x1001,  0},  //  pulserVsPixelOnDelay and pulserSync 0
   {0x1002,  0},  //  dummy pixel 1
   {0x1003,  0},  //  2
@@ -371,7 +390,8 @@ Configurator::Configurator(int f, unsigned lane, unsigned d) :
   Quad* q = 0;
   q->_quad_monitor.monitorEn       = 1;
   q->_quad_monitor.monitorStreamEn = 1;
-  //  q->_quad_monitor.trigPrescaler   = 1;
+  //  q->_quad_monitor.monitorEn       = 0;
+  //  q->_quad_monitor.monitorStreamEn = 0;
 #endif
 
   Quad::dumpMap();
@@ -554,7 +574,7 @@ unsigned Configurator::configure( const Epix::PgpEvrConfig&     p,
 
   ret |= this->_G3config(p);
 
-  ret |= _writeADCs();
+  //  ret |= _writeADCs();
 
   if (ret == 0) {
     _resetSequenceCount();
@@ -782,57 +802,72 @@ unsigned Configurator::_writeASIC()
 {
   unsigned ret = Success;
   _d.dest(Destination::Registers);
+  Quad* q = 0;
   for(unsigned ie=0; ie<4; ie++) {
     const Pds::Epix::Config10ka& e = _e[ie];
-    const unsigned AsicAddrBase = AsicQuadAddrBase + 4*ie*AsicAddrOffset;
     unsigned m = e.asicMask();
     for (unsigned index=0; index<e.numberOfAsics(); index++) {
       if (m&(1<<index)) {
         uint32_t* u = (uint32_t*) &e.asics(index);
-        uint32_t a = AsicAddrBase + AsicAddrOffset * index;
-        for (unsigned i=0; i<Epix10kaASIC_ConfigShadow::NumberOfValues; i++) {
-          if ((AconfigAddrs[i][1] == ReadWrite) || (AconfigAddrs[i][1] == WriteOnly)) {
-            if (_debug & 1) printf("%s writing addr(0x%x) data(0x%x) configValue(%u) Asic(%u)\n",
-                                   __PRETTY_FUNCTION__,
-                                   a+AconfigAddrs[i][0], u[i], i, index);
-            if (_pgp->writeRegister( &_d, a+AconfigAddrs[i][0], u[i], false, Pgp::PgpRSBits::Waiting)) {
-              printf("%s failed on %s, ASIC %u\n", __PRETTY_FUNCTION__,
-                     Epix10kaASIC_ConfigShadow::name((Epix10kaASIC_ConfigShadow::Registers)i), index);
-              ret |= Failure;
+        unsigned ia = ie*4+index;
+        try {
+          for (unsigned i=0; i<Epix10kaASIC_ConfigShadow::NumberOfValues; i++) {
+            unsigned addr = AconfigAddrs[i].addr;
+            unsigned mode = AconfigAddrs[i].mode;
+            Reg&     reg  = q->_asicSaci[ia].reg[addr];
+
+            if (addr==0x1015) continue;  // skip chip ID
+
+            if (mode == ReadOnly) {
+              if (_debug & 1) printf("%s reading addr(%p)", __PRETTY_FUNCTION__, &reg);
+              u[i] = reg;
+              if (_debug & 1) printf(" data(0x%x) Asic(%u)\n", u[i], ia);
             }
-            _getAnAnswer();
-          } else if (AconfigAddrs[i][1] == ReadOnly) {
-            if (_debug & 1) printf("%s reading addr(0x%x)", __PRETTY_FUNCTION__, a+AconfigAddrs[i][0]);
-            if (_pgp->readRegister(&_d, a+AconfigAddrs[i][0], 0x1100+i, u+i)) {
-              printf("%s failed reading 0x%x\n", __PRETTY_FUNCTION__, a+AconfigAddrs[i][0]);
-              ret |= Failure;
+
+            else if (mode==WriteOnly) {
+              if (_debug & 1) printf("%s writing addr(%p) data(0x%x)", __PRETTY_FUNCTION__, &reg, u[i]);
+              reg = u[i];
             }
-            if (_debug & 1) printf(" data(0x%x) configValue[%u] Asic(%u)\n", u[i], i, index);
+
+            else {
+              if (_debug & 1) printf("%s writing addr(%p) data(0x%x)", __PRETTY_FUNCTION__, &reg, u[i]);
+              reg = u[i];
+              unsigned v = reg;
+              if (_debug & 1) printf("%s read addr(%p) data(0x%x)", __PRETTY_FUNCTION__, &reg, v);
+            }
           }
+        }
+        catch(std::string& e) {
+          printf("Caught exception: %s\n",e.c_str());
+          ret |= Failure;
         }
       }
     }
   }
+
   ret |= _writePixelBits();
-  if (ret==Success) return _checkWrittenASIC(true);
-  else return ret;
+
+  if (ret==Success) 
+    ret |= _checkWrittenASIC(true);
+
+  return ret;
 }
 
 unsigned Configurator::_writePixelBits() {
-  enum { writeAhead = 18 };
+  enum { WriteAhead = 18 };
   unsigned ret = Success;
   _d.dest(Destination::Registers);
   bool first = _first;
   _first = false;
 
+  Quad* q = 0;
+
   for(unsigned ie=0; ie<4; ie++) {
     const Pds::Epix::Config10ka& e = _e[ie];
-    const unsigned AsicAddrBase = AsicQuadAddrBase + 4*ie*AsicAddrOffset;
     unsigned writeCount = 0;
     unsigned m    = e.asicMask();
     unsigned rows = e.numberOfRows();
     unsigned cols = e.numberOfColumns();
-    //    unsigned synchDepthHisto[writeAhead];
     unsigned pops[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
     unsigned totPixels = 0;
     // find the most popular pixel setting
@@ -863,26 +898,12 @@ unsigned Configurator::_writePixelBits() {
     // program the entire array to the most popular setting
     // note, that this is necessary because the global pixel write does not work in this device and programming
     //   one pixel in one bank also programs the same pixel in the other banks
-    for (unsigned index=0; index<e.numberOfAsics(); index++) {
-      if (m&(1<<index)) {
-        uint32_t a = AsicAddrBase + AsicAddrOffset * index;
-        if (_pgp->writeRegister( &_d, a+PrepareMultiConfigAddr, 0, (_debug&1)?true:false, Pgp::PgpRSBits::notWaiting)) {
-          printf("Configurator::writePixelBits failed on ASIC %u, writing prepareMultiConfig\n", index);
-          ret |= Failure;
-        }
-        writeCount += 1;
-      }
-    }
-    for (unsigned index=0; index<e.numberOfAsics(); index++) {
-      if (m&(1<<index)) {
-        uint32_t a = AsicAddrBase + AsicAddrOffset * index;
-        if (_pgp->writeRegister( &_d, a+WriteWholeMatricAddr, pixel, (_debug&1)?true:false, Pgp::PgpRSBits::notWaiting)) {
-          printf("Configurator::writePixelBits failed on ASIC %u, writing entire matrix\n", index);
-          ret |= Failure;
-        }
-        writeCount += 1;
-      }
-    }
+    for (unsigned index=0; index<e.numberOfAsics(); index++)
+      if (m&(1<<index))
+        q->_asicSaci[4*ie+index].reg[PrepareMultiConfigAddr] = 0;
+    for (unsigned index=0; index<e.numberOfAsics(); index++)
+      if (m&(1<<index))
+        q->_asicSaci[4*ie+index].reg[WriteWholeMatricAddr] = pixel;
 
     unsigned offset = 0;
     unsigned bank = 0;
@@ -894,180 +915,128 @@ unsigned Configurator::_writePixelBits() {
     unsigned asicHisto[4] = {0,0,0,0};
     uint32_t thisPix = 0;
     // allow it queue up writeAhead commands
-    Pds::Pgp::ConfigSynch mySynch(_fd, writeAhead, this, sizeof(Pds::Pgp::RegisterSlaveExportFrame)/sizeof(uint32_t));
-    for (unsigned row=0; row<rows; row++) {
-      for (unsigned col=0; col<cols; col++) {
-        if ((thisPix = (e.asicPixelConfigArray()(row,col)&15)) != pixel) {
-          if (row >= (rows>>1)) {
+    unsigned row,col;
+    try {
+      for (row=0; row<rows; row++) {
+        for (col=0; col<cols; col++) {
+          if ((thisPix = (e.asicPixelConfigArray()(row,col)&0xf)) != pixel) {
+            if (row >= (rows>>1)) {
+              if (col < (cols>>1)) {
+                offset = 3;
+                myCol = col;
+                myRow = row - (rows>>1);
+              }
+              else {
+                offset = 0;
+                myCol = col - (cols>>1);
+                myRow = row - (rows>>1);
+              }
+            } else {
+              if (col < (cols>>1)) {
+                offset = 2;
+                myCol = ((cols>>1)-1) - col;
+                myRow = ((rows>>1)-1) - row;
+              }
+              else {
+                offset = 1;
+                myCol = (cols-1) - col;
+                myRow = ((rows>>1)-1) - row;
+              }
+            }
+            if (m&(1<<offset)) {
+              bank = (myCol % (PixelsPerBank<<2)) / PixelsPerBank;
+              bankOffset = banks[bank];
+              bankHisto[bank]+= 1;
+              asicHisto[offset] += 1;
+
+              Epix10kaAsic& asic = q->_asicSaci[4*ie+offset];
+              asic.reg[RowCounterAddr] = myRow;
+              asic.reg[ColCounterAddr] = bankOffset | (myCol % PixelsPerBank);
+              asic.reg[PixelDataAddr ] = thisPix;
+              writeCount+=3;
+
+              if (writeCount >= WriteAhead) {
+                __attribute__((unused)) volatile unsigned v = asic.reg[PixelDataAddr];
+                writeCount = 0;
+              }
+            }
+          }
+        }
+      }
+    }
+    catch(std::string& exc) {
+      printf("%s\n",exc.c_str());
+      printf("Configurator::writePixelBits failed on row %u, col %u\n", row, col);
+      ret |= Failure;
+    }
+
+    //  there is one pixel configuration row per each pair of calibration rows.
+    unsigned calibRow = 176;
+    try {
+      for (row=0; row<2; row++) {
+        printf("Configurator::writePixelBits calibration row 0x%x\n", row);
+        for (col=0; col<cols; col++) {
+          pixel = e.calibPixelConfigArray()(row,col) & 3;
+          if (row) {
             if (col < (cols>>1)) {
               offset = 3;
               myCol = col;
-              myRow = row - (rows>>1);
             }
             else {
               offset = 0;
               myCol = col - (cols>>1);
-              myRow = row - (rows>>1);
             }
           } else {
             if (col < (cols>>1)) {
               offset = 2;
               myCol = ((cols>>1)-1) - col;
-              myRow = ((rows>>1)-1) - row;
             }
             else {
               offset = 1;
               myCol = (cols-1) - col;
-              myRow = ((rows>>1)-1) - row;
             }
           }
           if (m&(1<<offset)) {
+            //        if (0) {
             bank = (myCol % (PixelsPerBank<<2)) / PixelsPerBank;
             bankOffset = banks[bank];
-            bankHisto[bank]+= 1;
-            asicHisto[offset] += 1;
-            if (mySynch.take() == false) {
-              printf("Configurator::writePixelBits synchronization failed on asic %u write of calib row %u column %u\n",
-                     offset, myRow, myCol);
-              ret |= Failure;
-            }
-            //          printf("Configurator::writePixelBits asic %d, row %d col %d\n", offset, myRow, myCol);
-            if (_pgp->writeRegister( &_d,
-                                     RowCounterAdder + AsicAddrBase + AsicAddrOffset * offset, myRow,
-                                     (_debug&1)?true:false, Pds::Pgp::PgpRSBits::Waiting)) {
-              printf("Configurator::writePixelBits failed on asic %u, pixel row %u, col %u\n", offset, myRow, myCol);
-              ret |= Failure;
-            } else {
-              if (mySynch.take() == false) {
-                printf("Configurator::writePixelBits synchronization failed asic %u on write of calib row %u column %u\n",
-                       offset, myRow, myCol);
-                ret |= Failure;
-              }
-              if (_pgp->writeRegister(&_d,
-                                      ColCounterAddr + AsicAddrBase + AsicAddrOffset * offset, bankOffset | (myCol % PixelsPerBank),
-                                      (_debug&1)?true:false, Pds::Pgp::PgpRSBits::Waiting)) {
-                printf("Configurator::writePixelBits failed on pixel row %u, col %u\n", row, col);
-                ret |= Failure;
-              } else {
-                if (mySynch.take() == false) {
-                  printf("Configurator::writePixelBits synchronization failed on asic %u write of calib row %u column %u\n",
-                         offset, row, col);
-                  ret |= Failure;
-                }
-                if (_pgp->writeRegister( &_d,
-                                         PixelDataAddr + AsicAddrBase + AsicAddrOffset * offset, thisPix,
-                                         (_debug&1)?true:false, Pds::Pgp::PgpRSBits::Waiting))  {
 
-                  printf("Configurator::writePixelBits failed on asic %u pixel row %u, col %u\n", offset, row, col);
-                  ret |= Failure;
-                }
-              }
+            Epix10kaAsic& asic = q->_asicSaci[4*ie+offset];
+            asic.reg[RowCounterAddr] = calibRow;
+            asic.reg[ColCounterAddr] = bankOffset | (myCol % PixelsPerBank);
+            asic.reg[PixelDataAddr ] = pixel;
+            writeCount += 3;
+
+            if (writeCount >= WriteAhead) {
+              __attribute__((unused)) volatile unsigned v = asic.reg[PixelDataAddr];
+              writeCount = 0;
             }
-            writeCount += 1;
           }
         }
-        if (ret & Failure) {
-          printf("Configurator::writePixelBits failed on row %u, col %u\n", row, col);
-          break;
-        }
       }
-      if (ret & Failure) {
-        break;
-      }
+    }
+    catch(std::string& exc) {
+      printf("%s\n",exc.c_str());
+      printf("Configurator::writePixelBits failed on row %u, col %u\n", row, col);
+      ret |= Failure;
     }
 
-    //  there is one pixel configuration row per each pair of calibration rows.
-    unsigned calibRow = 176;
-    for (unsigned row=0; row<2; row++) {
-      printf("Configurator::writePixelBits calibration row 0x%x\n", row);
-      for (unsigned col=0; col<cols; col++) {
-        pixel = e.calibPixelConfigArray()(row,col) & 3;
-        if (row) {
-          if (col < (cols>>1)) {
-            offset = 3;
-            myCol = col;
-          }
-          else {
-            offset = 0;
-            myCol = col - (cols>>1);
-          }
-        } else {
-          if (col < (cols>>1)) {
-            offset = 2;
-            myCol = ((cols>>1)-1) - col;
-          }
-          else {
-            offset = 1;
-            myCol = (cols-1) - col;
-          }
+    try {
+      printf("\nConfigurator::writePixelBits write count %u\n", writeCount);
+      printf("Configurator::writePixelBits PrepareForReadout for ASIC:");
+      for (unsigned index=0; index<e.numberOfAsics(); index++) {
+        if (m&(1<<index)) {
+          q->_asicSaci[4*ie+index].reg[PrepareForReadout] = 0;
+          __attribute__((unused)) volatile unsigned v = q->_asicSaci[4*ie+index].reg[PrepareForReadout];
         }
-        if (m&(1<<offset)) {
-          //        if (0) {
-          bank = (myCol % (PixelsPerBank<<2)) / PixelsPerBank;
-          bankOffset = banks[bank];
-          if (mySynch.take() == false) {
-            printf("Configurator::writePixelBits synchronization failed on write of calib row %u column %u\n",
-                   row, col);
-            ret |= Failure;
-          }
-          if (_pgp->writeRegister( &_d,
-                                   RowCounterAdder + AsicAddrBase + AsicAddrOffset * offset, calibRow,
-                                   (_debug&1)?true:false, Pds::Pgp::PgpRSBits::Waiting)) {
-            printf("Configurator::writePixelBits failed on asic %u, calib row %u, col %u\n", offset, row, myCol);
-            ret |= Failure;
-          } else {
-            if (mySynch.take() == false) {
-              printf("Configurator::writePixelBits synchronization failed on write of calib row %u column %u\n",
-                     row, col);
-              ret |= Failure;
-            }
-            if (_pgp->writeRegister(&_d,
-                                    ColCounterAddr + AsicAddrBase + AsicAddrOffset * offset, bankOffset | (myCol % PixelsPerBank),
-                                    (_debug&1)?true:false, Pds::Pgp::PgpRSBits::Waiting)) {
-              printf("Configurator::writePixelBits failed on asic %u, calib row %u, col %u\n", offset, row, myCol);
-              ret |= Failure;
-            } else {
-              if (mySynch.take() == false) {
-                printf("Configurator::writePixelBits synchronization failed on write of calib row %u column %u\n",
-                       row, col);
-                ret |= Failure;
-              }
-              if (_pgp->writeRegister( &_d,
-                                       PixelDataAddr + AsicAddrBase + AsicAddrOffset * offset, pixel,
-                                       (_debug&1)?true:false, Pds::Pgp::PgpRSBits::Waiting))  {
+      }
+    }
+    catch(std::string& exc) {
+      printf("%s\n",exc.c_str());
+      printf("Configurator::writePixelBits failed on PrepareForReadout\n");
+      ret |= Failure;
+    }
 
-                printf("Configurator::writePixelBits failed on asic, %u, calib row %u, col %u\n", offset, row, myCol);
-                ret |= Failure;
-              }
-              //      }
-            }
-          }
-          if (ret & Failure) {
-            break;
-          }
-          writeCount += 3;
-        }
-      }
-      if (ret & Failure) {
-        break;
-      }
-    }
-    if (mySynch.clear() == false) {
-      printf("Configurator::writePixelBits synchronization failed to clear\n");
-    }
-    printf("\nConfigurator::writePixelBits write count %u\n", writeCount);
-    printf("Configurator::writePixelBits PrepareForReadout for ASIC:");
-    for (unsigned index=0; index<e.numberOfAsics(); index++) {
-      if (m&(1<<index)) {
-        uint32_t a = AsicAddrBase + AsicAddrOffset * index;
-        if (_pgp->writeRegister( &_d, a+PrepareForReadout, 0, (_debug&1)?true:false, Pgp::PgpRSBits::Waiting)) {
-          printf("Configurator::writePixelBits failed on ASIC %u\n", index);
-          ret |= Failure;
-        }
-        printf(" %u", index);
-        _getAnAnswer();
-      }
-    }
     printf("\n");
     printf("Configurator::writePixelBits banks %u %u %u %u\n",
            bankHisto[0], bankHisto[1],bankHisto[2],bankHisto[3]);
@@ -1077,52 +1046,27 @@ unsigned Configurator::_writePixelBits() {
   return ret;
 }
 
-
-bool Configurator::_getAnAnswer(unsigned size, unsigned count) {
-  Pds::Pgp::RegisterSlaveImportFrame* rsif;
-  count = 0;
-  while ((count < 6) && (rsif = _pgp->read(size)) != 0) {
-    if (rsif->waiting() == Pds::Pgp::PgpRSBits::Waiting) {
-      //      printf("_getAnAnswer in %u tries\n", count+1);
-      return true;
-    }
-    count += 1;
-  }
-  return false;
-}
-
 unsigned Configurator::_checkWrittenASIC(bool writeBack) {
   unsigned ret = Success;
-  //  return ret;
+  Quad* q = 0;
   for(unsigned ie=0; ie<4; ie++) {
     const Pds::Epix::Config10ka& e = _e[ie];
-    const unsigned AsicAddrBase = AsicQuadAddrBase + 4*ie*AsicAddrOffset;
     bool done = false;
     while (!done && _e && _pgp) {
       printf("Configurator::_checkWrittenASIC ");
-      _d.dest(Destination::Registers);
       unsigned m = e.asicMask();
       uint32_t myBuffer[sizeof(Epix10kaASIC_ConfigShadow)/sizeof(uint32_t)];
       Epix10kaASIC_ConfigShadow* readAsic = (Epix10kaASIC_ConfigShadow*) myBuffer;
       for (unsigned index=0; index<e.numberOfAsics(); index++) {
         if (m&(1<<index)) {
-          printf("reading(%u)->", index);
-          uint32_t a = AsicAddrBase + (AsicAddrOffset * index);
-          for (int i = 0; (i<Epix10kaASIC_ConfigShadow::NumberOfValues) && (ret==Success); i++) {
-            if ((AconfigAddrs[i][1] != WriteOnly) && _pgp) {
-              if (_pgp->readRegister(&_d, a+AconfigAddrs[i][0], 0xa000+(index<<2)+i, myBuffer+i, 1)){
-                printf("Configurator::_checkWrittenASIC read reg %u failed on ASIC %u at 0x%x\n",
-                       i, index, a+AconfigAddrs[i][0]);
-                return Failure;
-              }
-              myBuffer[i] &= 0xffff;
-            }
-          }
+          Epix10kaAsic& asic = q->_asicSaci[4*ie+index];
+          for (int i = 0; (i<Epix10kaASIC_ConfigShadow::NumberOfValues) && (ret==Success); i++)
+            if ((AconfigAddrs[i].mode != WriteOnly) && _pgp)
+              myBuffer[i] = unsigned(asic.reg[AconfigAddrs[i].addr])&0xffff;
           printf("checking, ");
           Epix10kaASIC_ConfigShadow* confAsic = (Epix10kaASIC_ConfigShadow*) &(e.asics(index));
           if ( (ret==Success) && (*confAsic != *readAsic) && _pgp) {
             printf("Configurator::_checkWrittenASIC failed on ASIC %u\n", index);
-            //          ret = Failure;
             if (writeBack) *confAsic = *readAsic;
           }
         }
@@ -1171,17 +1115,6 @@ void Configurator::dumpFrontEnd() {
       else printf("\t%s%5d\n", enviroNames[i], enviroData(i));
     }
   }
-  if (_debug & 0x400) {
-    //    printf("Checking Configuration, no news is good news ...\n");
-    //    if (Failure == checkWrittenConfig(false)) {
-    //      printf("Configurator::checkWrittenConfig() FAILED !!!\n");
-    //    }
-    //    enableRunTrigger(false);
-    //    if (Failure == checkWrittenASIC(false)) {
-    //      printf("Configurator::checkWrittenASICConfig() FAILED !!!\n");
-    //    }
-    //    enableRunTrigger(true);
-  }
   clock_gettime(CLOCK_REALTIME, &end);
   uint64_t diff = timeDiff(&end, &start) + 50000LL;
   if (_debug & 0x700) {
@@ -1193,10 +1126,5 @@ void Configurator::dumpFrontEnd() {
 
 unsigned Configurator::unconfigure()
 {
-  /*
-  _enableRunTrigger(false);
-  cleanupEvr(1);
-  evrLaneEnable(true);
-  */
   return 0;
 }

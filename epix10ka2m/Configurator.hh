@@ -142,7 +142,7 @@ namespace Pds {
       AdcCtrlAckMask                    = 2,
       AdcCtrlFailMask                   = 4,
       EnviroDataBaseAddr				        = 0x140,
-      RowCounterAdder                   = 0x6011,
+      RowCounterAddr                    = 0x6011,
       ColCounterAddr                    = 0x6013,
       PixelDataAddr                     = 0x5000,
       WriteColDataAddr                  = 0x3000,
@@ -223,7 +223,6 @@ namespace Pds {
       unsigned             _checkWrittenASIC(bool writeBack=true);
       unsigned             _G3config(const Pds::Epix::PgpEvrConfig&);
       bool                 _robustReadVersion(unsigned index=0);
-      bool                 _getAnAnswer(unsigned size = 4, unsigned count = 6);
 
 
     private:

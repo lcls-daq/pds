@@ -1,7 +1,10 @@
 #include "pds/epix10ka2m/ConfigCache.hh"
-#include "pds/config/EpixConfigType.hh"
 #include "pds/epix10ka2m/Server.hh"
 #include "pds/epix10ka2m/FrameBuilder.hh"
+#include "pds/config/EpixConfigType.hh"
+#include "pds/service/Routine.hh"
+#include "pds/service/Semaphore.hh"
+#include "pds/service/Task.hh"
 #include "pdsdata/xtc/DetInfo.hh"
 #include "pdsdata/xtc/TypeId.hh"
 
@@ -30,10 +33,50 @@ static int __size(const Src& src) {
   return 0;
 }
 
+namespace Pds {
+  namespace Epix10ka2m {
+    class ConfigRoutine : public Routine {
+    public:
+      ConfigRoutine(unsigned q, Server& srv, const Epix10ka2MConfigType& c) :
+        _q(q), _srv(srv), _c(c), _result(0), _sem(Semaphore::EMPTY) {}
+      ~ConfigRoutine() {}
+    public:
+      void routine()
+      {
+        _result = _srv.configure( _c.evr(), _c.quad(_q), const_cast<Epix::Config10ka*>(&_c.elemCfg(_q*4)) );
+        _sem.give();
+      }
+      unsigned result() { 
+        _sem.take();
+        return _result; 
+      }
+    private:
+      unsigned _q;
+      Server&  _srv;
+      const Epix10ka2MConfigType& _c;
+      unsigned _result;
+      Semaphore _sem;
+    };
+  }
+}
+
 Epix10ka2m::ConfigCache::ConfigCache(const Src& src) :
   CfgCache(src, __type(src),
            StaticALlocationNumberOfConfigurationsForScanning * __size(src)) 
 {
+  char buff[64];
+  for(unsigned i=0; i<4; i++) {
+    sprintf(buff,"2mCfg%u",i);
+    _task   [i] = new Task(TaskObject(buff));
+    _routine[i] = 0;
+  }
+}
+
+Epix10ka2m::ConfigCache::~ConfigCache()
+{
+  for(unsigned i=0; i<4; i++) {
+    _task[i]->destroy();
+  }
 }
 
 void Epix10ka2m::ConfigCache::printCurrent() {
@@ -47,10 +90,14 @@ int Epix10ka2m::ConfigCache::configure(const std::vector<Pds::Epix10ka2m::Server
   switch(info.device()) {
   case DetInfo::Epix10ka2M  : 
     { const Epix10ka2MConfigType* c = reinterpret_cast<const Epix10ka2MConfigType*>(current());
-      for(unsigned q=0; q<srv.size(); q++) 
-        if ((result = srv[q]->configure( c->evr(), c->quad(q), const_cast<Epix::Config10ka*>(&c->elemCfg(q*4)) ))) {
-          _result |= result;
-        };
+      for(unsigned q=0; q<srv.size(); q++) {
+        _routine[q] = new Epix10ka2m::ConfigRoutine(q, *srv[q], *c);
+        _task[q]->call( _routine[q] );
+      }
+      for(unsigned q=0; q<srv.size(); q++) {
+        _result |= _routine[q]->result();
+        delete _routine[q];
+      }
     } break;
   case DetInfo::Epix10kaQuad:
     { const Epix10kaQuadConfigType* c = reinterpret_cast<const Epix10kaQuadConfigType*>(current());
@@ -83,3 +130,4 @@ int  Epix10ka2m::ConfigCache::reformat(const Xtc* in, Xtc* out) const
 }
 
 int  Epix10ka2m::ConfigCache::_size(void*) const { return __size(_config.src()); }
+

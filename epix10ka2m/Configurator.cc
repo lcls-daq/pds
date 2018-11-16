@@ -185,17 +185,40 @@ namespace Pds {
     };
 
     class Epix10kaAsic {
+      enum { 
+        _PrepRead    = 0x00000,
+        _PixelData   = 0x05000,
+        _RowCounter  = 0x06011,
+        _ColCounter  = 0x06013,
+        _PrepMulti   = 0x08000,
+        _WriteMatrix = 0x84000,
+      };
     public:
       Reg      reg[0x00100000];
     public:
       void clearMatrix() {
-        printf("PrepMulti [%p]\n",&reg[0x8000]);
-        reg[0x8000] = 0;
-        printf("WriteMatrixData [%p]\n",&reg[0x4000]);
-        reg[0x4000] = 0;
+        reg[_PrepMulti  ] = 0;
+        reg[_WriteMatrix] = 0;
         usleep(100000);
-        // printf("PrepRead [%p]\n",&_reg[0]);
-        reg[0] = 0;
+        reg[_PrepRead   ] = 0;
+      }
+      ndarray<uint16_t,2> getPixelMap() {
+        unsigned shape[] = { 176,192 };
+        ndarray<uint16_t,2> a(shape);
+        reg[_PrepRead ]=0;
+        reg[_PrepMulti]=0;
+        for(unsigned x=0; x<shape[0]; x++)
+          for(unsigned y=0; y<shape[1]; y++) {
+            unsigned col  = y%48;
+            if      (y< 48) col += 0x700;
+            else if (y< 96) col += 0x680;
+            else if (y<144) col += 0x580;
+            else            col += 0x380;
+            reg[_RowCounter] = x;
+            reg[_ColCounter] = col;
+            a[x][y] = reg[_PixelData];
+          }
+        return a;
       }
     };
 
@@ -373,13 +396,29 @@ static AsicRegMode_s AconfigAddrs[Epix10kaASIC_ConfigShadow::NumberOfValues] = {
   {0x101A,  0}   //  25
 };
 
+static unsigned _writeElemAsicPCA(const Pds::Epix::Config10ka& e, 
+                                  Epix10kaAsic*                saci);
+
+static unsigned _checkElemAsicPCA(const Pds::Epix::Config10ka& e, 
+                                  Epix10kaAsic*                saci,
+                                  const char*                  base);
+
+static unsigned _writeElemCalibPCA(const Pds::Epix::Config10ka& e, 
+                                   Epix10kaAsic*                saci);
+
 
 Configurator::Configurator(int f, unsigned lane, unsigned d) :
   Pds::Pgp::Configurator(true, f, d),
-  _q(0), _e(0),
+  _q(0), _e(0), 
+  _ewrote(new Pds::Epix::Config10ka[4]),
+  _eread (new Pds::Epix::Config10ka[4]),
   _rhisto(0),
   _first(false)
 {
+  //  Initialize cache to impossible values
+  memset(_ewrote,1,4*sizeof(Pds::Epix::Config10ka));
+  memset(_eread ,1,4*sizeof(Pds::Epix::Config10ka));
+
   checkPciNegotiatedBandwidth();
 
   _d.dest(Destination::Registers);
@@ -576,7 +615,8 @@ unsigned Configurator::configure( const Epix::PgpEvrConfig&     p,
 
   //  ret |= _writeADCs();
 
-  if (ret == 0) {
+  //  if (ret == 0) {
+  if (1) {
     _resetSequenceCount();
     if (printFlag) {
       clock_gettime(CLOCK_REALTIME, &end);
@@ -853,10 +893,19 @@ unsigned Configurator::_writeASIC()
   return ret;
 }
 
-unsigned Configurator::_writePixelBits() {
-  enum { WriteAhead = 18 };
+static const unsigned WriteAhead = 1;
+
+#define CHKWRITE                                                           \
+  if (++writeCount >= WriteAhead) {                                       \
+    __attribute__((unused)) volatile unsigned v = asic.reg[PixelDataAddr]; \
+    writeCount = 0;                                                     \
+  }
+
+unsigned Configurator::_writePixelBits() 
+{
   unsigned ret = Success;
   _d.dest(Destination::Registers);
+  timespec tv; clock_gettime(CLOCK_REALTIME,&tv);
   bool first = _first;
   _first = false;
 
@@ -864,165 +913,42 @@ unsigned Configurator::_writePixelBits() {
 
   for(unsigned ie=0; ie<4; ie++) {
     const Pds::Epix::Config10ka& e = _e[ie];
-    unsigned writeCount = 0;
+
+    //  Skip configuration if all ASICs masked off
     unsigned m    = e.asicMask();
-    unsigned rows = e.numberOfRows();
-    unsigned cols = e.numberOfColumns();
-    unsigned pops[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-    unsigned totPixels = 0;
-    // find the most popular pixel setting
-    for (unsigned r=0; r<rows; r++) {
-      for (unsigned c=0; c<cols; c++) {
-        pops[e.asicPixelConfigArray()(r,c)&15] += 1;
-        totPixels += 1;
-      }
-    }
-    unsigned max = 0;
-    uint32_t pixel = e.asicPixelConfigArray()(0,0) & 0xffff;
-    printf("\nConfigurator::writePixelBits() histo");
-    for (unsigned n=0; n<16; n++) {
-      printf(" %u,", pops[n]);
-      if (pops[n] > max) {
-        max = pops[n];
-        pixel = n;
-      }
-    }
-    printf(" pixel %u, total pixels %u\n", pixel, totPixels);
-    if (first) {
-      if ((totPixels != pops[pixel]) || (pixel)) {
-        usleep(1400000);
-        printf("Configurator::writePixelBits sleeping 1.4 seconds\n");
+    if (!m) continue;
+
+    //  Skip asic pixel configuration if same as before
+    if (memcmp(_ewrote[ie].asicPixelConfigArray().data(),
+               e.asicPixelConfigArray().data(),
+               e.asicPixelConfigArray().size()*sizeof(uint16_t))!=0) {
+      memcpy(const_cast<uint16_t*>(_ewrote[ie].asicPixelConfigArray().data()),
+             e.asicPixelConfigArray().data(),
+             e.asicPixelConfigArray().size()*sizeof(uint16_t));
+
+      ret |= _writeElemAsicPCA(e, &q->_asicSaci[4*ie]);
+
+      if (_debug & (1<<4)) {  // check written pixel bits (slow!)
+        char buff[64];
+        sprintf(buff,"/tmp/epix.%08x.l%x.e%x",
+                unsigned(tv.tv_sec), _pgp->portOffset()+_d.lane(), ie);
+
+        ret |= _checkElemAsicPCA(e, &q->_asicSaci[4*ie], buff);
       }
     }
 
-    // program the entire array to the most popular setting
-    // note, that this is necessary because the global pixel write does not work in this device and programming
-    //   one pixel in one bank also programs the same pixel in the other banks
-    for (unsigned index=0; index<e.numberOfAsics(); index++)
-      if (m&(1<<index))
-        q->_asicSaci[4*ie+index].reg[PrepareMultiConfigAddr] = 0;
-    for (unsigned index=0; index<e.numberOfAsics(); index++)
-      if (m&(1<<index))
-        q->_asicSaci[4*ie+index].reg[WriteWholeMatricAddr] = pixel;
+    //  Skip calib pixel configuration if same as before
+    if (memcmp(_ewrote[ie].calibPixelConfigArray().data(),
+               e.calibPixelConfigArray().data(),
+               e.calibPixelConfigArray().size()*sizeof(uint16_t))!=0) {
+      memcpy(const_cast<uint8_t*>(_ewrote[ie].calibPixelConfigArray().data()),
+             e.calibPixelConfigArray().data(),
+             e.calibPixelConfigArray().size()*sizeof(uint8_t));
 
-    unsigned offset = 0;
-    unsigned bank = 0;
-    unsigned bankOffset = 0;
-    unsigned banks[4] = {Bank0, Bank1, Bank2, Bank3};
-    unsigned myRow = 0;
-    unsigned myCol = 0;
-    unsigned bankHisto[4] = {0,0,0,0};
-    unsigned asicHisto[4] = {0,0,0,0};
-    uint32_t thisPix = 0;
-    // allow it queue up writeAhead commands
-    unsigned row,col;
-    try {
-      for (row=0; row<rows; row++) {
-        for (col=0; col<cols; col++) {
-          if ((thisPix = (e.asicPixelConfigArray()(row,col)&0xf)) != pixel) {
-            if (row >= (rows>>1)) {
-              if (col < (cols>>1)) {
-                offset = 3;
-                myCol = col;
-                myRow = row - (rows>>1);
-              }
-              else {
-                offset = 0;
-                myCol = col - (cols>>1);
-                myRow = row - (rows>>1);
-              }
-            } else {
-              if (col < (cols>>1)) {
-                offset = 2;
-                myCol = ((cols>>1)-1) - col;
-                myRow = ((rows>>1)-1) - row;
-              }
-              else {
-                offset = 1;
-                myCol = (cols-1) - col;
-                myRow = ((rows>>1)-1) - row;
-              }
-            }
-            if (m&(1<<offset)) {
-              bank = (myCol % (PixelsPerBank<<2)) / PixelsPerBank;
-              bankOffset = banks[bank];
-              bankHisto[bank]+= 1;
-              asicHisto[offset] += 1;
-
-              Epix10kaAsic& asic = q->_asicSaci[4*ie+offset];
-              asic.reg[RowCounterAddr] = myRow;
-              asic.reg[ColCounterAddr] = bankOffset | (myCol % PixelsPerBank);
-              asic.reg[PixelDataAddr ] = thisPix;
-              writeCount+=3;
-
-              if (writeCount >= WriteAhead) {
-                __attribute__((unused)) volatile unsigned v = asic.reg[PixelDataAddr];
-                writeCount = 0;
-              }
-            }
-          }
-        }
-      }
-    }
-    catch(std::string& exc) {
-      printf("%s\n",exc.c_str());
-      printf("Configurator::writePixelBits failed on row %u, col %u\n", row, col);
-      ret |= Failure;
-    }
-
-    //  there is one pixel configuration row per each pair of calibration rows.
-    unsigned calibRow = 176;
-    try {
-      for (row=0; row<2; row++) {
-        printf("Configurator::writePixelBits calibration row 0x%x\n", row);
-        for (col=0; col<cols; col++) {
-          pixel = e.calibPixelConfigArray()(row,col) & 3;
-          if (row) {
-            if (col < (cols>>1)) {
-              offset = 3;
-              myCol = col;
-            }
-            else {
-              offset = 0;
-              myCol = col - (cols>>1);
-            }
-          } else {
-            if (col < (cols>>1)) {
-              offset = 2;
-              myCol = ((cols>>1)-1) - col;
-            }
-            else {
-              offset = 1;
-              myCol = (cols-1) - col;
-            }
-          }
-          if (m&(1<<offset)) {
-            //        if (0) {
-            bank = (myCol % (PixelsPerBank<<2)) / PixelsPerBank;
-            bankOffset = banks[bank];
-
-            Epix10kaAsic& asic = q->_asicSaci[4*ie+offset];
-            asic.reg[RowCounterAddr] = calibRow;
-            asic.reg[ColCounterAddr] = bankOffset | (myCol % PixelsPerBank);
-            asic.reg[PixelDataAddr ] = pixel;
-            writeCount += 3;
-
-            if (writeCount >= WriteAhead) {
-              __attribute__((unused)) volatile unsigned v = asic.reg[PixelDataAddr];
-              writeCount = 0;
-            }
-          }
-        }
-      }
-    }
-    catch(std::string& exc) {
-      printf("%s\n",exc.c_str());
-      printf("Configurator::writePixelBits failed on row %u, col %u\n", row, col);
-      ret |= Failure;
+      ret |= _writeElemCalibPCA(e, &q->_asicSaci[4*ie]);
     }
 
     try {
-      printf("\nConfigurator::writePixelBits write count %u\n", writeCount);
       printf("Configurator::writePixelBits PrepareForReadout for ASIC:");
       for (unsigned index=0; index<e.numberOfAsics(); index++) {
         if (m&(1<<index)) {
@@ -1036,12 +962,6 @@ unsigned Configurator::_writePixelBits() {
       printf("Configurator::writePixelBits failed on PrepareForReadout\n");
       ret |= Failure;
     }
-
-    printf("\n");
-    printf("Configurator::writePixelBits banks %u %u %u %u\n",
-           bankHisto[0], bankHisto[1],bankHisto[2],bankHisto[3]);
-    printf("Configurator::writePixelBits asics %u %u %u %u\n",
-           asicHisto[0], asicHisto[1],asicHisto[2],asicHisto[3]);
   }
   return ret;
 }
@@ -1053,7 +973,7 @@ unsigned Configurator::_checkWrittenASIC(bool writeBack) {
     const Pds::Epix::Config10ka& e = _e[ie];
     bool done = false;
     while (!done && _e && _pgp) {
-      printf("Configurator::_checkWrittenASIC ");
+      printf("Configurator::_checkWrittenASIC\n");
       unsigned m = e.asicMask();
       uint32_t myBuffer[sizeof(Epix10kaASIC_ConfigShadow)/sizeof(uint32_t)];
       Epix10kaASIC_ConfigShadow* readAsic = (Epix10kaASIC_ConfigShadow*) myBuffer;
@@ -1063,7 +983,7 @@ unsigned Configurator::_checkWrittenASIC(bool writeBack) {
           for (int i = 0; (i<Epix10kaASIC_ConfigShadow::NumberOfValues) && (ret==Success); i++)
             if ((AconfigAddrs[i].mode != WriteOnly) && _pgp)
               myBuffer[i] = unsigned(asic.reg[AconfigAddrs[i].addr])&0xffff;
-          printf("checking, ");
+          printf("checking elem(%u) asic(%u)\n",ie,index);
           Epix10kaASIC_ConfigShadow* confAsic = (Epix10kaASIC_ConfigShadow*) &(e.asics(index));
           if ( (ret==Success) && (*confAsic != *readAsic) && _pgp) {
             printf("Configurator::_checkWrittenASIC failed on ASIC %u\n", index);
@@ -1071,7 +991,6 @@ unsigned Configurator::_checkWrittenASIC(bool writeBack) {
           }
         }
       }
-      printf("\n");
       done = true;
     }
   }
@@ -1127,4 +1046,225 @@ void Configurator::dumpFrontEnd() {
 unsigned Configurator::unconfigure()
 {
   return 0;
+}
+
+unsigned _writeElemAsicPCA(const Pds::Epix::Config10ka& e, 
+                           Epix10kaAsic*                saci)
+{
+  unsigned ret = 0;
+
+  unsigned writeCount = 0;
+  const unsigned rows = e.numberOfRows();
+  const unsigned cols = e.numberOfColumns();
+  unsigned offset = 0;
+  unsigned bank = 0;
+  unsigned bankOffset = 0;
+  const unsigned banks[4] = {Bank0, Bank1, Bank2, Bank3};
+  unsigned myRow = 0;
+  unsigned myCol = 0;
+  unsigned bankHisto[4] = {0,0,0,0};
+  unsigned asicHisto[4] = {0,0,0,0};
+  uint32_t thisPix = 0;
+  
+  unsigned pops[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  unsigned totPixels = 0;
+  // find the most popular pixel setting
+  for (unsigned r=0; r<rows; r++) {
+    for (unsigned c=0; c<cols; c++) {
+      pops[e.asicPixelConfigArray()(r,c)&15] += 1;
+      totPixels += 1;
+    }
+  }
+  unsigned max = 0;
+  uint32_t pixel = e.asicPixelConfigArray()(0,0) & 0xffff;
+  printf("\nConfigurator::writePixelBits() histo");
+  for (unsigned n=0; n<16; n++) {
+    printf(" %u,", pops[n]);
+    if (pops[n] > max) {
+      max = pops[n];
+      pixel = n;
+    }
+  }
+  printf(" pixel %u, total pixels %u\n", pixel, totPixels);
+  // if (first) {
+  //   if ((totPixels != pops[pixel]) || (pixel)) {
+  //     usleep(1400000);
+  //     printf("Configurator::writePixelBits sleeping 1.4 seconds\n");
+  //   }
+  // }
+
+  // program the entire array to the most popular setting
+  // note, that this is necessary because the global pixel write does not work in this device and programming
+  //   one pixel in one bank also programs the same pixel in the other banks
+  for (unsigned index=0; index<e.numberOfAsics(); index++)
+    if (e.asicMask()&(1<<index)) {
+      Epix10kaAsic& asic = saci[index];
+      asic.reg[PrepareMultiConfigAddr] = 0;
+      CHKWRITE;
+    }
+  for (unsigned index=0; index<e.numberOfAsics(); index++)
+    if (e.asicMask()&(1<<index)) {
+      Epix10kaAsic& asic = saci[index];
+      asic.reg[WriteWholeMatricAddr] = pixel;
+      CHKWRITE; 
+    }
+
+  // allow it queue up writeAhead commands
+  unsigned row=0,col=0;
+  try {
+    for (row=0; row<rows; row++) {
+      for (col=0; col<cols; col++) {
+        if ((thisPix = (e.asicPixelConfigArray()(row,col)&0xf)) != pixel) {
+          if (row >= (rows>>1)) {
+            if (col < (cols>>1)) {
+              offset = 3;
+              myCol = col;
+              myRow = row - (rows>>1);
+            }
+            else {
+              offset = 0;
+              myCol = col - (cols>>1);
+              myRow = row - (rows>>1);
+            }
+          } else {
+            if (col < (cols>>1)) {
+              offset = 2;
+              myCol = ((cols>>1)-1) - col;
+              myRow = ((rows>>1)-1) - row;
+            }
+            else {
+              offset = 1;
+              myCol = (cols-1) - col;
+              myRow = ((rows>>1)-1) - row;
+            }
+          }
+          if (e.asicMask()&(1<<offset)) {
+            bank = (myCol % (PixelsPerBank<<2)) / PixelsPerBank;
+            bankOffset = banks[bank];
+            bankHisto[bank]+= 1;
+            asicHisto[offset] += 1;
+
+            Epix10kaAsic& asic = saci[offset];
+            asic.reg[RowCounterAddr] = myRow;                                CHKWRITE;
+            asic.reg[ColCounterAddr] = bankOffset | (myCol % PixelsPerBank); CHKWRITE;
+            asic.reg[PixelDataAddr ] = thisPix;                              CHKWRITE;
+          }
+        }
+      }
+    }
+  }
+  catch(std::string& exc) {
+    printf("%s\n",exc.c_str());
+    printf("Configurator::writePixelBits failed on row %u, col %u\n", row, col);
+    ret |= Configurator::Failure;
+  }
+  printf("Configurator::writePixelBits banks %u %u %u %u\n",
+         bankHisto[0], bankHisto[1],bankHisto[2],bankHisto[3]);
+  printf("Configurator::writePixelBits asics %u %u %u %u\n",
+         asicHisto[0], asicHisto[1],asicHisto[2],asicHisto[3]);
+  return ret;
+}
+
+unsigned _checkElemAsicPCA(const Pds::Epix::Config10ka& e, 
+                           Epix10kaAsic*                saci,
+                           const char*                  base)
+{
+  ndarray<const uint16_t,2> pca = e.asicPixelConfigArray();
+  for (unsigned index=0; index<e.numberOfAsics(); index++)
+    if (e.asicMask()&(1<<index)) {
+      ndarray<uint16_t,2> a = saci[index].getPixelMap();
+      unsigned nprint=4, nerr=0;
+      FILE *fwr, *frd;
+      { char buff[64];
+        sprintf(buff,"%s.a%x.wr", base, index);
+        fwr = fopen(buff,"w");
+        sprintf(buff,"%s.a%x.rd", base, index);
+        frd = fopen(buff,"w"); }
+      for(unsigned r=0; r<a.shape()[0]; r++) {
+        for(unsigned c=0; c<a.shape()[1]; c++) {
+          unsigned ar=0,ac=0;
+          switch(index) {
+          case 0: ar = a.shape()[0] +r   ; ac = a.shape()[1]   +c   ; break;
+          case 1: ar = a.shape()[0] -r -1; ac = a.shape()[1]*2 -c -1; break;
+          case 2: ar = a.shape()[0] -r -1; ac = a.shape()[1]   -c -1; break;
+          case 3: ar = a.shape()[0] +r   ; ac = c                   ; break;
+          }
+          if (a[r][c] != pca[ar][ac]) {
+            nerr++;
+            if (nprint) {
+              printf("  PCA error [%u][%u]  wrote(0x%x) read(0x%x)\n", ar, ac, pca[ar][ac], a[r][c]);
+              nprint--;
+            }
+          }
+          fprintf(fwr,"%x",pca[ar][ac]);
+          fprintf(frd,"%x",a[r][c]);
+        }
+        fprintf(fwr,"\n");
+        fprintf(frd,"\n");
+      }
+      fclose(fwr);
+      fclose(frd);
+      printf(" %u PCA errors\n",nerr);
+    }
+  return Configurator::Success;
+}
+
+unsigned _writeElemCalibPCA(const Pds::Epix::Config10ka& e, 
+                            Epix10kaAsic*                saci)
+{
+  unsigned ret = 0;
+
+  unsigned writeCount = 0;
+  const unsigned cols = e.numberOfColumns();
+  unsigned row=0,col=0;
+  unsigned offset = 0;
+  unsigned bank = 0;
+  unsigned bankOffset = 0;
+  const unsigned banks[4] = {Bank0, Bank1, Bank2, Bank3};
+  unsigned myCol = 0;
+  
+  //  there is one pixel configuration row per each pair of calibration rows.
+  unsigned calibRow = 176;
+  try {
+    for (row=0; row<2; row++) {
+      printf("Configurator::writePixelBits calibration row 0x%x\n", row);
+      for (col=0; col<cols; col++) {
+        unsigned pixel = e.calibPixelConfigArray()(row,col) & 3;
+        if (row) {
+          if (col < (cols>>1)) {
+            offset = 3;
+            myCol = col;
+          }
+          else {
+            offset = 0;
+            myCol = col - (cols>>1);
+          }
+        } else {
+          if (col < (cols>>1)) {
+            offset = 2;
+            myCol = ((cols>>1)-1) - col;
+          }
+          else {
+            offset = 1;
+            myCol = (cols-1) - col;
+          }
+        }
+        if (e.asicMask()&(1<<offset)) {
+          bank = (myCol % (PixelsPerBank<<2)) / PixelsPerBank;
+          bankOffset = banks[bank];
+
+          Epix10kaAsic& asic = saci[offset];
+          asic.reg[RowCounterAddr] = calibRow;                             CHKWRITE;
+          asic.reg[ColCounterAddr] = bankOffset | (myCol % PixelsPerBank); CHKWRITE;
+          asic.reg[PixelDataAddr ] = pixel;                                CHKWRITE;
+        }
+      }
+    }
+  }
+  catch(std::string& exc) {
+    printf("%s\n",exc.c_str());
+    printf("Configurator::writePixelBits failed on row %u, col %u\n", row, col);
+    ret |= Configurator::Failure;
+  }
+  return ret;
 }

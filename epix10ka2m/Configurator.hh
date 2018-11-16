@@ -229,6 +229,8 @@ namespace Pds {
       enum {MicroSecondsSleepTime=50};
       const Epix10kaQuadConfig*     _q;
       Pds::Epix::Config10ka*        _e;
+      Pds::Epix::Config10ka*        _ewrote;
+      Pds::Epix::Config10ka*        _eread;
       Destination                   _d;
       unsigned*                     _rhisto;
       bool                          _first;

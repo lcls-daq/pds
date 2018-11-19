@@ -58,6 +58,7 @@ namespace Pds {
         else                app.post((InDatagram*)_ptr);
       }
       void* ptr() { return _ptr; }
+      void  ptr(void* q) { _ptr=q; }
     public:
       double since_start (const timespec& now) const { return time_since(now,_start); }
     private:
@@ -109,7 +110,8 @@ namespace Pds {
       void unassign() { _entry = 0; }
       bool unassigned() const { return _entry==0; }
       void routine();
-      void process(InDatagram* dg) { _driver->events(dg); }
+      //  Only L1 events may return a result; everything else is distributed to all threads
+      InDatagram* process(InDatagram* dg) { return _driver->events(dg); }
       void process(Transition* tr) { _driver->transitions(tr); }
       unsigned id() const { return _id; }
       const Work::Entry* entry() const { return _entry; }
@@ -128,6 +130,7 @@ namespace Pds {
               Appliance& app,
               Pds::Task& mgr_task) : 
         _app     (app),
+        _next    (0),
         _mgr_task(mgr_task),
 	_pool    (sizeof(UserMessage),1),
 	_sem     (Semaphore::FULL),
@@ -255,7 +258,8 @@ namespace Pds {
             it!=_list.end(); it++) {
           if ((*it)->is_unassigned()) {
             bool lassign=false;
-            for(unsigned id=0; id<_tasks.size(); id++)
+            for(unsigned iid=0; iid<_tasks.size(); iid++) {
+              unsigned id = (iid+_next)%_tasks.size();
               if (_tasks[id]->unassigned()) {
                 _tasks[id]->assign(*it);
                 _worker->addcontent(1.,double(id));
@@ -263,8 +267,10 @@ namespace Pds {
 #ifdef DBUG
 		printf("WorkThreads assign to thread %d\n",id);
 #endif
+                _next = (id+1)%_tasks.size();
                 break;
               }
+            }
             //  Too busy to process now
             if (!lassign) {
 #ifdef DBUG
@@ -313,6 +319,7 @@ namespace Pds {
     private:
       Pds::Appliance&           _app;
       std::vector<Work::Task*>  _tasks;
+      unsigned                  _next;
       Pds::Task&                _mgr_task;
       GenericPool               _pool;
       Semaphore                 _sem;
@@ -332,8 +339,9 @@ using namespace Pds;
 void Work::Task::routine() {
   bool lCaught=true;
   InDatagram* dg = (InDatagram*)_entry->ptr();
+  InDatagram* odg = dg;
   try {
-    process(dg);
+    odg = process(dg);
     lCaught=false;
   }
   catch (std::exception& e) {
@@ -351,6 +359,10 @@ void Work::Task::routine() {
 
   if (lCaught)
     dg->datagram().xtc.damage.increase(Damage::UserDefined);
+
+  // Mimic Appliance::event  // DontDelete, ==0 not handled
+  if (dg != odg) delete dg;
+  _entry->ptr(odg);
 
   _app.mgr_task().call(new Work::ComplEv(_entry,_app,_id));
 }

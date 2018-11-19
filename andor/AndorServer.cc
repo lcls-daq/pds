@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include <utility>
 
 #include "pds/config/AndorDataType.hh"
 #include "pds/xtc/Datagram.hh"

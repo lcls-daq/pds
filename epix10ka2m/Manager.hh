@@ -24,7 +24,6 @@
 #define Pds_Epix10ka2m_Manager_hh
 
 #include "pds/utility/Appliance.hh"
-#include "pds/client/Fsm.hh"
 
 #include <vector>
 
@@ -36,11 +35,11 @@ namespace Pds {
 
     class Manager {
     public:
-      Manager(const std::vector<Server*>&);
-      Appliance& appliance( void ) { return _fsm; }
+      Manager(const std::vector<Server*>&, unsigned nthreads=0);
+      Appliance& appliance( void ) { return *_app; }
       
     private:
-      Fsm& _fsm;
+      Appliance*   _app;
       ConfigCache& _cfg;
     };
   };

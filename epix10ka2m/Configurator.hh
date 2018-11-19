@@ -208,7 +208,6 @@ namespace Pds {
       void                 dumpFrontEnd();
       void                 printMe();
       uint32_t             enviroData(unsigned);
-
     private:
       unsigned             _resetFrontEnd();
       void                 _resetSequenceCount();

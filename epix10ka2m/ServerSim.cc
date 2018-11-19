@@ -36,7 +36,9 @@ int ServerSim::fetch( char* payload, int flags )
   int payloadSize;
   if (_hdw) {
     payloadSize = _hdw->fetch(payload,flags);
-    if (_fwd && payloadSize>0) _fwd->post(payload,payloadSize);
+    if (_fwd && payloadSize>0) {
+      _fwd->post(payload,payloadSize);
+    }
   }
   else {
     char* src;
@@ -47,14 +49,18 @@ int ServerSim::fetch( char* payload, int flags )
     Pds::Pgp::DataImportFrame* data = reinterpret_cast<Pds::Pgp::DataImportFrame*>(payload+2*sizeof(Pds::Xtc));
     data->first.lane++;
 
-    if (_fwd) _fwd->post(payload,payloadSize);
+    if (_fwd) {
+      _fwd->post(payload,payloadSize);
+    }
   }
+  Pds::Pgp::DataImportFrame* data = reinterpret_cast<Pds::Pgp::DataImportFrame*>(payload+2*sizeof(Pds::Xtc));
+  _fiducials = data->fiducials();
   return payloadSize;
 }
 
 bool ServerSim::more() const { return false; }
 
-unsigned ServerSim::fiducials() const { return DEFER(fiducials); }
+unsigned ServerSim::fiducials() const { return _fiducials; }
 
 void     ServerSim::allocated  (const Allocate& a)
 { if (_hdw) _hdw->allocated(a); }
@@ -86,6 +92,7 @@ void     ServerSim::die() { if (_hdw) _hdw->die(); }
 
 void     ServerSim::post(char* payload, int payloadSize)
 {
+  if (_hdw) return;
   write(_pfd[1], &payload    , sizeof(payload));
   write(_pfd[1], &payloadSize, sizeof(payloadSize));
 }

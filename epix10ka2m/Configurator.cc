@@ -36,6 +36,7 @@
 #include "pds/epix10ka2m/Destination.hh"
 #include "pds/pgp/Reg.hh"
 #include "pds/pgp/AxiVersion.hh"
+#include <PgpDriver.h>
 #include "ndarray/ndarray.h"
 
 using Pds::Pgp::Reg;
@@ -408,10 +409,11 @@ static unsigned _writeElemCalibPCA(const Pds::Epix::Config10ka& e,
 
 
 Configurator::Configurator(int f, unsigned lane, unsigned d) :
-  Pds::Pgp::Configurator(true, f, d),
+  Pds::Pgp::Configurator(true, f, d, lane),
   _q(0), _e(0), 
   _ewrote(new Pds::Epix::Config10ka[4]),
   _eread (new Pds::Epix::Config10ka[4]),
+  _d(lane,Destination::Registers),
   _rhisto(0),
   _first(false)
 {
@@ -421,11 +423,10 @@ Configurator::Configurator(int f, unsigned lane, unsigned d) :
 
   checkPciNegotiatedBandwidth();
 
-  _d.dest(Destination::Registers);
+#if 1
   Reg::setPgp(_pgp);
   Reg::setDest(_d.dest());
 
-#if 1
   Quad* q = 0;
   q->_quad_monitor.monitorEn       = 1;
   q->_quad_monitor.monitorStreamEn = 1;
@@ -474,7 +475,6 @@ unsigned Configurator::_resetFrontEnd() {
 }
 
 void Configurator::_resetSequenceCount() {
-  _d.dest(Destination::Registers);
   if (_pgp) {
     Quad* pq = 0;
     _pgp->resetSequenceCount();
@@ -506,7 +506,8 @@ uint32_t Configurator::_acquisitionCount() {
 }
 
 uint32_t Configurator::enviroData(unsigned o) {
-  _d.dest(Destination::Registers);
+  Reg::setPgp(_pgp);
+  Reg::setDest(_d.dest());
   uint32_t dat=1113;
 #if 0
   if (_pgp) _pgp->readRegister(&_d, EnviroDataBaseAddr+o, 0x5e4, &dat);
@@ -562,9 +563,12 @@ bool Configurator::_robustReadVersion(unsigned index) {
 unsigned Configurator::configure( const Epix::PgpEvrConfig&     p,
                                   const Epix10kaQuadConfig&     q,
                                   Epix::Config10ka*       a,
-                                  unsigned first) {
+                                  unsigned first) 
+{
   unsigned ret = 0;
 
+  Reg::setPgp(_pgp);
+  Reg::setDest(_d.dest());
 #if 1
   printf("%s with PgpEvrConfig %p  QuadConfig %p  Elem %p\n",__PRETTY_FUNCTION__,&p,&q,a);
 
@@ -678,7 +682,6 @@ unsigned Configurator::_G3config(const Pds::Epix::PgpEvrConfig& c) {
     }
   }
 
-  _d.dest(Destination::Registers);
   if (evrEnabled() == false) {
     evrEnable(true);
   }
@@ -841,7 +844,6 @@ unsigned Configurator::_writeADCs()
 unsigned Configurator::_writeASIC() 
 {
   unsigned ret = Success;
-  _d.dest(Destination::Registers);
   Quad* q = 0;
   for(unsigned ie=0; ie<4; ie++) {
     const Pds::Epix::Config10ka& e = _e[ie];
@@ -904,7 +906,6 @@ static const unsigned WriteAhead = 1;
 unsigned Configurator::_writePixelBits() 
 {
   unsigned ret = Success;
-  _d.dest(Destination::Registers);
   timespec tv; clock_gettime(CLOCK_REALTIME,&tv);
   bool first = _first;
   _first = false;
@@ -1268,3 +1269,4 @@ unsigned _writeElemCalibPCA(const Pds::Epix::Config10ka& e,
   }
   return ret;
 }
+

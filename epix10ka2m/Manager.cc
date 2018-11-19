@@ -36,6 +36,7 @@
 #include "pds/xtc/CDatagram.hh"
 #include "pds/client/Fsm.hh"
 #include "pds/client/Action.hh"
+#include "pds/client/WorkThreads.hh"
 #include "pds/config/EpixConfigType.hh"
 #include "pds/epix10ka2m/ConfigCache.hh"
 #include "pds/epix10ka2m/Configurator.hh"
@@ -49,6 +50,7 @@
 #include "pds/config/CfgCache.hh"
 #include "pds/utility/Occurrence.hh"
 #include "pds/service/GenericPool.hh"
+#include "pds/service/GenericPoolW.hh"
 #include "pds/pgp/DataImportFrame.hh"
 #include "pds/pgp/Pgp.hh"
 
@@ -93,20 +95,17 @@ namespace Pds {
 
     class L1Action : public Action {
     public:
-      L1Action(const ConfigCache& cfg, const SrvL& svr) :
+      L1Action(const ConfigCache& cfg) :
         _cfg   (cfg),
-        _server(svr),
         _pool  (5<<20, 16)
       { printf("L1Action pool\n"); _pool.dump(); }
       
       InDatagram* fire(InDatagram* in);
-
+      
     private:
       const ConfigCache& _cfg;
-      const SrvL& _server;
-      GenericPool _pool;
+      GenericPool        _pool;
     };
-
 
     class ConfigAction : public Action {
     public:
@@ -297,9 +296,6 @@ static void _dump32(const void* p, unsigned nw)
 }
 
 InDatagram* L1Action::fire(InDatagram* in) {
-  if (_server[0]->debug() & 8)
-    printf("%s\n",__PRETTY_FUNCTION__);
-
   //  Create a new datagram from the pool
   Datagram&   dg = in->datagram();
 #ifdef DBUG
@@ -314,24 +310,17 @@ InDatagram* L1Action::fire(InDatagram* in) {
   // Damage here is either missing quadrant or missing EVR
   // Missing EVR is common when master EVR rate differs from 
   // PGPEVR rate.  Drop all with damage.
+  //  == Can't drop in WorkThreads == Mark non-iterable
   if (in->datagram().xtc.damage.value() != 0) {
-    return 0;
+    dg.xtc.damage.increase(Damage::IncompleteContribution);
+    return in;
   }
 
   CDatagram* cdg = new (&_pool) CDatagram(dg);
   cdg->datagram().xtc.damage = in->datagram().xtc.damage;
 
-  const Xtc*      xtc = (const Xtc*)dg.xtc.payload();
-  //
-  //  Reformat the assembled datagram into a new pool buffer
-  //
-  Xtc* cxtc = new ((char*)cdg->xtc.next()) 
-    Xtc(_epix10kaDataArray, xtc->src);
-#ifdef DBUG
-  printf("cdg %p  xtc.next %p  cxtx %p\n", 
-         cdg, cdg->xtc.next(), cxtc);
-#endif  
-  cdg->xtc.alloc( _cfg.reformat(&dg.xtc, cxtc)+sizeof(Xtc) );
+  _cfg.reformat(dg,cdg->datagram());
+
 #ifdef DBUG
   printf("L1Action: outdg\n");
   _dump32(&cdg->datagram(), 32);
@@ -352,16 +341,33 @@ Transition* ConfigAction::fire(Transition* tr) {
   return tr;
 }
 
-Manager::Manager( const std::vector<Epix10ka2m::Server*>& server) :
-  _fsm(*new Fsm), _cfg(*new ConfigCache(server[0]->client())) 
+Manager::Manager( const std::vector<Epix10ka2m::Server*>& server, unsigned nthreads) :
+  _cfg(*new ConfigCache(server[0]->client())) 
 {
    printf("Manager being initialized... " );
 
-   _fsm.callback( TransitionId::Map            , new AllocAction          ( _cfg, server ) );
-   _fsm.callback( TransitionId::Unmap          , new UnmapAction          ( ) );
-   _fsm.callback( TransitionId::Configure      , new ConfigAction         ( _cfg, server, _fsm ) );
-   _fsm.callback( TransitionId::BeginCalibCycle, new BeginCalibCycleAction( _cfg, server, _fsm ) );
-   _fsm.callback( TransitionId::EndCalibCycle  , new EndCalibCycleAction  ( _cfg, server ) );
-   _fsm.callback( TransitionId::L1Accept       , new L1Action             ( _cfg, server ) );
-   _fsm.callback( TransitionId::Unconfigure    , new UnconfigAction       ( _cfg, server ) );
+   Fsm& fsm = *new Fsm;
+
+   if (nthreads) {
+     std::vector<Appliance*> apps(4);
+     apps[0] = &fsm;
+     for(unsigned i=1; i<nthreads; i++) {
+       Fsm* f = new Fsm;
+       f->callback( TransitionId::L1Accept       , new L1Action             ( _cfg ) );
+       apps[i] = f;
+     }
+
+     _app = new WorkThreads("wt2m",apps);
+   }
+   else {
+     _app = &fsm;
+   }
+
+   fsm.callback( TransitionId::Map            , new AllocAction          ( _cfg, server ) );
+   fsm.callback( TransitionId::Unmap          , new UnmapAction          ( ) );
+   fsm.callback( TransitionId::Configure      , new ConfigAction         ( _cfg, server, *_app ) );
+   fsm.callback( TransitionId::BeginCalibCycle, new BeginCalibCycleAction( _cfg, server, *_app ) );
+   fsm.callback( TransitionId::EndCalibCycle  , new EndCalibCycleAction  ( _cfg, server ) );
+   fsm.callback( TransitionId::L1Accept       , new L1Action             ( _cfg ) );
+   fsm.callback( TransitionId::Unconfigure    , new UnconfigAction       ( _cfg, server ) );
 }

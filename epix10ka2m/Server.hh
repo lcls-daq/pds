@@ -95,15 +95,15 @@ namespace Pds {
       const Src& client( void ) const      { return _xtcTop.src; }
       
       //  EbSegment interface
-      const Xtc& xtc( void ) const    { return _xtcTop; }
-      unsigned   length() const       { return _xtcTop.extent; }
+      const Xtc& xtc( void ) const    { return _payload; }
+      unsigned   length() const       { return _payload.extent; }
 
       //  Server interface
       int pend( int flag = 0 ) { return -1; }
       int fetch( char* payload, int flags );
       bool more() const;
       
-      enum {DummySize = (1<<19)};
+      enum {DummySize = (1<<21)};
       
       void setFd( int fd, int fd2, unsigned lane );
       
@@ -138,6 +138,7 @@ namespace Pds {
       Xtc                            _xtcEpix;
       Xtc                            _xtcSamplr;
       Xtc                            _xtcConfig;
+      Xtc                            _payload;
       Pds::EpixSampler::ConfigV1*     _samplerConfig;
       unsigned                       _fiducials;
       Configurator*                  _cnfgrtr;

@@ -1,47 +1,92 @@
 #include "pds/epix10ka2m/FrameBuilder.hh"
 #include "pds/pgp/DataImportFrame.hh"
 #include "pds/pgp/Pgp.hh"
+#include "pds/xtc/Datagram.hh"
 #include "pds/xtc/XtcType.hh"
 #include "pdsdata/xtc/Xtc.hh"
 
+//#define SHORT_PAYLOAD
+//#define DBUG
+
 using namespace Pds::Epix10ka2m;
 
-FrameBuilder::FrameBuilder(const Xtc*                  in, 
-                           Xtc*                        out, 
+FrameBuilder::FrameBuilder(const Datagram&             in, 
+                           Datagram&                   out, 
                            const Epix10ka2MConfigType& cfg) :
-  Pds::XtcIterator(const_cast<Xtc*>(in)),
-  _payload(new (out->next()) Epix10kaDataArray),
-  _array  (_payload->frame            (cfg)),
-  _calib  (_payload->calibrationRows  (cfg)),
-  _env    (_payload->environmentalRows(cfg))
-  //  _temp   (_payload->temperatures     (cfg))
+  Pds::XtcIterator(const_cast<Xtc*>(&in.xtc)),
+  _qmask(0)
 {
-  unsigned sz = Epix10kaDataArray::_sizeof(cfg);
-  out->alloc(_alloc=sz);
-  _next = out->next();
+  memset(_qxtc, 0, 4*sizeof(Xtc*));
 
+  _next = out.xtc.next();
+
+  //  Cache pointers to the quad(s) and copy the remainder (advancing _next)
   iterate();
+
+  if ((_qmask&0xf)==0xf) {
+    const Xtc* inx = &in.xtc + 1;
+    Xtc* xtc = new ((char*)_next) Xtc(_epix10kaDataArray, inx->src);
+
+    _payload = new (xtc->next()) Epix10kaDataArray;
+    _array   = _payload->frame            (cfg);
+    _calib   = _payload->calibrationRows  (cfg);
+    _env     = _payload->environmentalRows(cfg);
+    //  _temp   = _payload->temperatures     (cfg);
+
+#if 1
+    for(unsigned i=0; i<4; i++)
+      _add_quad(i);
+#endif
+
+    xtc->alloc(Epix10kaDataArray::_sizeof(cfg));
+    _next = xtc->next();
+  }
+
+#ifdef SHORT_PAYLOAD
+#else
+  out.xtc.alloc( reinterpret_cast<char*>(_next) - 
+                 reinterpret_cast<char*>(&out.xtc+1));
+#endif
 }
 
-FrameBuilder::FrameBuilder(const Xtc*                    in, 
-                           Xtc*                          out, 
+FrameBuilder::FrameBuilder(const Datagram&               in, 
+                           Datagram&                     out, 
                            const Epix10kaQuadConfigType& cfg) :
-  Pds::XtcIterator(const_cast<Xtc*>(in)),
-  _payload(new (out->next()) Epix10kaDataArray),
-  _array  (_payload->frame            (cfg)),
-  _calib  (_payload->calibrationRows  (cfg)),
-  _env    (_payload->environmentalRows(cfg))
-  //  _temp   (_payload->temperatures     (cfg))
+  Pds::XtcIterator(const_cast<Xtc*>(&in.xtc)),
+  _qmask(0)
 {
-  unsigned sz = Epix10kaDataArray::_sizeof(cfg);
-  out->alloc(_alloc=sz);
-  _next = out->next();
+  _next = out.xtc.next();
 
+  //  Cache pointers to the quad(s) and copy the remainder (advancing _next)
   iterate();
+
+  if ((_qmask&0x1)==0x1) {
+    const Xtc* inx = &in.xtc + 1;
+    Xtc* xtc = new ((char*)_next) Xtc(_epix10kaDataArray, inx->src);
+
+    _payload = new (xtc->next()) Epix10kaDataArray;
+    _array   = _payload->frame            (cfg);
+    _calib   = _payload->calibrationRows  (cfg);
+    _env     = _payload->environmentalRows(cfg);
+    //  _temp   = _payload->temperatures     (cfg);
+
+    _add_quad(0);
+
+    xtc->alloc(Epix10kaDataArray::_sizeof(cfg));
+    _next = xtc->next();
+  }
+
+  out.xtc.alloc( reinterpret_cast<char*>(_next) - 
+                 reinterpret_cast<char*>(&out.xtc+1));
 }
 
 int FrameBuilder::process(Xtc* xtc)
 {
+#ifdef DBUG
+  { const unsigned* p = reinterpret_cast<const unsigned*>(xtc);
+    printf("FB::process %08x.%08x.%08x.%08x.%08x\n",p[0],p[1],p[2],p[3],p[4]); }
+#endif
+
   if (xtc->contains.id() == _xtcType.id()) {
     iterate(xtc);
     return 1;
@@ -49,33 +94,28 @@ int FrameBuilder::process(Xtc* xtc)
 
   if (xtc->contains.value() != _epix10kaDataType.value()) {
     memcpy((char*)_next, xtc, xtc->extent);
-    _alloc += xtc->extent;
     _next = _next->next();
     return 1;
   }
 
   //  Set the frame number
   const Pds::Pgp::DataImportFrame* e = reinterpret_cast<Pds::Pgp::DataImportFrame*>(xtc->payload());
-  *reinterpret_cast<uint32_t*>(_payload) = e->_frameNumber;
+  unsigned quad = e->lane()-Pds::Pgp::Pgp::portOffset();
+  _qmask |= (1<<quad);
+  _qxtc[quad] = xtc;
 
-#ifdef DBUG
-  printf("%s\n",__PRETTY_FUNCTION__);
-  for(unsigned i=0; i<5; i++)
-    printf(" %08x",reinterpret_cast<const uint32_t*>(xtc)[i]);
-  printf("\n");
-  for(unsigned i=0; i<8; i++)
-    printf(" %08x",reinterpret_cast<const uint32_t*>(e)[i]);
-  printf("\n");
-#endif
+  return 1;
+}
+
+void FrameBuilder::_add_quad(unsigned quad)
+{
+  const Xtc* xtc = _qxtc[quad];
+  const Pds::Pgp::DataImportFrame* e = reinterpret_cast<Pds::Pgp::DataImportFrame*>(xtc->payload());
 
   //  Each quad arrives on a separate lane
   //  A super row crosses 2 elements; each element contains 2x2 ASICs
-  const unsigned lane0        = Pds::Pgp::Pgp::portOffset();
   const unsigned asicRows     = Pds::Epix::Config10ka::_numberOfRowsPerAsic;
   const unsigned elemRowSize  = Pds::Epix::Config10ka::_numberOfAsicsPerRow*Pds::Epix::Config10ka::_numberOfPixelsPerAsicRow;
-
-  // Copy this quadrant into the correct location within cxtc 
-  unsigned quad = e->lane()-lane0;
 
   const uint16_t* u = reinterpret_cast<const uint16_t*>(e+1);
   
@@ -147,6 +187,5 @@ int FrameBuilder::process(Xtc* xtc)
   MMCPY(const_cast<uint16_t*>(&_temp(4*quad+0)), u, tempSize);
   MMCPY(const_cast<uint16_t*>(&_temp(4*quad+2)), u, tempSize);
 #endif
-  return 1;
 }
 

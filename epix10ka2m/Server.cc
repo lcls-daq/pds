@@ -37,6 +37,7 @@
 #include "pds/service/Routine.hh"
 #include "pds/service/Task.hh"
 #include "pds/service/TaskObject.hh"
+#include "pds/xtc/XtcType.hh"
 #include "pdsdata/xtc/DetInfo.hh"
 #include <PgpDriver.h>
 #include <unistd.h>
@@ -45,6 +46,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <omp.h>
+
+//#define SHORT_PAYLOAD
 
 using namespace Pds;
 
@@ -272,7 +275,7 @@ void Epix10ka2m::ServerSequence::disable() {
     flushInputQueue(fd());
     if (usleep(10000)<0) perror("Epix10ka2m::ServerSequence::disable ulseep 1 failed\n");
     if (_debug & 0x20) printf("Epix10ka2m::ServerSequence::disable\n");
-    dumpFrontEnd();
+    //    dumpFrontEnd();
     printHisto(true);
   } else {
     printf("Epix10ka2m::ServerSequence::disable() found nil configurator, so did not disable\n");
@@ -419,8 +422,8 @@ int Epix10ka2m::ServerSequence::fetch( char* payload, int flags ) {
              _timeSinceLastException /= 1000000.0;
 //             printf("Epix10ka2m::ServerSequence::fetch exceptional period %3lld, not %3u, frame %5u, frames since last %5u, ms since last %7.3f, ms/f %6.3f\n",
 //             diff, peak, _count, _fetchesSinceLastException, _timeSinceLastException, (1.0*_timeSinceLastException)/_fetchesSinceLastException);
-             printf("Epix10ka2m::ServerSequence::fetch exceptional period %3lld, not %3u, frames since last %5u\n",
-                 diff, peak, _fetchesSinceLastException);
+//             printf("Epix10ka2m::ServerSequence::fetch exceptional period %3lld, not %3u, frames since last %5u\n",
+//                 diff, peak, _fetchesSinceLastException);
              _timeSinceLastException = 0;
              _fetchesSinceLastException = 0;
            }
@@ -459,8 +462,13 @@ int Epix10ka2m::ServerSequence::fetch( char* payload, int flags ) {
      return Ignore;
    }
    if (ret > 0) {
+#ifdef SHORT_PAYLOAD
+     ret = (new (new(payload) Xtc(_xtcTop)) Xtc(_xtcType, _xtcEpix.src))->extent;
+#else
      ret = offset;
+#endif
    }
+   (_payload = *reinterpret_cast<const Xtc*>(payload)).extent = ret;
    if (_debug & 5) printf(" returned %d\n", ret);
    return ret;
 }

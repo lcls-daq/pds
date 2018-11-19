@@ -79,6 +79,7 @@ namespace Pds {
       ServerSim*                     _bwd;
       ServerSim*                     _fwd;
       int                            _pfd[2];
+      unsigned                       _fiducials;
     };
   };
 };

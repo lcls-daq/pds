@@ -19,10 +19,13 @@ namespace Pds {
         enum FEdest {Data=0, Registers=1, Oscilloscope=2, NumberOf=3};
 
         Destination() {}
+        Destination(unsigned lane, FEdest vc) : 
+          Pgp::Destination((lane<<2)|unsigned(vc)) {}
         ~Destination() {}
 
       public:
-        const char*         name();
+        const char*    name();
+        void           setVC(FEdest vc) { dest( (lane()<<2) | unsigned(vc) ); }
     };
   }
 }

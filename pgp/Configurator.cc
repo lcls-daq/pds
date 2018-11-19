@@ -23,8 +23,8 @@ namespace Pds {
       printRes();
     }
 
-    Configurator::Configurator(bool use_aes, int f, unsigned d) : _fd(f), _debug(d) {
-      _pgp = new Pds::Pgp::Pgp(use_aes, _fd, true);
+    Configurator::Configurator(bool use_aes, int f, unsigned d, unsigned lane) : _fd(f), _debug(d) {
+      _pgp = new Pds::Pgp::Pgp(use_aes, _fd, true, lane);
       _G3 = _pgp->G3Flag();
       checkPciNegotiatedBandwidth();
       printRes();

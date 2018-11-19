@@ -36,7 +36,7 @@ namespace Pds {
     class Configurator {
       public:
         Configurator(int, unsigned);
-        Configurator(bool, int, unsigned);
+        Configurator(bool, int, unsigned, unsigned =0);
         virtual ~Configurator();
 
       public:

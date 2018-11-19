@@ -46,7 +46,7 @@ static void printError(unsigned error, unsigned dest)
   printf("\tpgpLane(%u), pgpVc(%u)\n", pgpGetLane(dest), pgpGetVc(dest));
 }
 
-Pgp::Pgp(bool use_aes, int f, bool pf) : _fd(f), _useAesDriver(use_aes) {
+Pgp::Pgp(bool use_aes, int f, bool pf, unsigned lane) : _fd(f), _useAesDriver(use_aes) {
   unsigned version = 0;
   if (pf) printf("Pgp::Pgp(fd(%d)), offset(%u)\n", f, _portOffset);
   if (!_useAesDriver) {
@@ -83,7 +83,7 @@ Pgp::Pgp(bool use_aes, int f, bool pf) : _fd(f), _useAesDriver(use_aes) {
   }
   if (_myG3Flag) {
     if (use_aes) {
-       _status = new AesDriverG3StatusWrap(_fd, 0, this);
+      _status = new AesDriverG3StatusWrap(_fd, 0, this, lane);
     } else {
       _status = new PgpCardG3StatusWrap(_fd, 0, this);
     }

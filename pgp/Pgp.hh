@@ -22,7 +22,7 @@ namespace Pds {
 
     class Pgp {
       public:
-        Pgp(bool, int, bool printFlag = true);
+        Pgp(bool, int, bool printFlag = true, unsigned lane=0);
         virtual ~Pgp();
 
       public:

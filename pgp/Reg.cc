@@ -4,7 +4,12 @@
 #include <vector>
 #include <sstream>
 #include <stdio.h>
-//#include <boost/thread/tss.hpp>
+
+//#define USE_TSS
+
+#ifdef USE_TSS
+#include <boost/thread/tss.hpp>
+#endif
 
 using namespace Pds::Pgp;
 
@@ -14,22 +19,27 @@ static bool _debug = false;
 //  Must use setPgp(), setDest() to switch context - not thread safe
 //
 
-//boost::thread_specific_ptr<Pgp        > _pgp;
-//boost::thread_specific_ptr<Destination> _dest;
+#ifdef USE_TSS
+boost::thread_specific_ptr<Pgp        > _pgp;
+boost::thread_specific_ptr<Destination> _dest;
+#define DESTV _dest.get()
+#define SETDEST(d) _dest.reset(d)
+#define SETPGP(p) _pgp.reset(p)
+#else
 static Pgp*         _pgp  = 0;
 static Destination* _dest = 0;
+#define DESTV _dest
+#define SETDEST(d) _dest = d 
+#define SETPGP(p) _pgp = p
+#endif
 static unsigned     _tid  = 0;
 
 void Reg::setPgp (Pgp* p) { 
-  //  _pgp.reset(p);
-  _pgp = p;
+  SETPGP(p);
 }
 
 void Reg::setDest(unsigned d) {
-  // if (!_dest.get())
-  //   _dest.reset(new Destination);
-  if (!_dest)
-    _dest = new Destination;
+  if (!DESTV) SETDEST(new Destination);
   *_dest = Destination(d);
 }
 
@@ -37,8 +47,8 @@ void Reg::setDest(unsigned d) {
 Reg& Reg::operator=(unsigned v) {
   uint64_t addr = reinterpret_cast<uint64_t>(this);
   if (_debug)
-    printf("Reg::write @%08x %08x\n", unsigned(addr),v);
-  _pgp->writeRegister(_dest, addr, v);
+    printf("Reg::write @%08x %08x %x\n", unsigned(addr),v,_dest->dest());
+  _pgp->writeRegister(DESTV, addr, v);
   return *this;
 }
 
@@ -46,9 +56,9 @@ Reg& Reg::operator=(unsigned v) {
 Reg::operator unsigned() const {
   uint64_t addr = reinterpret_cast<uint64_t>(this);
   uint32_t v;
-  if (_pgp->readRegister(_dest, addr, _tid++, &v)!=Pgp::Pgp::Success) {
+  if (_pgp->readRegister(DESTV, addr, _tid++, &v)!=Pgp::Pgp::Success) {
     std::stringstream o;
-    o << "Pgp::Reg read error @ address " << std::hex << addr << " [" << v << "]";
+    o << "Pgp::Reg read error @ address " << std::hex << addr << "[" << v << "] dest[" << std::hex << _dest->dest() << "]";
     printf("Reg::unsigned: %s\n",o.str().c_str());
     throw o.str();
   }

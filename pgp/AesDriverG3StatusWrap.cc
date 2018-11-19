@@ -43,12 +43,12 @@ namespace Pds {
     }
 
     int AesDriverG3StatusWrap::resetSequenceCount(){
-      unsigned lane = _pgp->portOffset();
+      unsigned lane = _pgp->portOffset() + _lane;
       return pgpResetEvrCount(_pgp->fd(), lane);
     }
 
     int AesDriverG3StatusWrap::maskRunTrigger(bool b){
-      unsigned lane = _pgp->portOffset();
+      unsigned lane = _pgp->portOffset() + _lane;
       ssize_t res = 0;
       PgpEvrControl cntl;
       res |= pgpGetEvrControl(_pgp->fd(), lane, &cntl);
@@ -58,7 +58,7 @@ namespace Pds {
     }
 
     int AesDriverG3StatusWrap::resetPgpLane() {
-      unsigned lane = _pgp->portOffset();
+      unsigned lane = _pgp->portOffset() + _lane;
       unsigned tmp;
       ssize_t res = 0;
       res |= dmaReadRegister(_pgp->fd(), (unsigned)offsetof(PgpCardG3Regs, pgpCardStat[0]), (unsigned*)&(tmp));
@@ -90,7 +90,7 @@ namespace Pds {
     }
 
     int AesDriverG3StatusWrap::setFiducialTarget(unsigned r){
-      unsigned lane = _pgp->portOffset();
+      unsigned lane = _pgp->portOffset() + _lane;
       struct DmaRegisterData reg;
       reg.data = r;
       reg.address = (unsigned)offsetof(PgpCardG3Regs, fiducials[0]) + (lane*sizeof(unsigned));
@@ -99,7 +99,7 @@ namespace Pds {
       return (0);
     }
     int AesDriverG3StatusWrap::waitForFiducialMode(bool e){
-      unsigned lane = _pgp->portOffset();
+      unsigned lane = _pgp->portOffset() + _lane;
       ssize_t res = 0;
       PgpEvrControl cntl;
       res |= pgpGetEvrControl(_pgp->fd(), lane, &cntl);
@@ -108,7 +108,7 @@ namespace Pds {
       return res;
     }
     int AesDriverG3StatusWrap::evrRunCode(unsigned r){
-      unsigned lane = _pgp->portOffset();
+      unsigned lane = _pgp->portOffset() + _lane;
       ssize_t res = 0;
       PgpEvrControl cntl;
       res |= pgpGetEvrControl(_pgp->fd(), lane, &cntl);
@@ -117,7 +117,7 @@ namespace Pds {
       return res;
     }
     int AesDriverG3StatusWrap::evrRunDelay(unsigned r){
-      unsigned lane = _pgp->portOffset();
+      unsigned lane = _pgp->portOffset() + _lane;
       ssize_t res = 0;
       PgpEvrControl cntl;
       res |= pgpGetEvrControl(_pgp->fd(), lane, &cntl);
@@ -126,7 +126,7 @@ namespace Pds {
       return res;
     }
     int AesDriverG3StatusWrap::evrDaqCode(unsigned r){
-      unsigned lane = _pgp->portOffset();
+      unsigned lane = _pgp->portOffset() + _lane;
       ssize_t res = 0;
       PgpEvrControl cntl;
       res |= pgpGetEvrControl(_pgp->fd(), lane, &cntl);
@@ -135,7 +135,7 @@ namespace Pds {
       return res;
     }
     int AesDriverG3StatusWrap::evrDaqDelay(unsigned r){
-      unsigned lane = _pgp->portOffset();
+      unsigned lane = _pgp->portOffset() + _lane;
       ssize_t res = 0;
       PgpEvrControl cntl;
       res |= pgpGetEvrControl(_pgp->fd(), lane, &cntl);
@@ -144,7 +144,7 @@ namespace Pds {
       return res;
     }
     int AesDriverG3StatusWrap::evrSetPulses(unsigned runcode, unsigned rundelay, unsigned daqcode, unsigned daqdelay){
-      unsigned lane = _pgp->portOffset();
+      unsigned lane = _pgp->portOffset() + _lane;
       ssize_t res = 0;
       PgpEvrControl cntl;
       res |= pgpGetEvrControl(_pgp->fd(), lane, &cntl);
@@ -156,7 +156,7 @@ namespace Pds {
       return res;
     }
     int AesDriverG3StatusWrap::evrLaneEnable(bool e){
-      unsigned lane = _pgp->portOffset();
+      unsigned lane = _pgp->portOffset() + _lane;
       ssize_t res = 0;
       PgpEvrControl cntl;
       res |= pgpGetEvrControl(_pgp->fd(), lane, &cntl);
@@ -168,7 +168,7 @@ namespace Pds {
       return evrEnableHdrChkMask(1 << vc, e);
     }
     int AesDriverG3StatusWrap::evrEnableHdrChkMask(unsigned vcm, bool e) {
-      unsigned lane = _pgp->portOffset();
+      unsigned lane = _pgp->portOffset() + _lane;
       ssize_t res = 0;
       PgpEvrControl cntl;
       res |= pgpGetEvrControl(_pgp->fd(), lane, &cntl);
@@ -181,12 +181,12 @@ namespace Pds {
       return res;
     }
     bool AesDriverG3StatusWrap::getLatestLaneStatus() {
-      unsigned lane = _pgp->portOffset();
+      unsigned lane = _pgp->portOffset() + _lane;
       return (evrStatus[lane].runStatus == 1);
     }
 
     bool AesDriverG3StatusWrap::evrEnabled(bool pf) {
-      unsigned lane = _pgp->portOffset();
+      unsigned lane = _pgp->portOffset() + _lane;
       this->read();
       bool enabled = evrControl[lane].evrEnable && evrStatus[lane].linkUp;
       if ((enabled == false) && pf) {
@@ -202,7 +202,7 @@ namespace Pds {
     }
 
     int AesDriverG3StatusWrap::evrEnable(bool e) {
-      unsigned lane = _pgp->portOffset();
+      unsigned lane = _pgp->portOffset() + _lane;
       unsigned tmp;
       unsigned count=0;
       PgpEvrControl cntl;
@@ -240,12 +240,12 @@ namespace Pds {
     }
 
     int AesDriverG3StatusWrap::allocateVC(unsigned vcm) {
-      return allocateVC(vcm, 1);
+      return allocateVC(vcm, (1<<_lane));
     }
 
     int AesDriverG3StatusWrap::allocateVC(unsigned vcm, unsigned lm) {
       unsigned char maskBytes[32];
-      unsigned lane = _pgp->portOffset();
+      unsigned lane = _pgp->portOffset();  // _lane?
       dmaInitMaskBytes(maskBytes);
       for(unsigned i=0; i<G3_NUMBER_OF_LANES; i++) {
         if ((1<<i) & (lm<<lane)) {
@@ -265,7 +265,7 @@ namespace Pds {
     }
 
     int AesDriverG3StatusWrap::cleanupEvr(unsigned vcm, unsigned lm) {
-      unsigned offset = _pgp->portOffset();
+      unsigned offset = _pgp->portOffset();  // _lane?
       ssize_t res = 0;
       PgpEvrControl cntl;
       for(unsigned lane=0; lane<G3_NUMBER_OF_LANES; lane++) {

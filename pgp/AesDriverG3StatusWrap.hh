@@ -19,8 +19,8 @@ namespace Pds {
 
   class AesDriverG3StatusWrap : public PgpStatus {
       public:
-        AesDriverG3StatusWrap(int f, unsigned d, Pgp* pgp) :
-        	PgpStatus(f, d, pgp) {};
+        AesDriverG3StatusWrap(int f, unsigned d, Pgp* pgp, unsigned lane=0) :
+          PgpStatus(f, d, pgp), _lane(lane) {};
         virtual ~AesDriverG3StatusWrap() {};
 
       public:
@@ -56,6 +56,8 @@ namespace Pds {
         ::PgpStatus       status[G3_NUMBER_OF_LANES];
         PgpEvrStatus      evrStatus[G3_NUMBER_OF_LANES];
         PgpEvrControl     evrControl[G3_NUMBER_OF_LANES];
+      private:
+        unsigned          _lane;
     };
 
   }

@@ -367,10 +367,10 @@ int Epix10ka2m::ServerSequence::fetch( char* payload, int flags ) {
    if (pgpGetVc(pgpCardRx.dest) == Epix10ka::Epix10kaDestination::Data) {
 
      if ((ret > 0) && (ret < (int)_payloadSize)) {
-       printf("Epix10ka2m::ServerSequence::fetch() returning Ignore, ret was %d, looking for %u\n", ret, _payloadSize);
+       printf("Epix10ka2m::ServerSequence::fetch() returning Ignore, ret was %d(%u)\n", ret, _payloadSize);
 
-       uint32_t* u = (uint32_t*)data;
-       printf("\tDataHeader: "); for (int i=0; i<16; i++) printf("0x%08x ", u[i]); printf("\n");
+       // uint32_t* u = (uint32_t*)data;
+       // printf("\tDataHeader: "); for (int i=0; i<16; i++) printf("0x%08x ", u[i]); printf("\n");
        ret = Ignore;
      }
 

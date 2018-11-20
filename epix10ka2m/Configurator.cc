@@ -35,6 +35,7 @@
 #include "pds/epix10ka2m/Configurator.hh"
 #include "pds/epix10ka2m/Destination.hh"
 #include "pds/pgp/Reg.hh"
+#include "pds/pgp/SrpV3.hh"
 #include "pds/pgp/AxiVersion.hh"
 #include <PgpDriver.h>
 #include "ndarray/ndarray.h"
@@ -397,19 +398,12 @@ static AsicRegMode_s AconfigAddrs[Epix10kaASIC_ConfigShadow::NumberOfValues] = {
   {0x101A,  0}   //  25
 };
 
-static unsigned _writeElemAsicPCA(const Pds::Epix::Config10ka& e, 
-                                  Epix10kaAsic*                saci);
-
-static unsigned _checkElemAsicPCA(const Pds::Epix::Config10ka& e, 
-                                  Epix10kaAsic*                saci,
-                                  const char*                  base);
-
-static unsigned _writeElemCalibPCA(const Pds::Epix::Config10ka& e, 
-                                   Epix10kaAsic*                saci);
-
+#define PRINT_STR(str) { printf("Configurator[%u]: %s\n", _d.lane(), str); }
+#define PRINT_LINE(fmt, ...) { printf("Configurator[%u]: " fmt "\n", _d.lane(), __VA_ARGS__); }
 
 Configurator::Configurator(int f, unsigned lane, unsigned d) :
   Pds::Pgp::Configurator(true, f, d, lane),
+  _protocol(new Pds::Pgp::SrpV3::Protocol(f,Pgp::Pgp::portOffset())),
   _q(0), _e(0), 
   _ewrote(new Pds::Epix::Config10ka[4]),
   _eread (new Pds::Epix::Config10ka[4]),
@@ -423,18 +417,40 @@ Configurator::Configurator(int f, unsigned lane, unsigned d) :
 
   checkPciNegotiatedBandwidth();
 
-#if 1
-  Reg::setPgp(_pgp);
+  Reg::setPgp(_protocol);
   Reg::setDest(_d.dest());
 
   Quad* q = 0;
   q->_quad_monitor.monitorEn       = 1;
   q->_quad_monitor.monitorStreamEn = 1;
+  q->_quad_monitor.trigPrescaler   = 119;
   //  q->_quad_monitor.monitorEn       = 0;
   //  q->_quad_monitor.monitorStreamEn = 0;
-#endif
 
-  Quad::dumpMap();
+  //  Quad::dumpMap();
+
+  PRINT_LINE("SHT31 Humidity %2u%%",
+             unsigned(q->_quad_monitor.shtHumRaw)*100>>16);
+  PRINT_LINE("SHT31 Temperature %5.1f degC",
+             float(unsigned(q->_quad_monitor.shtTempRaw))*175./65535. - 45.);
+  PRINT_LINE("NCT218 Local Temp %u degC",
+             unsigned(q->_quad_monitor.nctLocTempRaw));
+  PRINT_LINE("NCT218 Remote Temp %5.1f degC",
+             float(unsigned(q->_quad_monitor.nctRemTempHRaw)) +
+             float(unsigned(q->_quad_monitor.nctRemTempLRaw))/256.);
+  char buff[32];
+  for(unsigned i=0; i<4; i++) {
+    sprintf(buff,"ASIC_A%d_2V5_Current",i);
+    float v = float(unsigned(q->_quad_monitor.ad7949DataRaw[i]));
+    v *= 2500./16383./330.;
+    PRINT_LINE("%s %5.3fA",buff,v);
+  }
+  for(unsigned i=0; i<2; i++) {
+    sprintf(buff,"ASIC_D%d_2V5_Current",i);
+    float v = float(unsigned(q->_quad_monitor.ad7949DataRaw[i+4]));
+    v *= 2500./16383./330.*500;
+    PRINT_LINE("%s %5.3fmA",buff,v);
+  }
 }
 
 Configurator::~Configurator() {
@@ -475,43 +491,32 @@ unsigned Configurator::_resetFrontEnd() {
 }
 
 void Configurator::_resetSequenceCount() {
-  if (_pgp) {
-    Quad* pq = 0;
-    _pgp->resetSequenceCount();
-    pq->_acqCore.acqCountReset   = 1;
-    pq->_rdoutCore.seqCountReset = 1;
-    usleep(1);
-    pq->_acqCore.acqCountReset   = 0;
-    pq->_rdoutCore.seqCountReset = 0;
-    usleep(1);
-  } else {
-    printf("Configurator::resetSequenceCount() found nil _pgp so not reset\n");
-  }
+  Quad* pq = 0;
+  _pgp->resetSequenceCount();
+  pq->_acqCore.acqCountReset   = 1;
+  pq->_rdoutCore.seqCountReset = 1;
+  usleep(1);
+  pq->_acqCore.acqCountReset   = 0;
+  pq->_rdoutCore.seqCountReset = 0;
+  usleep(1);
 }
 
 uint32_t Configurator::_sequenceCount() {
-  uint32_t count = -1U;
   Quad* q(0);
-  if (_pgp) count = q->_rdoutCore.seqCount;
-  else printf("Configurator::_sequenceCount() found nil _pgp so not read\n");
-  return (count);
+  return q->_rdoutCore.seqCount;
 }
 
 uint32_t Configurator::_acquisitionCount() {
-  uint32_t count = -1U;
   Quad* q(0);
-  if (_pgp) count = q->_acqCore.acqCount;
-  else printf("Configurator::_acquisitionCount() found nil _pgp so not read\n");
-  return (count);
+  return q->_acqCore.acqCount;
 }
 
 uint32_t Configurator::enviroData(unsigned o) {
-  Reg::setPgp(_pgp);
+  Reg::setPgp(_protocol);
   Reg::setDest(_d.dest());
   uint32_t dat=1113;
 #if 0
-  if (_pgp) _pgp->readRegister(&_d, EnviroDataBaseAddr+o, 0x5e4, &dat);
-  else printf("Configurator::enviroData() found nil _pgp so not read\n");
+  _pgp->readRegister(&_d, EnviroDataBaseAddr+o, 0x5e4, &dat);
 #endif
   return (dat);
 }
@@ -520,7 +525,7 @@ void Configurator::_enableRunTrigger(bool f) {
   Quad* q = 0;
   q->_systemRegs.trigEn = f ? 1:0;
   _pgp->maskRunTrigger(!f);
-  printf("Configurator::_enableRunTrigger(%s)\n", f ? "true" : "false");
+  PRINT_LINE("_enableRunTrigger(%s)", f ? "true" : "false");
 }
 
 void Configurator::print() {}
@@ -531,22 +536,20 @@ void Configurator::printMe() {
   printf("\n");
 }
 
-bool Configurator::_robustReadVersion(unsigned index) {
-  return false;
-
+unsigned Configurator::_robustReadVersion(unsigned index) {
   enum {numberOfTries=3};
   unsigned version = 0;
   unsigned failCount = 0;
-  printf("\n\t--flush-%u-", index);
+  PRINT_LINE("\t--flush-%u-", index);
   while (failCount<numberOfTries) {
     try {
       Quad* q(0);
       version = q->_axiVersion._fwVersion;
-      printf("%s version(0x%x)\n\t", _d.name(), version);
-      return false;
+      PRINT_LINE("%s version(0x%x)", _d.name(), version);
+      return Success;
     }
     catch( std::string& s ) {
-      printf("%s(%u)-%s", _d.name(), ++failCount, s.c_str());
+      PRINT_LINE("%s(%u)-%s", _d.name(), ++failCount, s.c_str());
     }
   }
 
@@ -556,8 +559,8 @@ bool Configurator::_robustReadVersion(unsigned index) {
     return _robustReadVersion(++index);
   }
 
-  printf("_robustReadVersion FAILED!!\n\t");
-  return true;
+  PRINT_STR("_robustReadVersion FAILED!!");
+  return Failure;
 }
 
 unsigned Configurator::configure( const Epix::PgpEvrConfig&     p,
@@ -567,10 +570,10 @@ unsigned Configurator::configure( const Epix::PgpEvrConfig&     p,
 {
   unsigned ret = 0;
 
-  Reg::setPgp(_pgp);
+  Reg::setPgp(_protocol);
   Reg::setDest(_d.dest());
-#if 1
-  printf("%s with PgpEvrConfig %p  QuadConfig %p  Elem %p\n",__PRETTY_FUNCTION__,&p,&q,a);
+
+  PRINT_LINE("%s with PgpEvrConfig %p  QuadConfig %p  Elem %p",__PRETTY_FUNCTION__,&p,&q,a);
 
   _q = &q;
   _e = a;
@@ -579,7 +582,7 @@ unsigned Configurator::configure( const Epix::PgpEvrConfig&     p,
   bool printFlag = true;
   clock_gettime(CLOCK_REALTIME, &start);
   //  _pgp->maskHWerror(true);
-  printf("Configurator::configure %s reseting front end\n", first ? "" : "not ");
+  PRINT_LINE("Configurator::configure %s reseting front end", first ? "" : "not ");
   if (first) {
     _resetFrontEnd();
     _first = true;
@@ -590,16 +593,16 @@ unsigned Configurator::configure( const Epix::PgpEvrConfig&     p,
   //  Fetch some status for sanity
   { 
     Quad* pq = 0;
-    printf("fwVersion: %x\n", unsigned(pq->_axiVersion._fwVersion));
-    printf("buildSt  : %s\n", pq->_axiVersion.buildStamp().c_str());
-    printf("upTime   : %x\n", unsigned(pq->_axiVersion._upTime));
-    printf("ddrVttPok: %x\n", unsigned(pq->_systemRegs.ddrVttPok));
-    printf("tempAlert: %x\n", unsigned(pq->_systemRegs.tempAlert));
-    printf("tempFault: %x\n", unsigned(pq->_systemRegs.tempFault));
+    PRINT_LINE("fwVersion: %x", unsigned(pq->_axiVersion._fwVersion));
+    PRINT_LINE("buildSt  : %s", pq->_axiVersion.buildStamp().c_str());
+    PRINT_LINE("upTime   : %x", unsigned(pq->_axiVersion._upTime));
+    PRINT_LINE("ddrVttPok: %x", unsigned(pq->_systemRegs.ddrVttPok));
+    PRINT_LINE("tempAlert: %x", unsigned(pq->_systemRegs.tempAlert));
+    PRINT_LINE("tempFault: %x", unsigned(pq->_systemRegs.tempFault));
 
     for(unsigned i=0; i<4; i++)
       if (_e[i].asicMask()&0xf) {
-        printf("carrierId[%u]: %08x:%08x\n", i, 
+        PRINT_LINE("carrierId[%u]: %08x:%08x", i, 
                unsigned(pq->_systemRegs.carrierId[i].hi), 
                unsigned(pq->_systemRegs.carrierId[i].lo));
       }
@@ -609,10 +612,10 @@ unsigned Configurator::configure( const Epix::PgpEvrConfig&     p,
              unsigned(pq->adConfig(i).chipId), 
              unsigned(pq->adConfig(i).chipGrade)&7);
 #endif
-    printf("SeqCount: %x\n", unsigned(pq->_rdoutCore.seqCount));
-    printf("AcqCount: %x\n", unsigned(pq->_acqCore.acqCount));
-    printf("AcqR0Wid: %x\n", unsigned(pq->_acqCore.asicR0Width));
-    printf("AcqRoClk: %x\n", unsigned(pq->_acqCore.asicRoClkCount));
+    PRINT_LINE("SeqCount: %x", unsigned(pq->_rdoutCore.seqCount));
+    PRINT_LINE("AcqCount: %x", unsigned(pq->_acqCore.acqCount));
+    PRINT_LINE("AcqR0Wid: %x", unsigned(pq->_acqCore.asicR0Width));
+    PRINT_LINE("AcqRoClk: %x", unsigned(pq->_acqCore.asicRoClkCount));
   }
 
   ret |= this->_G3config(p);
@@ -625,41 +628,36 @@ unsigned Configurator::configure( const Epix::PgpEvrConfig&     p,
     if (printFlag) {
       clock_gettime(CLOCK_REALTIME, &end);
       uint64_t diff = timeDiff(&end, &start) + 50000LL;
-      printf("- 0x%x - so far %lld.%lld milliseconds\n", ret, diff/1000000LL, diff%1000000LL);
+      PRINT_LINE("- 0x%x - so far %lld.%lld milliseconds", ret, diff/1000000LL, diff%1000000LL);
     }
     ret <<= 1;
     _enableRunTrigger(false);
-    if (printFlag) printf("\n\twriting top level config\n");
+    if (printFlag) PRINT_STR("writing top level config");
     ret |= _writeConfig();
     if (printFlag) {
       clock_gettime(CLOCK_REALTIME, &end);
       uint64_t diff = timeDiff(&end, &start) + 50000LL;
-      printf("- 0x%x - so far %lld.%lld milliseconds\n", ret, diff/1000000LL, diff%1000000LL);
+      PRINT_LINE("- 0x%x - so far %lld.%lld milliseconds", ret, diff/1000000LL, diff%1000000LL);
     }
     ret <<= 1;
-    if (printFlag) printf("\n\twriting ASIC regs\n");
+    if (printFlag) PRINT_STR("writing ASIC regs");
     ret |= _writeASIC();
     if (printFlag) {
       clock_gettime(CLOCK_REALTIME, &end);
       uint64_t diff = timeDiff(&end, &start) + 50000LL;
-      printf("- 0x%x - so far %lld.%lld milliseconds\n", ret, diff/1000000LL, diff%1000000LL);
+      PRINT_LINE("- 0x%x - so far %lld.%lld milliseconds", ret, diff/1000000LL, diff%1000000LL);
     }
     ret <<= 1;
     _enableRunTrigger(true);
-    if (usleep(10000)<0) perror("Configurator::configure second ulseep failed\n");
+    if (usleep(10000)<0) perror("configure second usleep failed");
   }
   if (printFlag) {
     clock_gettime(CLOCK_REALTIME, &end);
     uint64_t diff = timeDiff(&end, &start) + 50000LL;
-    printf("- 0x%x - \n\tdone \n", ret);
-    printf(" it took %lld.%lld milliseconds with first %u\n", diff/1000000LL, diff%1000000LL, first);
+    PRINT_LINE("- 0x%x - \n\tdone", ret);
+    PRINT_LINE(" it took %lld.%lld milliseconds with first %u", diff/1000000LL, diff%1000000LL, first);
     if (ret) dumpFrontEnd();
   }
-#else
-  _enableRunTrigger(false);
-  ret |= this->_G3config(p);
-  _enableRunTrigger(true);
-#endif
 
   return ret;
 }
@@ -677,7 +675,7 @@ unsigned Configurator::_G3config(const Pds::Epix::PgpEvrConfig& c) {
     if ((daqTick - runTick) < ((unsigned)c.runDelay() + 64)) {
       daqDelay = ((unsigned)c.runDelay() + 64) + runTick - daqTick;
     } else {
-      printf("%s Timing error!!!!!\n",__PRETTY_FUNCTION__);
+      PRINT_LINE("%s Timing error!!!!!",__PRETTY_FUNCTION__);
       return 1;
     }
   }
@@ -696,7 +694,7 @@ unsigned Configurator::_G3config(const Pds::Epix::PgpEvrConfig& c) {
     ret |= evrLaneEnable(false);
     microSpin(10);
     ret |=  waitForFiducialMode(true);
-    printf("%s setting up fiber triggering on G3 pgpcard\n",__PRETTY_FUNCTION__);
+    PRINT_STR("setting up fiber triggering on G3 pgpcard");
     //    Quad* q = 0;
     //    q->_systemRegs.trigEn = 1;
   } else {
@@ -775,10 +773,13 @@ unsigned Configurator::_checkWrittenConfig(bool writeBack) {
       uint32_t* u = reinterpret_cast<uint32_t*>(&e);
       u[0] = q->_systemRegs.carrierId[ia].lo;
       u[1] = q->_systemRegs.carrierId[ia].hi;
+      if (u[0]==0 && u[1]==0) {  // Failed to read ID, assign from position
+        u[0]=0xfffffff0 | (_d.lane()<<2) | ia;
+        u[1]=0xffffffff;
+        PRINT_LINE("Elem %d carrier Id == 0; set to %08x.%08x",ia,u[1],u[0]);
+      }
     }
 
-
-  if (!_pgp) printf("Configurator::_checkWrittenConfig found nil pgp\n");
   return ret;
 }
 
@@ -822,19 +823,19 @@ unsigned Configurator::_writeADCs()
     usleep(100);
     testDone = q->_systemRegs.adcTestDone & 1;
     if (++tmo > 100) {
-      printf("Adc Test Timedout\n");
+      PRINT_STR("Adc Test Timedout");
       return 1;
     }
   } while (testDone==0);
-  printf("Adc Test Done after %u cycles\n",tmo);
+  PRINT_LINE("Adc Test Done after %u cycles",tmo);
 
   // check the results
   if (q->_systemRegs.adcTestFail != 0) {
-    printf("%s: adc test failed\n",__PRETTY_FUNCTION__);
+    PRINT_LINE("%s: adc test failed",__PRETTY_FUNCTION__);
     unsigned v;
     for(unsigned a=0; a<10; a++)
       if ((v=q->_systemRegs.adcChanFail[a]))
-        printf("\tChannel %d failed [%x]\n",a,v);
+        PRINT_LINE("Channel %d failed [%x]",a,v);
     //    return 1;
   }
 #endif
@@ -861,26 +862,26 @@ unsigned Configurator::_writeASIC()
             if (addr==0x1015) continue;  // skip chip ID
 
             if (mode == ReadOnly) {
-              if (_debug & 1) printf("%s reading addr(%p)", __PRETTY_FUNCTION__, &reg);
+              if (_debug & 1) PRINT_LINE("%s reading addr(%p)", __PRETTY_FUNCTION__, &reg);
               u[i] = reg;
-              if (_debug & 1) printf(" data(0x%x) Asic(%u)\n", u[i], ia);
+              if (_debug & 1) PRINT_LINE(" data(0x%x) Asic(%u)", u[i], ia);
             }
 
             else if (mode==WriteOnly) {
-              if (_debug & 1) printf("%s writing addr(%p) data(0x%x)", __PRETTY_FUNCTION__, &reg, u[i]);
+              if (_debug & 1) PRINT_LINE("%s writing addr(%p) data(0x%x)", __PRETTY_FUNCTION__, &reg, u[i]);
               reg = u[i];
             }
 
             else {
-              if (_debug & 1) printf("%s writing addr(%p) data(0x%x)", __PRETTY_FUNCTION__, &reg, u[i]);
+              if (_debug & 1) PRINT_LINE("%s writing addr(%p) data(0x%x)", __PRETTY_FUNCTION__, &reg, u[i]);
               reg = u[i];
               unsigned v = reg;
-              if (_debug & 1) printf("%s read addr(%p) data(0x%x)", __PRETTY_FUNCTION__, &reg, v);
+              if (_debug & 1) PRINT_LINE("%s read addr(%p) data(0x%x)", __PRETTY_FUNCTION__, &reg, v);
             }
           }
         }
         catch(std::string& e) {
-          printf("Caught exception: %s\n",e.c_str());
+          PRINT_LINE("Caught exception: %s",e.c_str());
           ret |= Failure;
         }
       }
@@ -907,7 +908,6 @@ unsigned Configurator::_writePixelBits()
 {
   unsigned ret = Success;
   timespec tv; clock_gettime(CLOCK_REALTIME,&tv);
-  bool first = _first;
   _first = false;
 
   Quad* q = 0;
@@ -950,7 +950,7 @@ unsigned Configurator::_writePixelBits()
     }
 
     try {
-      printf("Configurator::writePixelBits PrepareForReadout for ASIC:");
+      PRINT_STR("Configurator::writePixelBits PrepareForReadout for ASIC:");
       for (unsigned index=0; index<e.numberOfAsics(); index++) {
         if (m&(1<<index)) {
           q->_asicSaci[4*ie+index].reg[PrepareForReadout] = 0;
@@ -959,8 +959,8 @@ unsigned Configurator::_writePixelBits()
       }
     }
     catch(std::string& exc) {
-      printf("%s\n",exc.c_str());
-      printf("Configurator::writePixelBits failed on PrepareForReadout\n");
+      PRINT_LINE("%s",exc.c_str());
+      PRINT_STR("writePixelBits failed on PrepareForReadout");
       ret |= Failure;
     }
   }
@@ -973,8 +973,8 @@ unsigned Configurator::_checkWrittenASIC(bool writeBack) {
   for(unsigned ie=0; ie<4; ie++) {
     const Pds::Epix::Config10ka& e = _e[ie];
     bool done = false;
-    while (!done && _e && _pgp) {
-      printf("Configurator::_checkWrittenASIC\n");
+    while (!done && _e) {
+      //      PRINT_STR("_checkWrittenASIC");
       unsigned m = e.asicMask();
       uint32_t myBuffer[sizeof(Epix10kaASIC_ConfigShadow)/sizeof(uint32_t)];
       Epix10kaASIC_ConfigShadow* readAsic = (Epix10kaASIC_ConfigShadow*) myBuffer;
@@ -982,12 +982,12 @@ unsigned Configurator::_checkWrittenASIC(bool writeBack) {
         if (m&(1<<index)) {
           Epix10kaAsic& asic = q->_asicSaci[4*ie+index];
           for (int i = 0; (i<Epix10kaASIC_ConfigShadow::NumberOfValues) && (ret==Success); i++)
-            if ((AconfigAddrs[i].mode != WriteOnly) && _pgp)
+            if ((AconfigAddrs[i].mode != WriteOnly))
               myBuffer[i] = unsigned(asic.reg[AconfigAddrs[i].addr])&0xffff;
-          printf("checking elem(%u) asic(%u)\n",ie,index);
+          //          PRINT_LINE("checking elem(%u) asic(%u)",ie,index);
           Epix10kaASIC_ConfigShadow* confAsic = (Epix10kaASIC_ConfigShadow*) &(e.asics(index));
-          if ( (ret==Success) && (*confAsic != *readAsic) && _pgp) {
-            printf("Configurator::_checkWrittenASIC failed on ASIC %u\n", index);
+          if ((*confAsic != *readAsic)) {
+            PRINT_LINE("_checkWrittenASIC failed on ASIC %u Elem %u", index, ie);
             if (writeBack) *confAsic = *readAsic;
           }
         }
@@ -995,7 +995,6 @@ unsigned Configurator::_checkWrittenASIC(bool writeBack) {
       done = true;
     }
   }
-  if (!_pgp) printf("Configurator::_checkWrittenASIC found nil pgp\n");
   return ret;
 }
 
@@ -1010,6 +1009,7 @@ unsigned Configurator::_checkWrittenASIC(bool writeBack) {
 // 8 Digital input voltage in mV. Unsigned data.
 #define NumberOfEnviroDatas 9
 
+#if 0
 static char enviroNames[NumberOfEnviroDatas+1][120] = {
   {"Thermistor 0 in degrees Celcius...."},
   {"Thermistor 1 in degrees Celcius...."},
@@ -1021,6 +1021,7 @@ static char enviroNames[NumberOfEnviroDatas+1][120] = {
   {"Analog input voltage in mV........."},
   {"Digital input voltage in mV........"}
 };
+#endif
 
 void Configurator::dumpFrontEnd() {
   timespec      start, end;
@@ -1028,18 +1029,12 @@ void Configurator::dumpFrontEnd() {
   int ret = Success;
   if (_debug & 0x100) {
     pgp()->printStatus();
-    printf("\tSequence Count(%u), Acquisition Count(%u)\n", _sequenceCount(), _acquisitionCount());
-    printf("Environmental Data:\n");
-    for (int i=0; i<NumberOfEnviroDatas; i++) {
-      if (i<3) printf("\t%s%5.2f\n", enviroNames[i], 0.01*(signed int)enviroData(i));
-      else printf("\t%s%5d\n", enviroNames[i], enviroData(i));
-    }
+    PRINT_LINE("Sequence Count(%u), Acquisition Count(%u)", _sequenceCount(), _acquisitionCount());
   }
   clock_gettime(CLOCK_REALTIME, &end);
   uint64_t diff = timeDiff(&end, &start) + 50000LL;
   if (_debug & 0x700) {
-    printf("Configurator::dumpFrontEnd took %lld.%lld milliseconds", diff/1000000LL, diff%1000000LL);
-    printf(" - %s\n", ret == Success ? "Success" : "Failed!");
+    PRINT_LINE("dumpFrontEnd took %lld.%lld milliseconds - %s", diff/1000000LL, diff%1000000LL, ret == Success ? "Success" : "Failed!");
   }
   return;
 }
@@ -1049,8 +1044,8 @@ unsigned Configurator::unconfigure()
   return 0;
 }
 
-unsigned _writeElemAsicPCA(const Pds::Epix::Config10ka& e, 
-                           Epix10kaAsic*                saci)
+unsigned Configurator::_writeElemAsicPCA(const Pds::Epix::Config10ka& e, 
+                                         Epix10kaAsic*                saci)
 {
   unsigned ret = 0;
 
@@ -1078,19 +1073,22 @@ unsigned _writeElemAsicPCA(const Pds::Epix::Config10ka& e,
   }
   unsigned max = 0;
   uint32_t pixel = e.asicPixelConfigArray()(0,0) & 0xffff;
-  printf("\nConfigurator::writePixelBits() histo");
-  for (unsigned n=0; n<16; n++) {
-    printf(" %u,", pops[n]);
-    if (pops[n] > max) {
-      max = pops[n];
-      pixel = n;
+  { char buff[128]; char* p = buff;
+    p += sprintf(p, "writePixelBits() histo");
+    for (unsigned n=0; n<16; n++) {
+      p += sprintf(p, " %u,", pops[n]);
+      if (pops[n] > max) {
+        max = pops[n];
+        pixel = n;
+      }
     }
+    PRINT_LINE("%s",buff);
   }
-  printf(" pixel %u, total pixels %u\n", pixel, totPixels);
+  PRINT_LINE(" pixel %u, total pixels %u", pixel, totPixels);
   // if (first) {
   //   if ((totPixels != pops[pixel]) || (pixel)) {
   //     usleep(1400000);
-  //     printf("Configurator::writePixelBits sleeping 1.4 seconds\n");
+  //     PRINT_LINE("Configurator::writePixelBits sleeping 1.4 seconds\n");
   //   }
   // }
 
@@ -1155,20 +1153,20 @@ unsigned _writeElemAsicPCA(const Pds::Epix::Config10ka& e,
     }
   }
   catch(std::string& exc) {
-    printf("%s\n",exc.c_str());
-    printf("Configurator::writePixelBits failed on row %u, col %u\n", row, col);
+    PRINT_LINE("%s",exc.c_str());
+    PRINT_LINE("writePixelBits failed on row %u, col %u", row, col);
     ret |= Configurator::Failure;
   }
-  printf("Configurator::writePixelBits banks %u %u %u %u\n",
+  PRINT_LINE("writePixelBits banks %u %u %u %u",
          bankHisto[0], bankHisto[1],bankHisto[2],bankHisto[3]);
-  printf("Configurator::writePixelBits asics %u %u %u %u\n",
+  PRINT_LINE("writePixelBits asics %u %u %u %u",
          asicHisto[0], asicHisto[1],asicHisto[2],asicHisto[3]);
   return ret;
 }
 
-unsigned _checkElemAsicPCA(const Pds::Epix::Config10ka& e, 
-                           Epix10kaAsic*                saci,
-                           const char*                  base)
+unsigned Configurator::_checkElemAsicPCA(const Pds::Epix::Config10ka& e, 
+                                         Epix10kaAsic*                saci,
+                                         const char*                  base)
 {
   ndarray<const uint16_t,2> pca = e.asicPixelConfigArray();
   for (unsigned index=0; index<e.numberOfAsics(); index++)
@@ -1193,7 +1191,7 @@ unsigned _checkElemAsicPCA(const Pds::Epix::Config10ka& e,
           if (a[r][c] != pca[ar][ac]) {
             nerr++;
             if (nprint) {
-              printf("  PCA error [%u][%u]  wrote(0x%x) read(0x%x)\n", ar, ac, pca[ar][ac], a[r][c]);
+              PRINT_LINE("  PCA error [%u][%u]  wrote(0x%x) read(0x%x)", ar, ac, pca[ar][ac], a[r][c]);
               nprint--;
             }
           }
@@ -1205,13 +1203,13 @@ unsigned _checkElemAsicPCA(const Pds::Epix::Config10ka& e,
       }
       fclose(fwr);
       fclose(frd);
-      printf(" %u PCA errors\n",nerr);
+      PRINT_LINE("%u PCA errors",nerr);
     }
   return Configurator::Success;
 }
 
-unsigned _writeElemCalibPCA(const Pds::Epix::Config10ka& e, 
-                            Epix10kaAsic*                saci)
+unsigned Configurator::_writeElemCalibPCA(const Pds::Epix::Config10ka& e, 
+                                          Epix10kaAsic*                saci)
 {
   unsigned ret = 0;
 
@@ -1228,7 +1226,7 @@ unsigned _writeElemCalibPCA(const Pds::Epix::Config10ka& e,
   unsigned calibRow = 176;
   try {
     for (row=0; row<2; row++) {
-      printf("Configurator::writePixelBits calibration row 0x%x\n", row);
+      PRINT_LINE("writePixelBits calibration row 0x%x", row);
       for (col=0; col<cols; col++) {
         unsigned pixel = e.calibPixelConfigArray()(row,col) & 3;
         if (row) {
@@ -1263,8 +1261,8 @@ unsigned _writeElemCalibPCA(const Pds::Epix::Config10ka& e,
     }
   }
   catch(std::string& exc) {
-    printf("%s\n",exc.c_str());
-    printf("Configurator::writePixelBits failed on row %u, col %u\n", row, col);
+    PRINT_LINE("%s",exc.c_str());
+    PRINT_LINE("writePixelBits failed on row %u, col %u", row, col);
     ret |= Configurator::Failure;
   }
   return ret;

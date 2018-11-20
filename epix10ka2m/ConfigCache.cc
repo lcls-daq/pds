@@ -9,6 +9,8 @@
 #include "pdsdata/xtc/DetInfo.hh"
 #include "pdsdata/xtc/TypeId.hh"
 
+#define USE_THREADS
+
 using namespace Pds;
 
 enum {StaticALlocationNumberOfConfigurationsForScanning=100};
@@ -98,7 +100,7 @@ int Epix10ka2m::ConfigCache::configure(const std::vector<Pds::Epix10ka2m::Server
       if (_cache) delete[] _cache;
       _cache = new char[c->_sizeof()];
       memcpy(_cache,c,c->_sizeof());
-#if 0
+#ifdef USE_THREADS
       for(unsigned q=0; q<srv.size(); q++) {
         _routine[q] = new Epix10ka2m::ConfigRoutine(q, *srv[q], *(const Epix10ka2MConfigType*)_cache);
         _task[q]->call( _routine[q] );

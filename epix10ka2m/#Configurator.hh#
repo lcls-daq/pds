@@ -224,13 +224,19 @@ namespace Pds {
       unsigned             _checkWrittenASIC(bool writeBack=true);
       unsigned             _G3config(const Pds::Epix::PgpEvrConfig&);
       unsigned             _robustReadVersion(unsigned index=0);
-      unsigned             _writeElemAsicPCA(const Pds::Epix::Config10ka& e, 
-                                             Epix10kaAsic*                saci);
-      unsigned             _checkElemAsicPCA(const Pds::Epix::Config10ka& e, 
-                                             Epix10kaAsic*                saci,
-                                             const char*                  base);
-      unsigned             _writeElemCalibPCA(const Pds::Epix::Config10ka& e, 
-                                              Epix10kaAsic*                saci);
+      unsigned             _writeElemAsicPCA(const Epix::Config10ka&,
+                                             Epix10kaAsic*);
+static unsigned _writeElemAsicPCA(const Pds::Epix::Config10ka& e, 
+                                  Epix10kaAsic*                saci);
+
+static unsigned _checkElemAsicPCA(const Pds::Epix::Config10ka& e, 
+                                  Epix10kaAsic*                saci,
+                                  const char*                  base);
+
+static unsigned _writeElemCalibPCA(const Pds::Epix::Config10ka& e, 
+                                   Epix10kaAsic*                saci);
+
+
 
     private:
       enum {MicroSecondsSleepTime=50};

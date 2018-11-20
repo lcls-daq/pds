@@ -8,6 +8,7 @@ namespace Pds {
   class MonServerManager;
   class MonEntryTH1F;
   class MonEntryScalar;
+  class MonEntryProf;
   class Server;
 
   class VmonEb {
@@ -26,6 +27,7 @@ namespace Pds {
     void depth     (unsigned events);
     void fetch_time(unsigned ticks);
     void damage_count(unsigned dmg);
+    void alloc_time(unsigned id, unsigned ticks);
     void post_time (unsigned ticks);
     void post_size (unsigned bytes);
     void update    (const ClockTime&);
@@ -39,6 +41,7 @@ namespace Pds {
     MonEntryTH1F*     _post_time;
     MonEntryTH1F*     _post_time_log;
     MonEntryTH1F*     _post_size;
+    MonEntryProf*     _alloc_time;
     unsigned          _tshift;
     unsigned          _sshift;
     unsigned          _fshift;

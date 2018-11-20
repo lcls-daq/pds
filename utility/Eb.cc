@@ -167,6 +167,9 @@ int Eb::processIo(Server* serverGeneric)
 
   _hits++;
 
+  if (_vmoneb)
+    _vmoneb->alloc_time( server->id(), SysClk::since(event->begin()) );
+
   static bool bBufferCorrupted = false;
 
   //  If we have overrun the event buffer, then the pool has been corrupted

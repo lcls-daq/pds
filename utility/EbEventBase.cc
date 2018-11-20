@@ -1,6 +1,7 @@
 #include "EbEventBase.hh"
 #include "EbServer.hh"
 #include "EbTimeouts.hh"
+#include "pds/service/SysClk.hh"
 
 static const int MaxTimeouts=0xffff;
 
@@ -40,6 +41,7 @@ EbEventBase::EbEventBase(EbBitMask creator,
   _segments         (),
   _timeouts         (MaxTimeouts),
   _datagram         (datagram),
+  _begin            (SysClk::sample()),
   _bClientGroupSet  (false),
   _post             (false)
   {
@@ -68,6 +70,7 @@ EbEventBase::EbEventBase() :
   _segments         (),
   _timeouts         (MaxTimeouts),
   _datagram         (0),
+  _begin            (0),
   _bClientGroupSet  (false),
   _post             (false)
   {

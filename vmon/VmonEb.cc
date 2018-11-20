@@ -6,8 +6,10 @@
 #include "pds/mon/MonGroup.hh"
 #include "pds/mon/MonEntryTH1F.hh"
 #include "pds/mon/MonEntryScalar.hh"
+#include "pds/mon/MonEntryProf.hh"
 #include "pds/mon/MonDescTH1F.hh"
 #include "pds/mon/MonDescScalar.hh"
+#include "pds/mon/MonDescProf.hh"
 #include "pds/utility/EbServer.hh"
 #include "pds/collection/Node.hh"
 
@@ -54,6 +56,13 @@ VmonEb::VmonEb(const Src& src,
     sprintf(tmp,"srv%02d",i);
     srv_names[i] = std::string(tmp);
   }
+
+  char srvn[256];
+  char* p = srvn;
+  for(unsigned i=0; i<nservers; i++) {
+    p += sprintf(p,"sv%02d:",i); 
+  }
+  *--p = 0;
 
   MonDescScalar fixup("Fixups",srv_names);
   _fixup = new MonEntryScalar(fixup);
@@ -108,6 +117,10 @@ VmonEb::VmonEb(const Src& src,
     //    group->add(_fetch_time_long);
   }
 
+  MonDescProf alloc_time("Alloc Time", "Server", "dTime", nservers, -0.5, float(nservers)-0.5, srvn);
+  _alloc_time = new MonEntryProf(alloc_time);
+  group->add(_alloc_time);
+
   std::vector<std::string> bit_names(32);
   for(unsigned i=0; i<32; i++) {
     sprintf(tmp,"b%02d",i);
@@ -147,6 +160,11 @@ void VmonEb::depth(unsigned events)
     _depth->addcontent(1, events);
   else
     _depth->addinfo(1, MonEntryTH1F::Overflow);
+}
+
+void VmonEb::alloc_time(unsigned id, unsigned ticks)
+{
+  _alloc_time->addy(double(ticks)*1.e-9, id);
 }
 
 void VmonEb::post_time(unsigned t)
@@ -202,6 +220,7 @@ void VmonEb::update(const ClockTime& now)
 {
   _fixup     ->time(now);
   _depth     ->time(now);
+  _alloc_time->time(now);
   _post_time ->time(now);
   _post_time_log ->time(now);
   _fetch_time->time(now);

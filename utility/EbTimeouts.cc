@@ -1,8 +1,11 @@
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 
 #include "EbTimeouts.hh"
 #include "EbTimeoutConstants.hh"
+
+//#define NO_TMO
 
 using namespace Pds;
 
@@ -119,6 +122,10 @@ unsigned EbTimeouts::duration(int s) {
 }
 
 int EbTimeouts::timeouts(const Sequence* sequence) const {
+
+#ifdef NO_TMO
+  return INT_MAX;
+#endif
 
   //printf("EbTimeouts::timeouts() tmo = %d\n", _tmos);//!!!debug
   if (sequence && sequence->service()==TransitionId::Configure)

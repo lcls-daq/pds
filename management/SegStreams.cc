@@ -51,7 +51,7 @@ SegStreams::SegStreams(PartitionMember& cmgr,
                                          ipaddress,
                                          max_event_size, max_event_depth,
                                          cmgr.slowEb(),
-                                         new VmonEb(src,32,max_event_depth,(1<<24),(1<<22)));
+                                         new VmonEb(src,8,max_event_depth,(1<<24),(1<<22)));
 
     (new VmonServerAppliance(src,name))->connect(stream(s)->inlet());
   }

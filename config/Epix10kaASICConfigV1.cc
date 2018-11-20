@@ -261,8 +261,6 @@ namespace Pds {
       while (i<NumberOfRegisters) {
         Registers c = (Registers)i++;
         if ((readOnly(c) == ReadWrite) && (doNotCopy(c) == DoCopy)) set(c,foo.get(c));
-        else printf("ASIC_ConfigV1::operator= did not copy %s because %s\n", name(c),
-        		(readOnly(c) == ReadWrite) ? "(doNotCopy(c) != DoCopy)" : "(readOnly(c) != ReadWrite)");
       }
     }
 
@@ -273,10 +271,11 @@ namespace Pds {
         Registers c = (Registers)i++;
         if (doNotCopy(c) == DoCopy) {
           // don't compare if not ReadWrite
-          ret = ( (readOnly(c) != ReadWrite) || (get(c) == foo.get(c)));
-          if (ret == false) {
+          bool lret = ( (readOnly(c) != ReadWrite) || (get(c) == foo.get(c)));
+          if (lret == false) {
             printf("\tEpix10ka ASIC_ConfigV1 %u != %u at %s\n", get(c), foo.get(c), ASIC_ConfigV1::name(c));
           }
+          ret = ret && lret;
         }
       }
       return ret;

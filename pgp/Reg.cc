@@ -1,15 +1,12 @@
 #include "pds/pgp/Reg.hh"
-#include "pds/pgp/Pgp.hh"
+#include "pds/pgp/SrpV3.hh"
 #include "pds/pgp/Destination.hh"
+#include <boost/thread/tss.hpp>
 #include <vector>
 #include <sstream>
 #include <stdio.h>
 
-//#define USE_TSS
-
-#ifdef USE_TSS
-#include <boost/thread/tss.hpp>
-#endif
+typedef Pds::Pgp::SrpV3::Protocol PgpProto;
 
 using namespace Pds::Pgp;
 
@@ -19,22 +16,16 @@ static bool _debug = false;
 //  Must use setPgp(), setDest() to switch context - not thread safe
 //
 
-#ifdef USE_TSS
-boost::thread_specific_ptr<Pgp        > _pgp;
+boost::thread_specific_ptr<PgpProto   > _pgp;
 boost::thread_specific_ptr<Destination> _dest;
 #define DESTV _dest.get()
-#define SETDEST(d) _dest.reset(d)
-#define SETPGP(p) _pgp.reset(p)
-#else
-static Pgp*         _pgp  = 0;
-static Destination* _dest = 0;
-#define DESTV _dest
-#define SETDEST(d) _dest = d 
-#define SETPGP(p) _pgp = p
-#endif
+#define PGPV  _pgp.get()
+#define SETDEST(d) { _dest.release(); _dest.reset(d); }
+#define SETPGP(p)  { _pgp .release(); _pgp .reset(p); }
+
 static unsigned     _tid  = 0;
 
-void Reg::setPgp (Pgp* p) { 
+void Reg::setPgp (PgpProto* p) { 
   SETPGP(p);
 }
 
@@ -56,9 +47,9 @@ Reg& Reg::operator=(unsigned v) {
 Reg::operator unsigned() const {
   uint64_t addr = reinterpret_cast<uint64_t>(this);
   uint32_t v;
-  if (_pgp->readRegister(DESTV, addr, _tid++, &v)!=Pgp::Pgp::Success) {
+  if (_pgp->readRegister(DESTV, addr, _tid++, &v)) {
     std::stringstream o;
-    o << "Pgp::Reg read error @ address " << std::hex << addr << "[" << v << "] dest[" << std::hex << _dest->dest() << "]";
+    o << "Pgp::Reg read error @ address " << std::hex << addr << "[" << v << "] dest[" << std::hex << _dest->dest() << "] pgp[" << PGPV << "]";
     printf("Reg::unsigned: %s\n",o.str().c_str());
     throw o.str();
   }

@@ -10,6 +10,7 @@
 
 namespace Pds {
   namespace Pgp {
+    class RegisterSlaveImportFrame;
     namespace SrpV3 {
       class RegisterSlaveFrame {
       public:
@@ -34,6 +35,29 @@ namespace Pds {
         uint32_t _addr_lo;
         uint32_t _addr_hi;
         uint32_t _req_size;
+      };
+
+      class Protocol {
+      public:
+        Protocol(int fd, unsigned lane);
+      public:
+        unsigned      writeRegister( Destination* dest,
+                                     unsigned     addr,
+                                     uint32_t     val);
+        unsigned      readRegister( Destination* dest,
+                                    unsigned     addr,
+                                    unsigned     tid,
+                                    uint32_t*    retp);
+        RegisterSlaveImportFrame*  read(unsigned size);
+      public:
+        int       fd  () const { return _fd; }
+        unsigned  lane() const { return _lane; }
+      private:
+        enum {BufferWords=8192};
+        int                    _fd;
+        unsigned               _lane;
+        unsigned               _readBuffer [BufferWords];
+        unsigned               _writeBuffer[BufferWords];
       };
     }
   }

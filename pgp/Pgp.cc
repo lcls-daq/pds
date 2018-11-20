@@ -7,7 +7,6 @@
 
 #include "pds/pgp/Pgp.hh"
 #include "pds/pgp/RegisterSlaveExportFrame.hh"
-#include "pds/pgp/SrpV3.hh"
 #include "pds/pgp/PgpRSBits.hh"
 #include "pds/pgp/Destination.hh"
 #include "pds/pgp/PgpStatus.hh"
@@ -31,7 +30,6 @@
 
 using namespace Pds::Pgp;
 
-unsigned Pgp::_srpVersion = 0;
 unsigned Pgp::_portOffset = 0;
 
 static const unsigned SelectSleepTimeUSec=100000;
@@ -77,10 +75,6 @@ Pgp::Pgp(bool use_aes, int f, bool pf, unsigned lane) : _fd(f), _useAesDriver(us
   }
   _myG3Flag = ((version>>12) & 0xf) == 3;
   printf("Pgp::Pgp found card version 0x%x which I see is %sa G3 card\n", version, _myG3Flag ? "" : "NOT ");
-  if (_srpVersion==3 && !_myG3Flag) {
-    printf("*** SRPv3 will not work without a G3 card ***\n");
-    exit(1);
-  }
   if (_myG3Flag) {
     if (use_aes) {
       _status = new AesDriverG3StatusWrap(_fd, 0, this, lane);
@@ -185,9 +179,6 @@ void     Pgp::Pgp::printStatus() {
 }
 
 ::RegisterSlaveImportFrame* Pgp::Pgp::read(unsigned size) {
-  if (_srpVersion==3) // Read result + header + trailer
-    return read_srpv3(size+sizeof(SrpV3::RegisterSlaveFrame)/sizeof(uint32_t)+1);
-
   ::RegisterSlaveImportFrame* ret = (::RegisterSlaveImportFrame*)::Pgp::_readBuffer;
   int             sret = 0;
   struct timeval  timeout;
@@ -348,9 +339,6 @@ unsigned Pgp::Pgp::writeRegister(Destination* dest,
                                  uint32_t data,
                                  bool printFlag,
                                  ::PgpRSBits::waitState w) {
-  if (_srpVersion==3)
-    return writeRegister_srpv3(dest, addr, 0x6969, &data, 1, printFlag);
-
   ::RegisterSlaveExportFrame rsef = 
     ::RegisterSlaveExportFrame(::PgpRSBits::write,
                                        dest,
@@ -393,9 +381,6 @@ unsigned Pgp::Pgp::readRegister(
                                 uint32_t* retp,
                                 unsigned size,  // in uint32s
                                 bool pf) {
-  if (_srpVersion == 3)
-    return readRegister_srpv3(dest, addr, tid, retp, size, pf);
-
   ::RegisterSlaveImportFrame* rsif;
     
   ::RegisterSlaveExportFrame  rsef = 
@@ -460,187 +445,3 @@ int Pgp::Pgp::IoctlCommand(unsigned c, long long unsigned a) {
   }
 }
 
-RegisterSlaveImportFrame* Pgp::Pgp::read_srpv3(unsigned size) 
-{
-  RegisterSlaveImportFrame* ret = 0;
-
-  struct timeval  timeout;
-  timeout.tv_sec  = 0;
-  timeout.tv_usec = SelectSleepTimeUSec;
-  fd_set          fds;
-  FD_ZERO(&fds);
-  FD_SET(_fd,&fds);
-  bool   found  = false;
-  struct DmaReadData       pgpCardRx;
-  pgpCardRx.flags   = 0;
-  pgpCardRx.is32    = 0;
-  pgpCardRx.dest    = 0;
-  pgpCardRx.size = BufferWords*sizeof(uint32_t);
-  pgpCardRx.data    = (uint64_t)(&(_readBuffer));
-  pgpCardRx.is32    = sizeof(&pgpCardRx)==4;
-  while (found == false) {
-    int sret = select(_fd+1,&fds,NULL,NULL,&timeout);
-    if (sret > 0) {
-      int readRet = ::read(_fd, &pgpCardRx, sizeof(struct DmaReadData));
-      if (readRet >= 0) {
-        SrpV3::RegisterSlaveFrame* rsf = 
-          reinterpret_cast<SrpV3::RegisterSlaveFrame*>(_readBuffer);
-        if (rsf->opcode() == PgpRSBits::read) {
-          found = true;
-          if (pgpCardRx.error) {
-            printError(pgpCardRx.error, pgpCardRx.dest);
-          } else {
-            //            rsf->print(readRet/sizeof(uint32_t));
-            // Sometimes we are missing the trailing word
-            if (readRet != int(size*sizeof(uint32_t))) {
-              printf("Pgp::read read returned %u, we were looking for %u uint32s\n", readRet, size);
-              printf("\tDmaReadData: data(%llx)  dest(%x)  flags(%x)  index(%x)  error(%x)  size(%x)  is32(%x)\n",
-                     pgpCardRx.data, pgpCardRx.dest, pgpCardRx.flags, pgpCardRx.index, pgpCardRx.error, pgpCardRx.size, pgpCardRx.is32);
-              rsf->print();
-            } else {
-              bool hardwareFailure = false;
-              uint32_t* u = (uint32_t*)rsf;
-              if (reinterpret_cast<LastBits*>(u+size-1)->failed) {
-                if (_maskHWerror == false) {
-                  printf("Pgp::read received HW failure\n");
-                  rsf->print();
-                  hardwareFailure = true;
-                } else {
-                  _maskedHWerrorCount[pgpCardRx.dest&3] += 1;
-                }
-              }
-              if (reinterpret_cast<LastBits*>(u+size-1)->timeout) {
-                printf("Pgp::read received HW timed out\n");
-                rsf->print();
-                hardwareFailure = true;
-              }
-              if (!hardwareFailure) {
-                // Format the SrpV0 frame header
-                SrpV3::RegisterSlaveFrame rsfv = *rsf;
-                ret = reinterpret_cast<RegisterSlaveImportFrame*>(_readBuffer+3);
-                Destination dest(pgpCardRx.dest);
-                ret->bits._vc      = dest.vc();
-                ret->bits.mbz      = 0;
-                ret->bits._lane    = dest.lane();
-                ret->bits._waiting = PgpRSBits::Waiting;
-                ret->bits._tid     = rsfv.tid();
-                ret->bits._addr    = rsfv.addr()&0xffffff;
-                ret->bits.dnc      = 0;
-                ret->bits.oc       = rsfv.opcode();
-              }
-            }
-          }
-        }
-      } else {
-        perror("Pgp::read() ERROR ! ");
-        found = true;
-      }
-    } else {
-      found = true;  // we might as well give up!
-      if (sret < 0) {
-        perror("Pgp::read_srpv3 select error: ");
-        printf("\tpgpLane(%u), pgpVc(%u)\n", pgpCardRx.dest>>2, pgpCardRx.dest&3);
-      } else {
-        printf("Pgp::read_srpv3 select timed out!\n");
-      }
-    }
-  }
-  return ret;
-}
-
-unsigned Pgp::writeRegister_srpv3(Destination* dest,
-                                  unsigned addr,
-                                  unsigned tid,
-                                  uint32_t* data,
-                                  unsigned size,  // in uint32s
-                                  bool pf) {
-  SrpV3::RegisterSlaveFrame* hdr = 
-    new (_writeBuffer) SrpV3::RegisterSlaveFrame(PgpRSBits::write, 
-                                                 dest, 
-                                                 addr, 
-                                                 tid, 
-                                                 size);
-  memcpy(hdr+1, data, size*sizeof(uint32_t));
-
-  // post
-  // Wait for write ready
-  struct timeval  timeout;
-  timeout.tv_sec=0;
-  timeout.tv_usec=100000;
-  fd_set          fds;
-  FD_ZERO(&fds);
-  FD_SET(_fd,&fds);
-    
-  struct DmaWriteData  pgpCardTx;
-  pgpCardTx.is32   = (sizeof(&pgpCardTx) == 4);
-  pgpCardTx.flags  = 0;
-  pgpCardTx.dest   = dest->vc() | ((dest->lane() + portOffset())<<2);
-  pgpCardTx.index  = 0;
-  pgpCardTx.size   = sizeof(*hdr) + size*sizeof(uint32_t);
-  pgpCardTx.data   = (__u64)hdr;
-
-  int ret;
-  if ((ret = select( _fd+1, NULL, &fds, NULL, &timeout)) <= 0) {
-    if (ret < 0) {
-      perror("SrpV3 post select error: ");
-    } else {
-      printf("SrpV3 post select timed out\n");
-    }
-    return Failure;
-  }
-  ::write(_fd, &pgpCardTx, sizeof(pgpCardTx));
-  return Success;
-}
-
-unsigned Pgp::readRegister_srpv3(Destination* dest,
-                                 unsigned addr,
-                                 unsigned tid,
-                                 uint32_t* retp,
-                                 unsigned size,  // in uint32s
-                                 bool pf) {
-  SrpV3::RegisterSlaveFrame hdr(PgpRSBits::read, dest, addr, tid, size);
-  // post
-  // Wait for write ready
-  struct timeval  timeout;
-  timeout.tv_sec=0;
-  timeout.tv_usec=100000;
-  fd_set          fds;
-  FD_ZERO(&fds);
-  FD_SET(_fd,&fds);
-    
-  struct DmaWriteData  pgpCardTx;
-  pgpCardTx.is32   = (sizeof(&pgpCardTx) == 4);
-  pgpCardTx.flags  = 0;
-  pgpCardTx.dest   = dest->vc() | ((dest->lane() + portOffset())<<2);
-  pgpCardTx.index  = 0;
-  pgpCardTx.size   = sizeof(hdr);
-  pgpCardTx.data   = (__u64)&hdr;
-
-  int ret;
-  if ((ret = select( _fd+1, NULL, &fds, NULL, &timeout)) <= 0) {
-    if (ret < 0) {
-      perror("SrpV3 post select error: ");
-    } else {
-      printf("SrpV3 post select timed out\n");
-    }
-    return Failure;
-  }
-  ::write(_fd, &pgpCardTx, sizeof(pgpCardTx));
-    
-  unsigned errorCount = 0;
-  while (true) {
-    RegisterSlaveImportFrame* rsif = this->read(size);
-    if (rsif == 0) {
-      printf("Pgp::readRegister _pgp->read failed!\n");
-      return Failure;
-    }
-    if ((addr&0xffffff) != rsif->addr()) {  // Can only test lowest 24 bits of addr
-      printf("Pgp::readRegister out of order response lane=%u, vc=%u, addr=0x%x(0x%x), tid=0x%x(0x%x), errorCount=%u\n",
-             dest->lane(), dest->vc(), addr, rsif->addr(), tid, rsif->tid(), ++errorCount);
-      if (errorCount > 5) return Failure;
-    } else {  // copy the data
-      memcpy(retp, rsif->array(), size * sizeof(uint32_t));
-      return Success;
-    }
-  }
-}

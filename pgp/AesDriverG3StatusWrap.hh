@@ -20,7 +20,7 @@ namespace Pds {
   class AesDriverG3StatusWrap : public PgpStatus {
       public:
         AesDriverG3StatusWrap(int f, unsigned d, Pgp* pgp, unsigned lane=0) :
-          PgpStatus(f, d, pgp), _lane(lane) {};
+          PgpStatus(f, d, pgp), portOffset(pgp->portOffset()), fd(f), _lane(lane) {};
         virtual ~AesDriverG3StatusWrap() {};
 
       public:
@@ -51,6 +51,9 @@ namespace Pds {
         int               writeScratch(unsigned);
 
       protected:
+        //  Next two members are to override static variables
+        unsigned          portOffset;
+        int               fd;
         PgpInfo           info;
         PciStatus         pciStatus;
         ::PgpStatus       status[G3_NUMBER_OF_LANES];

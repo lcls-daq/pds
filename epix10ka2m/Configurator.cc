@@ -398,18 +398,19 @@ static AsicRegMode_s AconfigAddrs[Epix10kaASIC_ConfigShadow::NumberOfValues] = {
   {0x101A,  0}   //  25
 };
 
-#define PRINT_STR(str) { printf("Configurator[%u]: %s\n", _d.lane(), str); }
-#define PRINT_LINE(fmt, ...) { printf("Configurator[%u]: " fmt "\n", _d.lane(), __VA_ARGS__); }
+#define PRINT_STR(str) { printf("Configurator[%u]: %s\n", _quad, str); }
+#define PRINT_LINE(fmt, ...) { printf("Configurator[%u]: " fmt "\n", _quad, __VA_ARGS__); }
 
-Configurator::Configurator(int f, unsigned lane, unsigned d) :
+Configurator::Configurator(int f, unsigned lane, unsigned quad, unsigned d) :
   Pds::Pgp::Configurator(true, f, d, lane),
-  _protocol(new Pds::Pgp::SrpV3::Protocol(f,Pgp::Pgp::portOffset())),
+  _protocol(new Pds::Pgp::SrpV3::Protocol(f,0)),
   _q(0), _e(0), 
   _ewrote(new Pds::Epix::Config10ka[4]),
   _eread (new Pds::Epix::Config10ka[4]),
-  _d(lane,Destination::Registers),
+  _d     (lane,Destination::Registers),
+  _quad  (quad),
   _rhisto(0),
-  _first(false)
+  _first (false)
 {
   //  Initialize cache to impossible values
   memset(_ewrote,1,4*sizeof(Pds::Epix::Config10ka));
@@ -591,7 +592,7 @@ unsigned Configurator::configure( const Epix::PgpEvrConfig&     p,
   ret |= _robustReadVersion(0);
 
   //  Fetch some status for sanity
-  { 
+  if (first) { 
     Quad* pq = 0;
     PRINT_LINE("fwVersion: %x", unsigned(pq->_axiVersion._fwVersion));
     PRINT_LINE("buildSt  : %s", pq->_axiVersion.buildStamp().c_str());
@@ -896,7 +897,7 @@ unsigned Configurator::_writeASIC()
   return ret;
 }
 
-static const unsigned WriteAhead = 1;
+static const unsigned WriteAhead = 2;
 
 #define CHKWRITE                                                           \
   if (++writeCount >= WriteAhead) {                                       \
@@ -932,7 +933,7 @@ unsigned Configurator::_writePixelBits()
       if (_debug & (1<<4)) {  // check written pixel bits (slow!)
         char buff[64];
         sprintf(buff,"/tmp/epix.%08x.l%x.e%x",
-                unsigned(tv.tv_sec), _pgp->portOffset()+_d.lane(), ie);
+                unsigned(tv.tv_sec), _d.lane(), ie);
 
         ret |= _checkElemAsicPCA(e, &q->_asicSaci[4*ie], buff);
       }

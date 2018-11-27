@@ -105,7 +105,7 @@ namespace Pds {
       
       enum {DummySize = (1<<21)};
       
-      void setFd( int fd, int fd2, unsigned lane );
+      void setFd( int fd, int fd2, unsigned lane, unsigned quad );
       
       unsigned configure(const Pds::Epix::PgpEvrConfig&,
                          const Epix10kaQuadConfig&, 
@@ -140,6 +140,7 @@ namespace Pds {
       Xtc                            _xtcConfig;
       Xtc                            _payload;
       Pds::EpixSampler::ConfigV1*     _samplerConfig;
+      unsigned                       _quad;
       unsigned                       _fiducials;
       Configurator*                  _cnfgrtr;
       unsigned                       _payloadSize;

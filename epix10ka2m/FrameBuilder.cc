@@ -100,7 +100,8 @@ int FrameBuilder::process(Xtc* xtc)
 
   //  Set the frame number
   const Pds::Pgp::DataImportFrame* e = reinterpret_cast<Pds::Pgp::DataImportFrame*>(xtc->payload());
-  unsigned quad = e->lane()-Pds::Pgp::Pgp::portOffset();
+  //  unsigned quad = e->lane()-Pds::Pgp::Pgp::portOffset();
+  unsigned quad = e->lane();
   _qmask |= (1<<quad);
   _qxtc[quad] = xtc;
 

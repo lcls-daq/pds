@@ -13,7 +13,7 @@
 
 using namespace Pds;
 
-enum {StaticALlocationNumberOfConfigurationsForScanning=100};
+enum {StaticALlocationNumberOfConfigurationsForScanning=105};
 
 static TypeId __type(const Src& src)
 {

@@ -136,6 +136,7 @@ Epix10ka2m::ServerSequence::ServerSequence( const Src& client, unsigned configMa
   _xtcSamplr(_epixSamplerDataType, client),
   _xtcConfig(TypeId(TypeId::Id_EpixSamplerConfig,2), client),
   _samplerConfig(0),
+  _quad     (-1),
   _fiducials(0),
   _cnfgrtr(0),
   _payloadSize(0),
@@ -166,10 +167,11 @@ Epix10ka2m::ServerSequence::ServerSequence( const Src& client, unsigned configMa
   _dummy = (unsigned*)malloc(DummySize);
 }
 
-void  Epix10ka2m::ServerSequence::setFd( int f, int f2, unsigned lane ) {
+void  Epix10ka2m::ServerSequence::setFd( int f, int f2, unsigned lane, unsigned quad ) {
   _myfd = f;
   fd(f);
-  _cnfgrtr = new Epix10ka2m::Configurator(f2, lane, _debug);
+  _cnfgrtr = new Epix10ka2m::Configurator(f2, lane, quad, _debug);
+  _quad = quad;
 }
 
 unsigned Epix10ka2m::ServerSequence::configure(const Epix::PgpEvrConfig&     evr,
@@ -362,7 +364,8 @@ int Epix10ka2m::ServerSequence::fetch( char* payload, int flags ) {
 
    Pds::Pgp::DataImportFrame* data = reinterpret_cast<Pds::Pgp::DataImportFrame*>(payload+offset);
 
-   data->fixup(); //fix pgp header for v3 to v2
+   //   data->fixup(); //fix pgp header for v3 to v2
+   data->first.lane = _quad;
 
    if (pgpGetVc(pgpCardRx.dest) == Epix10ka::Epix10kaDestination::Data) {
 
@@ -387,9 +390,9 @@ int Epix10ka2m::ServerSequence::fetch( char* payload, int flags ) {
      } else {
        _fiducials = data->fiducials();    // for fiber triggering
        if ((_debug & 5) || ret < 0) {
-         printf("\telementId(%u) frameType(0x%x) acqcount(0x%x) lane(%u) vc(%u)\n",
+         printf("\telementId(%u) frameType(0x%x) acqcount(0x%x) lane(%u) vc(%u) quad(%u)\n",
                 data->elementId(), data->_frameType, data->acqCount(),
-                pgpGetLane(pgpCardRx.dest)-Pgp::Pgp::portOffset(), pgpGetVc(pgpCardRx.dest));
+                pgpGetLane(pgpCardRx.dest), pgpGetVc(pgpCardRx.dest), _quad);
          uint32_t* u = (uint32_t*)data;
          printf("\tDataHeader: "); for (int i=0; i<16; i++) printf("0x%x ", u[i]); printf("\n");
        }

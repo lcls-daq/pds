@@ -195,7 +195,7 @@ namespace Pds {
 
     class Configurator : public Pds::Pgp::Configurator {
     public:
-      Configurator(int, unsigned, unsigned);
+      Configurator(int fd, unsigned lane, unsigned quad, unsigned debug);
       virtual ~Configurator();
 
       enum resultReturn {Success=0, Failure=1, Terminate=2};
@@ -240,6 +240,7 @@ namespace Pds {
       Pds::Epix::Config10ka*        _ewrote;
       Pds::Epix::Config10ka*        _eread;
       Destination                   _d;
+      unsigned                      _quad;
       unsigned*                     _rhisto;
       bool                          _first;
     };

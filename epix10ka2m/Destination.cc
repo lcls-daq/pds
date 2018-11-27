@@ -16,7 +16,7 @@ const char* Destination::name()
       "Data VC, invalid destination",
       "Registers",
       "Oscilloscope",
-      "--INVALID--"
+      "Monitor"
   };
   switch (_dest) {
     case Data:

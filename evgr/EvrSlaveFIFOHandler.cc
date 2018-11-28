@@ -302,6 +302,11 @@ Transition* EvrSlaveFIFOHandler::config      (Transition* tr)
   return tr;
 }
 
+Transition* EvrSlaveFIFOHandler::begincalib  (Transition* tr)
+{
+  return tr;
+}
+
 Transition* EvrSlaveFIFOHandler::endcalib    (Transition* tr)
 {
   return tr;

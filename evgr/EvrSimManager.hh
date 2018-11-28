@@ -29,6 +29,7 @@ namespace Pds {
     EvrFifoServer* _server;
     EvrTimer*      _done;
     SimEvr&        _er;
+    unsigned*      _events;
   };
 }
 

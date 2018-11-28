@@ -50,6 +50,7 @@ namespace Pds {
     virtual Transition* disable     (Transition*);
     virtual void        set_config  (const EvrConfigType*);
     virtual Transition* config      (Transition*); // config action
+    virtual Transition* begincalib  (Transition*);
     virtual Transition* endcalib    (Transition*);
     virtual void        get_sync    ();
     virtual void        release_sync();

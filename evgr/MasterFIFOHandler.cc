@@ -249,18 +249,6 @@ Transition* MasterFIFOHandler::enable      (Transition* tr)
   bShowFirstFiducial  = true;
   bShowFiducial       = false;
 
-  //
-  //  Calibration cycle event counting
-  //
-  const EnableEnv& env = static_cast<const EnableEnv&>(tr->env());
-  _evtStop = _evtCounter + env.events();
-
-  if (env.timer())
-    {
-      _done->set_duration_ms(env.duration());
-      _done->start();
-    }
-
   nextEnable(); // clear the unprocessed events from previous Enable-Disable
   bEnabled = true;
 
@@ -274,8 +262,26 @@ Transition* MasterFIFOHandler::config      (Transition* tr)
   return tr;
 }
 
+Transition* MasterFIFOHandler::begincalib  (Transition* tr)
+{
+  //
+  //  Calibration cycle event counting
+  //
+  const EnableEnv& env = static_cast<const EnableEnv&>(tr->env());
+  _evtStop = _evtCounter + env.events();
+
+  if (env.timer())
+  {
+    _done->set_duration_ms(env.duration());
+    _done->start();
+  }
+
+  return tr;
+}
+
 Transition* MasterFIFOHandler::endcalib    (Transition* tr)
 {
+  _done->cancel();
   ++uNumBeginCalibCycle;
   return tr;
 }
@@ -649,8 +655,6 @@ void MasterFIFOHandler::release_sync()
 {
   bShowFirstFiducial  = false;
   bShowFiducial       = true;
-
-  _done->cancel();
 
   clear();
 

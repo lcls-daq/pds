@@ -234,48 +234,31 @@ namespace Pds {
   class EvrSimEnableAction:public Action
   {
   public:
-    EvrSimEnableAction(SimEvr& er, EvrTimer& done, Appliance& app) : 
-      _er(er), _done(done), _app(app), 
-      _pool(sizeof(Occurrence),1), _events(0) {}
+    EvrSimEnableAction(SimEvr& er, unsigned* events, Appliance& app) :
+      _er(er), _events(events), _app(app),
+      _pool(sizeof(Occurrence),1) {}
 
-    Transition* fire(Transition* tr) { 
-      const EnableEnv& env = static_cast<const EnableEnv&>(tr->env());
-      if (env.timer()) {
-	_done.set_duration_ms(env.duration());
-	_done.start();
-	_events = 0;
-      }
-      else
-	_events = env.events();
-      return tr; 
-    }
+    Transition* fire(Transition* tr) { return tr; }
     InDatagram* fire(InDatagram* tr) { 
-      _er.enable(_events); 
+      _er.enable(_events ? *_events : 0);
       if (_er.master())
-	_app.post(new (&_pool) Occurrence(OccurrenceId::EvrEnabled));
+        _app.post(new (&_pool) Occurrence(OccurrenceId::EvrEnabled));
       return tr; 
     }
   private:
     SimEvr&     _er;
-    EvrTimer&   _done;
+    unsigned*   _events;
     Appliance&  _app;
     GenericPool _pool;
-    unsigned    _events;
   };
 
   class EvrSimDisableAction:public Action
   {
   public:
-    EvrSimDisableAction(EvrTimer& done) : 
-      _done(done) {}
+    EvrSimDisableAction() {}
     
-    Transition* fire(Transition* tr) { 
-      _done.cancel();
-      return tr; 
-    }
+    Transition* fire(Transition* tr) { return tr; }
     InDatagram* fire(InDatagram* tr) { return tr; }
-  private:
-    EvrTimer& _done;
   };
 
   static unsigned int configSize(unsigned maxNumEventCodes, unsigned maxNumPulses, unsigned maxNumOutputMaps)
@@ -465,23 +448,44 @@ namespace Pds {
 
   class EvrSimBeginCalibAction: public Action {
   public:
-    EvrSimBeginCalibAction(EvrSimConfigManager& cfg) : _cfg(cfg) {}
+    EvrSimBeginCalibAction(EvrSimConfigManager& cfg, EvrTimer& done, unsigned* events) :
+      _cfg(cfg), _done(done), _events(events) {}
   public:
-    Transition* fire(Transition* tr) { _cfg.configure(); return tr; }
+    Transition* fire(Transition* tr) {
+      _cfg.configure();
+      const EnableEnv& env = static_cast<const EnableEnv&>(tr->env());
+      if (env.timer()) {
+        _done.set_duration_ms(env.duration());
+        _done.start();
+        if (_events)
+          *_events = 0;
+      }
+      else
+        if (_events)
+          *_events = env.events();
+      return tr;
+    }
     InDatagram* fire(InDatagram* dg) { _cfg.insert(dg); return dg; }
   private:
     EvrSimConfigManager& _cfg;
+    EvrTimer&            _done;
+    unsigned*            _events;
   };
 
   class EvrSimEndCalibAction: public Action
   {
   public:
-    EvrSimEndCalibAction(EvrSimConfigManager& cfg): _cfg(cfg) {}
+    EvrSimEndCalibAction(EvrSimConfigManager& cfg, EvrTimer& done) :
+      _cfg(cfg), _done(done) {}
   public:
-    Transition *fire(Transition * tr) { return tr; }
+    Transition *fire(Transition * tr) {
+      _done.cancel();
+      return tr;
+    }
     InDatagram *fire(InDatagram * dg) { _cfg.advance(); return dg; }
   private:
     EvrSimConfigManager& _cfg;
+    EvrTimer&            _done;
   };
 
   class EvrSimAllocAction:public Action
@@ -518,22 +522,24 @@ EvrSimManager::EvrSimManager(CfgClientNfs & cfg) :
   _fsm   (*new Fsm),
   _server(new EvrFifoServer(cfg.src())),
   _done  (new EvrTimer(_fsm)),
-  _er    (*new SimEvr(*_server,*_done))
+  _er    (*new SimEvr(*_server,*_done)),
+  _events(new unsigned(0))
 {
   EvrSimConfigManager* cmgr = new EvrSimConfigManager(_er, cfg, _fsm);
 
   _fsm.callback(TransitionId::Map            , new EvrSimAllocAction     (cfg,_er));
   _fsm.callback(TransitionId::Configure      , new EvrSimConfigAction    (_er,*cmgr));
-  _fsm.callback(TransitionId::BeginCalibCycle, new EvrSimBeginCalibAction(*cmgr));
-  _fsm.callback(TransitionId::EndCalibCycle  , new EvrSimEndCalibAction  (*cmgr));
-  _fsm.callback(TransitionId::Enable         , new EvrSimEnableAction    (_er,*_done,_fsm));
-  _fsm.callback(TransitionId::Disable        , new EvrSimDisableAction   (*_done));
+  _fsm.callback(TransitionId::BeginCalibCycle, new EvrSimBeginCalibAction(*cmgr,*_done,_events));
+  _fsm.callback(TransitionId::EndCalibCycle  , new EvrSimEndCalibAction  (*cmgr,*_done));
+  _fsm.callback(TransitionId::Enable         , new EvrSimEnableAction    (_er,_events,_fsm));
+  _fsm.callback(TransitionId::Disable        , new EvrSimDisableAction   ());
   _fsm.callback(TransitionId::L1Accept       , new EvrSimL1Action        (_er,cfg.src()));
 }
 
 EvrSimManager::~EvrSimManager()
 {
   delete _done;
+  delete _events;
 }
 
 void EvrSimManager::randomize_nodes(bool v) { _randomize_nodes=v; }

@@ -60,6 +60,8 @@ namespace Pds {
     ///
     virtual Transition* config      (Transition*); // config action
     ///
+    virtual Transition* begincalib  (Transition*);
+    ///
     virtual Transition* endcalib    (Transition*);
     ///  Configure FIFO event handling
     virtual void        set_config  (const EvrConfigType*);

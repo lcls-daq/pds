@@ -175,8 +175,10 @@ public:
   Transition* fire(Transition* tr) {
     const EvrConfigType* cfg = _cfg.configure();
 
-    if (_fifo_handler && cfg)
-      _fifo_handler->set_config( cfg );
+    if (_fifo_handler) {
+      if (cfg) _fifo_handler->set_config( cfg );
+      _fifo_handler->begincalib(tr);
+    }
 
     _cfg.enable();
 

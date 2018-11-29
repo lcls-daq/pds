@@ -191,13 +191,6 @@ ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
     // roi y len config pv
     CREATE_PV(_ylen, "%s:SizeY_RBV");
 
-    if (_scale) {
-      // xscale config pv
-      CREATE_PV(_xscale, "%s:ScaleX_RBV");
-      // yscale config pv
-      CREATE_PV(_yscale, "%s:ScaleY_RBV");
-    }
-
     if (info.device() == Pds::DetInfo::Rayonix) {
       // Rayonix binning pv
       CREATE_PV(_rnx_bin, "%s:Bin_RBV");

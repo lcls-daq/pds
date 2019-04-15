@@ -187,12 +187,14 @@ namespace Pds {
         bool wait_power_mode(PowerMode mode, int timeout=0);
         bool power_on();
         bool power_off();
+        bool set_number_of_lines(unsigned num_lines, unsigned num_batch, bool reload=true);
         bool set_number_of_lines(unsigned num_lines, bool reload=true);
         bool set_number_of_pixels(unsigned num_pixels, bool reload=true);
         bool set_vertical_binning(unsigned binning);
         bool set_horizontal_binning(unsigned binning);
         bool set_preframe_clear(unsigned num_lines);
         bool set_idle_clear(unsigned num_lines=1);
+        bool set_preframe_skip(unsigned num_lines);
         bool set_integration_time(unsigned milliseconds);
         bool set_non_integration_time(unsigned milliseconds);
         bool set_external_trigger(bool enable, bool reload=true);

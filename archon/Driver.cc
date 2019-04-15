@@ -961,9 +961,10 @@ bool Driver::power_off()
   }
 }
 
-bool Driver::set_number_of_lines(unsigned num_lines, bool reload)
+bool Driver::set_number_of_lines(unsigned num_lines, unsigned num_batch, bool reload)
 {
-  if (edit_config_line("LINECOUNT", num_lines)) {
+  if (edit_config_line("LINESCAN", num_batch ? 1 : 0) &&
+      edit_config_line("LINECOUNT", num_batch ? num_batch * num_lines: num_lines)) {
     if (reload) {
       if (!command("APPLYCDS"))
         return false;
@@ -1007,6 +1008,11 @@ bool Driver::set_preframe_clear(unsigned num_lines)
 bool Driver::set_idle_clear(unsigned num_lines)
 {
   return load_parameter("IdleSweepCount", num_lines);
+}
+
+bool Driver::set_preframe_skip(unsigned num_lines)
+{
+  return load_parameter("PreSkipLines", num_lines);
 }
 
 bool Driver::set_integration_time(unsigned milliseconds)

@@ -246,7 +246,7 @@ namespace Pds {
                 } else if (!_driver.set_horizontal_binning(config->horizontalBinning())) {
                   printf("ConfigAction: failed to set horizontal_binning parameter!\n");
                   _error = true;
-                } else if (!_driver.set_number_of_lines(config->lines())) {
+                } else if (!_driver.set_number_of_lines(config->lines(), config->batches())) {
                   printf("ConfigAction: failed to set lines parameter!\n");
                   _error = true;
                 } else if (!_driver.set_number_of_pixels(config->pixels())) {

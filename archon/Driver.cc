@@ -189,6 +189,11 @@ uint32_t BufferInfo::write_buffer() const
   return get_value_as_uint32("WBUF");
 }
 
+uint32_t BufferInfo::latest_frame() const
+{
+  return frame_num(write_buffer());
+}
+
 bool BufferInfo::is32bit(unsigned buffer_idx) const
 {
   return get_buffer("BUF%uSAMPLE", buffer_idx);
@@ -201,7 +206,12 @@ bool BufferInfo::complete(unsigned buffer_idx) const
 
 uint32_t BufferInfo::size(unsigned buffer_idx) const
 {
-  return height(buffer_idx) * width(buffer_idx) * (is32bit(buffer_idx) ? 4 : 2);
+  // If the buffer is complete read the whole buffer otherwise read only the completed lines
+  if (complete(buffer_idx)) {
+    return height(buffer_idx) * width(buffer_idx) * (is32bit(buffer_idx) ? 4 : 2);
+  } else {
+    return lines(buffer_idx) * width(buffer_idx) * (is32bit(buffer_idx) ? 4 : 2);
+  }
 }
 
 FrameMode BufferInfo::mode(unsigned buffer_idx) const
@@ -498,6 +508,11 @@ uint32_t Config::pixelcount() const
 uint32_t Config::samplemode() const
 {
   return get_value_as_uint32("SAMPLEMODE");
+}
+
+uint32_t Config::linescan() const
+{
+  return get_value_as_uint32("LINESCAN");
 }
 
 uint32_t Config::bytes_per_pixel() const
@@ -843,6 +858,40 @@ bool Driver::fetch_frame(uint32_t frame_number, void* data, FrameMetaData* frame
   return true;
 }
 
+bool Driver::flush_frame(void* data, FrameMetaData* frame_meta)
+{
+  if (!fetch_buffer_info()) {
+    fprintf(stderr, "Error fetching frame buffer info from controller!\n");
+    return false;
+  }
+
+  ssize_t size = 0;
+  uint64_t timestamp = 0;
+  uint32_t frame_number = 0;
+  unsigned buffer_idx = _buffer_info.write_buffer();
+  if (!_buffer_info.complete(buffer_idx)) {
+    frame_number = _buffer_info.frame_num(buffer_idx);
+    timestamp = _buffer_info.timestamp(buffer_idx);
+    size = fetch_buffer(buffer_idx, data);
+    if (size != _buffer_info.size(buffer_idx)) {
+      fprintf(stderr, "Error fetching frame %u: unexpected size %lu vs expected of %u\n", frame_number, size, _buffer_info.size(buffer_idx));
+      return false;
+    }
+
+    if (frame_meta) {
+      frame_meta->number = frame_number;
+      frame_meta->timestamp = timestamp;
+      frame_meta->size = size;
+    }
+
+    _last_frame = frame_number;
+
+    return true;
+  }
+
+  return false;
+}
+
 bool Driver::wait_frame(void* data, FrameMetaData* frame_meta, int timeout)
 {
   bool waiting = true;
@@ -881,7 +930,7 @@ bool Driver::start_acquisition(uint32_t num_frames)
     fprintf(stderr, "Error fetching frame buffer info from controller!\n");
     return false;
   }
-  _last_frame = _buffer_info.frame_num();
+  _last_frame = _buffer_info.latest_frame();
 
   if (num_frames) {
     status = load_parameter("Exposures", num_frames);
@@ -912,6 +961,24 @@ bool Driver::stop_acquisition()
   }
   _acq_mode = Stopped;
   return status;
+}
+
+bool Driver::clear_acquisition()
+{
+  if (_config.linescan()) {
+    if (stop_acquisition()) {
+      // If we are in linescan mode toggle it to clear any partial frames
+      if (set_linescan_mode(false)) {
+        return set_linescan_mode(true);
+      } else {
+        return false;
+      }
+    } else {
+      return false;
+    }
+  } else {
+    return stop_acquisition();
+  }
 }
 
 bool Driver::wait_power_mode(PowerMode mode, int timeout)
@@ -1023,6 +1090,20 @@ bool Driver::set_integration_time(unsigned milliseconds)
 bool Driver::set_non_integration_time(unsigned milliseconds)
 {
   return load_parameter("NoIntMS", milliseconds);
+}
+
+bool Driver::set_linescan_mode(bool enable, bool reload)
+{
+  if (edit_config_line("LINESCAN", enable ? 1 : 0)) {
+    if (reload) {
+      if (!command("APPLYCDS"))
+        return false;
+    }
+
+    return true;
+  } else {
+    return false;
+  }
 }
 
 bool Driver::set_external_trigger(bool enable, bool reload)

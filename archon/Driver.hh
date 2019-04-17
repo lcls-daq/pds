@@ -48,6 +48,7 @@ namespace Pds {
         uint32_t current_buffer() const;
         uint32_t read_buffer() const;
         uint32_t write_buffer() const;
+        uint32_t latest_frame() const;
         bool is32bit(unsigned buffer_idx=0) const;
         bool complete(unsigned buffer_idx=0) const;
         uint32_t size(unsigned buffer_idx=0) const;
@@ -133,6 +134,7 @@ namespace Pds {
         uint32_t linecount() const;
         uint32_t pixelcount() const;
         uint32_t samplemode() const;
+        uint32_t linescan() const;
         uint32_t bytes_per_pixel() const;
         uint32_t pixels_per_line() const;
         uint32_t total_pixels() const;
@@ -182,8 +184,10 @@ namespace Pds {
         bool fetch_config();
         bool fetch_frame(uint32_t frame_number, void* data, FrameMetaData* frame_meta=NULL, bool need_fetch=true);
         bool wait_frame(void* data, FrameMetaData* frame_meta=NULL, int timeout=0);
+        bool flush_frame(void* data, FrameMetaData* frame_meta=NULL);
         bool start_acquisition(uint32_t num_frames=0);
         bool stop_acquisition();
+        bool clear_acquisition();
         bool wait_power_mode(PowerMode mode, int timeout=0);
         bool power_on();
         bool power_off();
@@ -197,6 +201,7 @@ namespace Pds {
         bool set_preframe_skip(unsigned num_lines);
         bool set_integration_time(unsigned milliseconds);
         bool set_non_integration_time(unsigned milliseconds);
+        bool set_linescan_mode(bool enable, bool reload=true);
         bool set_external_trigger(bool enable, bool reload=true);
         bool set_clock_at(unsigned ticks);
         bool set_clock_st(unsigned ticks);

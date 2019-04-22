@@ -16,7 +16,7 @@ struct server_post {
 using namespace Pds::Archon;
 
 Server::Server( const Src& client )
-  : _xtc( _archonDataType, client ), _count(0), _framesz(0), _last_frame(0), _first_frame(true)
+  : _xtc( _archonDataType, client ), _count(0), _framesz(0), _pending(0), _last_frame(0), _first_frame(true)
 {
   _xtc.extent = sizeof(ArchonDataType) + sizeof(Xtc);
   int err = ::pipe(_pfd);
@@ -83,15 +83,28 @@ void Server::setFrame(uint32_t frame)
   _first_frame = false;
 }
 
-void Server::post(uint32_t frame, const void* hdr, const void* ptr)
+void Server::post(uint32_t frame, const void* hdr, const void* ptr, bool sync)
 {
   void* ret_ptr;
   struct server_post info = { frame, hdr, ptr };
   ::write(_pfd[1], &info, sizeof(info));
-  // wait for the reciever to finish using the posted buffer
-  ::read(_pfd[2], &ret_ptr, sizeof(ret_ptr));
-  if (ptr != ret_ptr) {
-    fprintf(stderr, "Error: server post did not return expected pointer %p instead of %p\n", ret_ptr, ptr);
+  if (sync) {
+    // wait for the reciever to finish using the posted buffer
+    ::read(_pfd[2], &ret_ptr, sizeof(ret_ptr));
+    if (ptr != ret_ptr) {
+      fprintf(stderr, "Error: server post did not return expected pointer %p instead of %p\n", ret_ptr, ptr);
+    }
+  } else {
+    _pending++;
+  }
+}
+
+void Server::wait_buffers()
+{
+  void* ret_ptr;
+  while (_pending) {
+    ::read(_pfd[2], &ret_ptr, sizeof(ret_ptr));
+    _pending--;
   }
 }
 

@@ -1500,6 +1500,11 @@ int Driver::_recv(char* buf, unsigned bufsz)
   return len;
 }
 
+const uint32_t Driver::last_frame() const
+{
+  return _last_frame;
+}
+
 const unsigned long long Driver::time()
 {
   if (command("TIMER")) {

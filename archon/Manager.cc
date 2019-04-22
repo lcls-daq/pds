@@ -24,6 +24,7 @@ namespace Pds {
         _server(server),
         _disable(true),
         _first(false),
+        _batches(0),
         _frame_sz(0),
         _buffer_sz(0),
         _buffer(0),
@@ -36,22 +37,30 @@ namespace Pds {
       Task& task() { return *_task; }
       void enable () { _disable=false; _first=true; _task->call(this); }
       void disable() { _disable=true ; _driver.timeout_waits(); }
-      void set_frame(uint32_t width, uint32_t height, uint32_t depth, uint32_t offset) {
+      void set_frame(uint32_t width, uint32_t height, uint32_t depth, uint32_t offset, uint32_t batches) {
+        unsigned new_buffer_sz = 0;
+
         // Redo the frame header
         if (_header) delete _header;
           _header = new ArchonDataType(width, height, depth, offset);
 
         _frame_sz = _header->_sizeof() - sizeof(ArchonDataType);
         _server.set_frame_sz(_frame_sz);
+        _batches = batches;
+        if (_batches) {
+          new_buffer_sz = batches * _frame_sz;
+        } else {
+          new_buffer_sz = _frame_sz;
+        }
         if (_buffer) {
-          if (_frame_sz > _buffer_sz) {
+          if (new_buffer_sz > _buffer_sz) {
             delete[] _buffer;
-            _buffer = new char[_frame_sz];
-            _buffer_sz = _frame_sz;
+            _buffer = new char[new_buffer_sz];
+            _buffer_sz = new_buffer_sz;
           }
         } else {
-          _buffer = new char[_frame_sz];
-          _buffer_sz = _frame_sz;
+          _buffer = new char[new_buffer_sz];
+          _buffer_sz = new_buffer_sz;
         }
       }
       void routine() {
@@ -61,13 +70,29 @@ namespace Pds {
         } else {
           if (_first) {
             _first = false;
+            if (_batches)
+              _server.setFrame(_batches * _driver.last_frame());
             _sem.take();
           }
           if (_buffer) {
+            // wait for previously posted buffers to be available before waiting for the frame
+            _server.wait_buffers();
+            // wait for the next frame
             if (_driver.wait_frame(_buffer, &_frame_meta)) {
-              _server.post(_frame_meta.number, _header, _buffer);
-            } else if(!_disable) {
+              if (_batches) {
+                for (unsigned n=0; n<_batches; n++)
+                  _server.post(_batches * (_frame_meta.number - 1) + n + 1, _header, _buffer + (_frame_sz * n), false);
+              } else {
+                _server.post(_frame_meta.number, _header, _buffer);
+              }
+            } else if (!_disable) {
               fprintf(stderr, "Error: FrameReader failed to retrieve frame from the Archon\n");
+            } else if (_batches) {
+              if (_driver.flush_frame(_buffer, &_frame_meta)) {
+                for (unsigned n=0; n<(_frame_meta.size / _frame_sz); n++)
+                  _server.post(_batches * (_frame_meta.number - 1) + n + 1, _header, _buffer + (_frame_sz * n), false);
+                _driver.clear_acquisition();
+              }
             }
           } else {
             fprintf(stderr, "Error: FrameReader has not been allocated a data buffer!\n");
@@ -82,6 +107,7 @@ namespace Pds {
       Server&         _server;
       bool            _disable;
       bool            _first;
+      unsigned        _batches;
       unsigned        _frame_sz;
       unsigned        _buffer_sz;
       char*           _buffer;
@@ -209,7 +235,7 @@ namespace Pds {
             }
 
             if (_driver.fetch_buffer_info()) {
-              _server.setFrame(info.frame_num());
+              _server.setFrame(config->batches() ? config->batches() * info.latest_frame() : info.latest_frame());
             } else {
               printf("Invalid buffer info returned by controller!\n");
               _error = true;
@@ -264,6 +290,9 @@ namespace Pds {
                 } else if (!_driver.set_idle_clear(config->idleSweepCount())) {
                   printf("ConfigAction: failed to set idle_clear parameter!\n");
                   _error = true;
+                } else if (!_driver.set_preframe_skip(config->preSkipLines())) {
+                  printf("ConfigAction: failed to set preframe_skip parameter!\n");
+                  _error = true;
                 } else if (!_driver.set_external_trigger(config->readoutMode() == ArchonConfigType::Triggered)) {
                   printf("ConfigAction: failed to set external_trigger parameter!\n");
                   _error = true;
@@ -283,7 +312,11 @@ namespace Pds {
                 UserMessage* msg = new (&_occPool) UserMessage("Archon Config Error: failed to set timing/bias parameters!\n");
                 _mgr.appliance().post(msg);
               } else {
-                _reader.set_frame(config_rbv.pixels_per_line(), config_rbv.linecount(), config_rbv.bytes_per_pixel()*8, 0);
+                  _reader.set_frame(config_rbv.pixels_per_line(),
+                                    config_rbv.linecount() / (config->batches() ? config->batches() : 1),
+                                    config_rbv.bytes_per_pixel()*8,
+                                    0,
+                                    config->batches());
                 // Waiting for ccd power tp reach desired state - timeout after 2000 ms
                 switch (config->power()) {
                   case ArchonConfigType::On:

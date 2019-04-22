@@ -35,7 +35,9 @@ namespace Pds {
       void resetCount();
       void setFrame(uint32_t);
 
-      void post(uint32_t, const void*, const void*);
+      void post(uint32_t, const void*, const void*, bool sync=true);
+
+      void wait_buffers();
 
       void set_frame_sz(unsigned);
 
@@ -43,6 +45,7 @@ namespace Pds {
       Xtc _xtc;
       unsigned  _count;
       unsigned  _framesz;
+      unsigned  _pending;
       uint32_t  _last_frame;
       bool      _first_frame;
       int       _pfd[4];

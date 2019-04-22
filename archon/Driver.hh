@@ -211,6 +211,7 @@ namespace Pds {
         int find_config_line(const char* line, bool use_cache=true);
         void timeout_waits(bool request_timeout=true);
         void set_frame_poll_interval(unsigned microseconds);
+        const uint32_t last_frame() const;
         const unsigned long long time();
         const char* rd_config_line(unsigned num);
         const char* command_output(const char* cmd, char delim='\n');

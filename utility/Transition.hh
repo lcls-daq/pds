@@ -22,11 +22,11 @@ namespace Pds {
     Transition(TransitionId::Value id,
          Phase           phase,
          const Sequence& sequence,
-         const Env&      env, 
+         const Env&      env,
          unsigned        size=sizeof(Transition));
 
     Transition(TransitionId::Value id,
-         const Env&          env, 
+         const Env&          env,
          unsigned            size=sizeof(Transition));
 
     Transition(const Transition&);
@@ -134,15 +134,12 @@ namespace Pds {
 
   class RunInfo : public Transition {
   public:
-    RunInfo(unsigned run, unsigned experiment);
-    RunInfo(unsigned run, unsigned experiment, char *expname);
+    RunInfo(unsigned run, const char *expname);
     unsigned run();
-    unsigned experiment();
-    char *expname();
+    const char *expname();
   private:
-    static const unsigned MaxExpName=16;
+    static const unsigned MaxExpName=32;
     uint32_t _run;
-    uint32_t _experiment;
     char     _expname  [MaxExpName];
   };
 
@@ -151,7 +148,7 @@ namespace Pds {
     Kill(const Node& allocator);
 
     const Node& allocator() const;
-  
+
   private:
     Node _allocator;
   };

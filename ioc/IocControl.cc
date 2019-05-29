@@ -18,7 +18,6 @@ using namespace Pds;
 
 IocControl::IocControl() :
   _station(0),
-  _expt_id(0),
   _pv_ignore(0),
   _recording(0),
   _initialized(0),
@@ -32,12 +31,12 @@ IocControl::IocControl() :
 IocControl::IocControl(const char* offlinerc,
                        const char* instrument,
                        unsigned    station,
-                       unsigned    expt_id,
+                       const char* expt_name,
                        const char* controlrc,
                        unsigned    pv_ignore) :
   _instrument(instrument),
   _station   (station),
-  _expt_id   (expt_id),
+  _expt_name (expt_name),
   _pv_ignore (pv_ignore),
   _recording (0),
   _occSender(new IocOccurrence(this))
@@ -131,12 +130,12 @@ void IocControl::write_config(IocConnection *c, unsigned run, unsigned stream)
 
     c->configure(run, stream);
     c->transmit("hostname " + c->host() + "\n");
-    sprintf(buf, "dbinfo daq %d %d %d\n", _expt_id, run, stream);
+    sprintf(buf, "dbinfo daq %s %d %d\n", _expt_name.c_str(), run, stream);
     c->transmit(buf);
     for(std::list<std::string>::iterator it=_offlinerc.begin();
         it!=_offlinerc.end(); it++)
         c->transmit(*it);
-    sprintf(buf, "output daq/xtc/e%d-r%04d-s%02d\n", _expt_id, run, stream);
+    sprintf(buf, "output daq/xtc/e%s-r%04d-s%02d\n", _expt_name.c_str(), run, stream);
     c->transmit(buf);
     c->transmit("quiet\n");
     sprintf(buf, "pv ignore %d\n", _pv_ignore);
@@ -179,17 +178,17 @@ Transition* IocControl::transitions(Transition* tr)
   char trans[1024];
 #ifdef DBUG
   printf("IocControl::transitions %s %d.%09d\n",
-         TransitionId::name(tr->id()), 
+         TransitionId::name(tr->id()),
          tr->sequence().clock().seconds(),
          tr->sequence().clock().nanoseconds());
-#endif  
+#endif
   switch(tr->id()) {
   case TransitionId::Configure:
       sprintf(_trans, "trans %d %d %d %d\n",
-              TransitionId::Configure, tr->sequence().clock().seconds(), 
+              TransitionId::Configure, tr->sequence().clock().seconds(),
               tr->sequence().clock().nanoseconds(), tr->sequence().stamp().fiducials());
       break;
-  case TransitionId::BeginRun: 
+  case TransitionId::BeginRun:
       /* Make connections to the world. */
       for(std::list<IocNode*>::iterator it=_selected_nodes.begin();
           it!=_selected_nodes.end(); it++) {
@@ -240,7 +239,7 @@ Transition* IocControl::transitions(Transition* tr)
       if (!_recording)
           break;
       sprintf(trans, "trans %d %d %d %d\n",
-              tr->id(), tr->sequence().clock().seconds(), 
+              tr->id(), tr->sequence().clock().seconds(),
               tr->sequence().clock().nanoseconds(), tr->sequence().stamp().fiducials());
       IocConnection::transmit_all(trans);
       break;
@@ -248,7 +247,7 @@ Transition* IocControl::transitions(Transition* tr)
       if (_recording) {
           /* Pass along the transition, if we were recording. */
           sprintf(trans, "trans %d %d %d %d\n",
-                  tr->id(), tr->sequence().clock().seconds(), 
+                  tr->id(), tr->sequence().clock().seconds(),
                   tr->sequence().clock().nanoseconds(), tr->sequence().stamp().fiducials());
           IocConnection::transmit_all(trans);
       }
@@ -286,7 +285,6 @@ void IocControl::_report_data_error(const std::string& msg, const unsigned run, 
   printf("%s\n",msg.c_str());
   if (_occSender) {
     // Send an occurrance with the error message
-    _occSender->iocControlError(msg, _expt_id, run, stream, 0);
+    _occSender->iocControlError(msg, _expt_name.c_str(), run, stream, 0);
   }
 }
-

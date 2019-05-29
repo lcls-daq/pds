@@ -311,25 +311,16 @@ Allocate::Allocate(const Allocation& allocation,
 const Allocation& Allocate::allocation() const
 { return _allocation; }
 
-RunInfo::RunInfo(unsigned run, unsigned experiment) :
+RunInfo::RunInfo(unsigned run, const char* expname) :
   Transition(TransitionId::BeginRun, Transition::Execute,
              none(TransitionId::BeginRun), run,
              sizeof(RunInfo)),
-  _run(run),_experiment(experiment)
-{
-  _expname[0] = '\0';
-}
-RunInfo::RunInfo(unsigned run, unsigned experiment, char *expname) :
-  Transition(TransitionId::BeginRun, Transition::Execute,
-             none(TransitionId::BeginRun), run,
-             sizeof(RunInfo)),
-  _run(run),_experiment(experiment)
+  _run(run)
 {
   strncpy(_expname, expname, MaxExpName-1);
 }
 unsigned RunInfo::run() {return _run;}
-unsigned RunInfo::experiment() {return _experiment;}
-char *RunInfo::expname() {return _expname;}
+const char* RunInfo::expname() {return _expname;}
 
 Kill::Kill(const Node& allocator) : 
   Transition(TransitionId::Unmap, Transition::Execute, none(TransitionId::Unmap), 0, 

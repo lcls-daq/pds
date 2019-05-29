@@ -45,7 +45,7 @@ UserMessage::UserMessage(const char* msg) :
   Occurrence(OccurrenceId::UserMessage,
 	     sizeof(UserMessage))
 {
-  strncpy(_msg, msg, MaxMsgLength); 
+  strncpy(_msg, msg, MaxMsgLength);
   _msg[MaxMsgLength-1] = 0;
 }
 
@@ -55,13 +55,13 @@ int  UserMessage::remaining() const
 }
 
 void UserMessage::append(const char* msg)
-{ 
+{
   int l = strlen(_msg);
   strncpy(_msg+l, msg, MaxMsgLength-l);
   _msg[MaxMsgLength-1] = 0;
 }
 
-DataFileOpened::DataFileOpened(unsigned _expt,
+DataFileOpened::DataFileOpened(const char* _expt,
                                unsigned _run,
                                unsigned _stream,
                                unsigned _chunk,
@@ -69,13 +69,13 @@ DataFileOpened::DataFileOpened(unsigned _expt,
                                char* _path) :
   Occurrence(OccurrenceId::DataFileOpened,
   sizeof(DataFileOpened)),
-  expt  (_expt  ),
   run   (_run   ),
   stream(_stream),
   chunk (_chunk )
 {
   strncpy(host, _host, sizeof(host)-1);
   strncpy(path, _path, sizeof(path)-1);
+  strncpy(expt, _expt, sizeof(expt)-1);
 }
 
 EvrCommandRequest::EvrCommandRequest(const std::vector<unsigned>& codes) :

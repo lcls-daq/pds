@@ -5,6 +5,7 @@
 #include "pds/utility/OccurrenceId.hh"
 #include "pdsdata/xtc/Sequence.hh"
 
+#include <string.h>
 #include <vector>
 
 namespace Pds {
@@ -27,7 +28,7 @@ namespace Pds {
   class DataFileOpened : public Occurrence
   {
   public:
-    DataFileOpened(unsigned _expt,
+    DataFileOpened(const char* _expt,
 		   unsigned _run,
 		   unsigned _stream,
 		   unsigned _chunk,
@@ -36,7 +37,8 @@ namespace Pds {
   public:
     enum { MaxHostLength=40 };
     enum { MaxPathLength=200 };
-    unsigned expt;
+    enum { MaxExptLength=64 };
+    char expt[MaxExptLength];
     unsigned run;
     unsigned stream;
     unsigned chunk;
@@ -47,19 +49,21 @@ namespace Pds {
   class DataFileError : public Occurrence
   {
   public:
-    DataFileError(unsigned _expt,
+    DataFileError(const char* _expt,
 		   unsigned _run,
 		   unsigned _stream,
 		   unsigned _chunk ) :
       Occurrence(OccurrenceId::DataFileError,
 		 sizeof(DataFileError)),
-      expt  (_expt  ),
       run   (_run   ),
       stream(_stream),
       chunk (_chunk )
-    {}
+    {
+        strncpy(expt, _expt, sizeof(expt)-1);
+    }
   public:
-    unsigned expt;
+    enum { MaxExptLength=64 };
+    char expt[MaxExptLength];
     unsigned run;
     unsigned stream;
     unsigned chunk;
@@ -82,10 +86,10 @@ namespace Pds {
   class EvrCommand : public Occurrence
   {
   public:
-    EvrCommand(const Sequence& _seq, unsigned char _code) : 
-      Occurrence(OccurrenceId::EvrCommand,sizeof(EvrCommand)), 
+    EvrCommand(const Sequence& _seq, unsigned char _code) :
+      Occurrence(OccurrenceId::EvrCommand,sizeof(EvrCommand)),
       seq (_seq ),
-      code(_code) 
+      code(_code)
     {}
   public:
     Sequence seq;

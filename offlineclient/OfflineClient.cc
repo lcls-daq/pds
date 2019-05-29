@@ -7,9 +7,6 @@
 #include "pdsdata/xtc/Xtc.hh"
 #include "pdsdata/xtc/TypeId.hh"
 #include "OfflineClient.hh"
-
-#include "LogBook/Connection.h"
-
 #include <stdio.h>
 
 using namespace Pds;
@@ -90,75 +87,29 @@ bool PartitionDescriptor::valid()
 //      {instrument_name,experiment_name} -> {experiment_id}
 //
 OfflineClient::OfflineClient(const char* path, PartitionDescriptor& pd, const char *experiment_name, bool verbose) :
-    _path (path),
+    _pd(pd),
     _experiment_name (experiment_name),
-    _experiment_number(OFFLINECLIENT_DEFAULT_EXPNUM),
-    _station_number(OFFLINECLIENT_DEFAULT_STATION),
+    _client(NULL),
     _verbose(verbose),
-    _pd(pd)
+    _isTesting(false)
 {
-    if (_pd.valid()) {
-      _instrument_name = _pd.GetInstrumentName().c_str();
-      _station_number= _pd.GetStationNumber();
-    }
     if (_verbose) {
       printf("entered %s: path='%s', instrument='%s:%u', experiment='%s'\n", __PRETTY_FUNCTION__,
-             _path, _instrument_name, _station_number, _experiment_name);
+             path, _pd.GetInstrumentName().c_str(), _pd.GetStationNumber(), _experiment_name.c_str());
     }
+    _isTesting = (path == (char *)NULL) || (strcmp(path, "/dev/null") == 0); 
     if (_pd.valid()) {
-      // translate experiment name to experiment number
-      LogBook::Connection * conn = NULL;
-
       try {
-          if (strcmp(path, "/dev/null") == 0) {
-              if (_verbose) {
-                printf("%s: use experiment #1 (path=/dev/null)\n", __PRETTY_FUNCTION__);
-              }
-              _experiment_number = 1;
-          } else {
-              conn = LogBook::Connection::open(path);
-              if (conn == NULL) {
-                  fprintf(stderr, "LogBook::Connection::connect() failed\n");
-              }
-          }
-
-          if (conn != NULL) {
-              // begin transaction
-              conn->beginTransaction();
-
-              // translate experiment name to experiment number
-              std::string instrument = _instrument_name;
-              std::string experiment = _experiment_name;
-              LogBook::ExperDescr descr;
-              if (conn->getOneExperiment (descr, instrument, experiment)) {
-                // database lookup successful
-                _experiment_number = descr.id;
-              } else {
-                fprintf (stderr, "%s: experiment '%s' not found\n", __PRETTY_FUNCTION__,
-                        _experiment_name);
-              }
-          }
-
-      } catch (const LogBook::ValueTypeMismatch& e) {
-        fprintf (stderr, "Parameter type mismatch %s:\n", e.what());
-
-      } catch (const LogBook::WrongParams& e) {
-        fprintf (stderr, "Problem with parameters %s:\n", e.what());
-      
-      } catch (const LogBook::DatabaseError& e) {
-        fprintf (stderr, "Database operation failed: %s\n", e.what());
-      }
-
-      if (conn != NULL) {
-          // close connection
-          delete conn ;
+         _client = WSLogbookClient::createWSLogbookClient(path, _experiment_name.c_str(), _pd.GetInstrumentName().c_str(), _pd.GetStationNumber(), _verbose);
+         _info = _client->get_experiment_details();
+      } catch(const std::runtime_error& e){
+        fprintf(stderr, "Caught exception %s\n", e.what());
       }
     } else {
       fprintf(stderr, "%s: partition descriptor not valid\n", __PRETTY_FUNCTION__);
     }
     if (_verbose) {
-      printf ("%s: experiment %s/%s (#%d) \n", __PRETTY_FUNCTION__,
-              _instrument_name, _experiment_name, _experiment_number);
+      printf ("%s: experiment %s/%s \n", __PRETTY_FUNCTION__, _pd.GetInstrumentName().c_str(), _experiment_name.c_str());
     }
 }
 
@@ -166,140 +117,33 @@ OfflineClient::OfflineClient(const char* path, PartitionDescriptor& pd, const ch
 // OfflineClient (current experiment name retrieved from database)
 //
 OfflineClient::OfflineClient(const char* path, PartitionDescriptor& pd, bool verbose) :
-    _path (path),
+    _pd(pd),
     _experiment_name(OFFLINECLIENT_DEFAULT_EXPNAME),
-    _experiment_number(OFFLINECLIENT_DEFAULT_EXPNUM),
-    _station_number(OFFLINECLIENT_DEFAULT_STATION),
+    _client(NULL),
     _verbose(verbose),
-    _pd(pd)
+    _isTesting(false)
 {
-    if (_pd.valid()) {
-      _instrument_name = _pd.GetInstrumentName().c_str();
-      _station_number= _pd.GetStationNumber();
-    }
     if (_verbose) {
-      printf("entered OfflineClient(path=%s, instr=%s, station=%u)\n", _path, _instrument_name, _station_number);
+      printf("entered OfflineClient(path=%s, instr=%s, station=%u)\n", path, _pd.GetInstrumentName().c_str(), _pd.GetStationNumber());
     }
+    _isTesting = (path == (char *)NULL) || (strcmp(path, "/dev/null") == 0); 
     if (_pd.valid()) {
-      LogBook::Connection * conn = NULL;
       try {
-        conn = LogBook::Connection::open(path);
-        if (conn == NULL) {
-          fprintf(stderr, "LogBook::Connection::connect() failed\n");
-        } else {
-          // begin transaction
-          conn->beginTransaction();
-
-          // get current experiment
-          std::string instrument = _instrument_name;
-          
-          if (conn->getCurrentExperiment(_experiment_descr, instrument, _station_number)) {
-            _experiment_name = _experiment_descr.name.c_str();
-            _experiment_number = _experiment_descr.id;
-          } else {
-            fprintf (stderr, "%s: No experiment found for instrument %s:%u\n",
-                     __FUNCTION__, _instrument_name, _station_number);
-          }
-        }
-      } catch (const LogBook::ValueTypeMismatch& e) {
-        fprintf (stderr, "Parameter type mismatch %s:\n", e.what());
-
-      } catch (const LogBook::WrongParams& e) {
-        fprintf (stderr, "Problem with parameters %s:\n", e.what());
-      
-      } catch (const LogBook::DatabaseError& e) {
-        fprintf (stderr, "Database operation failed: %s\n", e.what());
-      }
-
-      if (conn != NULL) {
-          // close connection
-          delete conn ;
+         _client = WSLogbookClient::createWSLogbookClient(path, _experiment_name.c_str(), _pd.GetInstrumentName().c_str(), _pd.GetStationNumber(), _verbose);
+         _info = _client->get_experiment_details();
+      } catch(const std::runtime_error& e){
+        fprintf(stderr, "Caught exception %s\n", e.what());
       }
       if (_verbose) {
-        printf ("%s: instrument %s:%u experiment %s (#%d) \n", __PRETTY_FUNCTION__,
-                _instrument_name, _station_number, _experiment_name, _experiment_number);
+        printf ("%s: instrument %s:%u experiment %s \n", __PRETTY_FUNCTION__, _pd.GetInstrumentName().c_str(), _pd.GetStationNumber(), _experiment_name.c_str());
       }
     } else {
       fprintf(stderr, "%s: partition descriptor not valid\n", __PRETTY_FUNCTION__);
     }
 }
 
-//
-// AllocateRunNumber
-//
-// Allocate a new run number from the database.
-// If database is NULL then the run number is set to 0.
-//
-// NOTE: Allocating a run number won't result in any runs automatically
-// registered in LogBook or any other database.
-//
-// SEE ALSO: BeginNewRun()
-//
-// RETURNS: 0 if successful, otherwise -1
-//
-int OfflineClient::AllocateRunNumber(unsigned int *runNumber) {
-  LogBook::Connection * conn = NULL;
-  int returnVal = -1;  // default return is ERROR
-
-  // sanity check
-  if (runNumber && _instrument_name && _experiment_name) {
-
-    // in case of NULL database, set run number to 0
-    if ((_path == (char *)NULL) || (strcmp(_path, "/dev/null") == 0)) {
-      *runNumber = _run_number = 0;
-      returnVal = 0;  // OK
-    } else {
-      printf("Allocating run number (instrument '%s:%u', experiment '%s')\n", _instrument_name, _station_number, _experiment_name);
-      try {
-        conn = LogBook::Connection::open(_path);
-
-        if (conn != NULL) {
-          // begin transaction
-          conn->beginTransaction();
-
-          // allocate run # from database
-          _run_number = (unsigned) conn->allocateRunNumber(_instrument_name, _experiment_name);
-          *runNumber = _run_number;
-          returnVal = 0; // OK
-
-          // commit transaction
-          conn->commitTransaction();
-        } else {
-            printf("LogBook::Connection::connect() failed\n");
-        }
-
-      } catch (const LogBook::ValueTypeMismatch& e) {
-        printf ("Parameter type mismatch %s:\n", e.what());
-        returnVal = -1; // ERROR
-
-      } catch (const LogBook::WrongParams& e) {
-        printf ("Problem with parameters %s:\n", e.what());
-        returnVal = -1; // ERROR
-    
-      } catch (const LogBook::DatabaseError& e) {
-        printf ("Database operation failed: %s\n", e.what());
-        returnVal = -1; // ERROR
-      }
-
-      if (0 == returnVal) {
-        printf("Completed allocating run number %d\n",_run_number);
-      }
-
-      if (conn != NULL) {
-        // close connection
-        delete conn ;
-      }
-    }
-  }
-
-  if (-1 == returnVal) {
-    _run_number = 0;
-    if (runNumber)
-      *runNumber = _run_number;
-    printf("%s returning error, setting run number = 0\n", __FUNCTION__);
-  }
-
-  return (returnVal);
+OfflineClient::~OfflineClient() {
+    delete _client;
 }
 
 //
@@ -307,67 +151,27 @@ int OfflineClient::AllocateRunNumber(unsigned int *runNumber) {
 //
 // Begin new run: create a new run entry in the database.
 //
-// NOTE: Allocating a run number won't result in any runs automatically
-// registered in LogBook or any other database.
-//
-// SEE ALSO: AllocateRunNumber()
-//
 // RETURNS: 0 if successful, otherwise -1
 //
-int OfflineClient::BeginNewRun(int runNumber) {
-  LusiTime::Time now;
-  LogBook::Connection * conn = NULL;
+int OfflineClient::BeginNewRun(unsigned int *runNumber) {
   int returnVal = -1;  // default return is ERROR
 
   // sanity check
-  if (runNumber && _instrument_name && _experiment_name) {
+  if (_client && runNumber && !_experiment_name.empty()) {
 
     // in case of NULL database, do nothing
-    if ((_path == (char *)NULL) || (strcmp(_path, "/dev/null") == 0)) {
+    if (_isTesting) {
       returnVal = 0;  // OK
     } else {
-      printf("Creating new run number %d database entry\n", runNumber);
+      printf("Starting a new run\n");
       try {
-        conn = LogBook::Connection::open(_path);
-
-        if (conn != NULL) {
-          // begin transaction
-          conn->beginTransaction();
-
-          // LogBook: begin run
-          now = LusiTime::Time::now();
-          conn->beginRun(_instrument_name,
-                         _experiment_name,
-                         runNumber, "DATA", now); // DATA/CALIB
-
+          unsigned int newRunNumber = _client->start_run();
+          *runNumber = newRunNumber;
+          printf("Started new run %d\n", newRunNumber);
           returnVal = 0; // OK
-
-          // commit transaction
-          conn->commitTransaction();
-        } else {
-            printf("LogBook::Connection::connect() failed\n");
-        }
-
-      } catch (const LogBook::ValueTypeMismatch& e) {
-        printf ("Parameter type mismatch %s:\n", e.what());
-        returnVal = -1; // ERROR
-
-      } catch (const LogBook::WrongParams& e) {
-        printf ("Problem with parameters %s:\n", e.what());
-        returnVal = -1; // ERROR
-    
-      } catch (const LogBook::DatabaseError& e) {
-        printf ("Database operation failed: %s\n", e.what());
-        returnVal = -1; // ERROR
-      }
-
-      if (0 == returnVal) {
-        printf("Completed creating new run rumber %d database entry\n", runNumber);
-      }
-
-      if (conn != NULL) {
-        // close connection
-        delete conn ;
+      } catch(const std::runtime_error& e){
+          printf("Caught exception starting a new run %s\n", e.what());
+          returnVal = -1; // ERROR
       }
     }
   }
@@ -379,204 +183,145 @@ int OfflineClient::BeginNewRun(int runNumber) {
   return (returnVal);
 }
 
-int OfflineClient::reportOpenFile (int expt, int run, int stream, int chunk, std::string& host, std::string& dirpath, bool ffb) {
-  LogBook::Connection * conn = NULL;
+int OfflineClient::EndCurrentRun() {
   int returnVal = -1;  // default return is ERROR
 
   // sanity check
-  if (run && _instrument_name && _experiment_name) {
+  if (_client && !_experiment_name.empty()) {
 
-    // in case of NULL database, report nothing
-    if ((_path == (char *)NULL) || (strcmp(_path, "/dev/null") == 0)) {
+    // in case of NULL database, do nothing
+    if (_isTesting) {
       returnVal = 0;  // OK
     } else {
+      printf("Ending the current run\n");
       try {
-        conn = LogBook::Connection::open(_path);
-
-        if (conn != NULL) {
-          // begin transaction
-          conn->beginTransaction();
-          // fast feedback option
-          if (ffb) {
-            conn->reportOpenFile(expt, run, stream, chunk, host, dirpath, "ffb"); // fast feedback
-          } else {
-            conn->reportOpenFile(expt, run, stream, chunk, host, dirpath);
-          }
+          _client->end_run();
+          printf("Ended the current run\n");
           returnVal = 0; // OK
-
-          // commit transaction
-          conn->commitTransaction();
-        } else {
-            printf("LogBook::Connection::connect() failed\n");
-        }
-
-      } catch (const LogBook::ValueTypeMismatch& e) {
-        printf ("Parameter type mismatch %s:\n", e.what());
-        returnVal = -1; // ERROR
-
-      } catch (const LogBook::WrongParams& e) {
-        printf ("Problem with parameters %s:\n", e.what());
-        returnVal = -1; // ERROR
-    
-      } catch (const LogBook::DatabaseError& e) {
-        printf ("Database operation failed: %s\n", e.what());
-        returnVal = -1; // ERROR
-      }
-
-      if (conn != NULL) {
-        // close connection
-        delete conn ;
+      } catch(const std::runtime_error& e){
+          printf("Caught exception ending the current run%s\n", e.what());
+          returnVal = -1; // ERROR
       }
     }
   }
 
   if (-1 == returnVal) {
-    fprintf(stderr, "Error reporting open file expt %d run %d stream %d chunk %d\n",
-            expt, run, stream, chunk);
+    printf("%s returning error\n", __FUNCTION__);
+  }
+
+  return (returnVal);
+
+}
+
+int OfflineClient::reportOpenFile (std::string& dirpath, int run, int stream, int chunk, std::string& host, bool ffb) {
+  int returnVal = -1;  // default return is ERROR
+
+  // sanity check
+  if (_client != NULL && !_experiment_name.empty()) {
+
+    // in case of NULL database, report nothing
+    if (_isTesting) {
+      returnVal = 0;  // OK
+    } else {
+      try {
+        _client->report_open_file(dirpath.c_str(), stream, chunk, host.c_str(), ffb);
+        returnVal = 0; // OK
+      } catch(const std::runtime_error& e){
+          printf("Caught exception %s\n", e.what());
+          returnVal = -1; // ERROR
+      }
+    }
+  }
+
+  if (-1 == returnVal) {
+    fprintf(stderr, "Error reporting open file expt %s run %d stream %d chunk %d\n",
+            _experiment_name.c_str(), run, stream, chunk);
   }
 
   return (returnVal);
 }
 
-int OfflineClient::reportDetectors (int expt, int run, std::vector<std::string>& names) {
-  LogBook::Connection * conn = NULL;
+int OfflineClient::reportDetectors (int run, std::vector<std::string>& names) {
   int returnVal = -1;  // default return is ERROR
 
   // sanity check
-  if ((names.size() > 0) && run && _instrument_name && _experiment_name) {
+  if (_client != NULL && (names.size() > 0) && !_experiment_name.empty()) {
     // in case of NULL database, report nothing
-    if ((_path == (char *)NULL) || (strcmp(_path, "/dev/null") == 0)) {
+    if (_isTesting) {
       returnVal = 0;  // OK
     } else {
       try {
-        conn = LogBook::Connection::open(_path);
-
-        if (conn != NULL) {
-          // begin transaction
-          conn->beginTransaction();
-
-          std::vector<std::string>::iterator nn;
-          for (nn = names.begin(); nn != names.end(); nn++) {
-            conn->createRunAttr(_instrument_name, _experiment_name, run,
-                                "DAQ Detectors", *nn, "", "");
-          }
-          returnVal = 0; // OK
-
-          // commit transaction
-          conn->commitTransaction();
-        } else {
-            printf("LogBook::Connection::connect() failed\n");
-        }
-
-      } catch (const LogBook::ValueTypeMismatch& e) {
-        printf ("Parameter type mismatch %s:\n", e.what());
-        returnVal = -1; // ERROR
-
-      } catch (const LogBook::WrongParams& e) {
-        printf ("Problem with parameters %s:\n", e.what());
-        returnVal = -1; // ERROR
-    
-      } catch (const LogBook::DatabaseError& e) {
-        printf ("Database operation failed: %s\n", e.what());
-        returnVal = -1; // ERROR
-      }
-
-      if (conn != NULL) {
-        // close connection
-        delete conn ;
+        _client->reportDetectors(names);
+        returnVal = 0; // OK
+      } catch(const std::runtime_error& e){
+          printf("Caught exception %s\n", e.what());
+          returnVal = -1; // ERROR
       }
     }
   }
   return (returnVal);
 }
 
-int OfflineClient::reportTotals (int expt, int run, long events, long damaged, double gigabytes) {
-  LogBook::Connection * conn = NULL;
+int OfflineClient::reportTotals (int run, long events, long damaged, double gigabytes) {
   int returnVal = -1;  // default return is ERROR
 
   // sanity check
-  if (run && _instrument_name && _experiment_name) {
+  if (_client != NULL && !_experiment_name.empty()) {
     // in case of NULL database, report nothing
-    if ((_path == (char *)NULL) || (strcmp(_path, "/dev/null") == 0)) {
+    if (_isTesting) {
       returnVal = 0;  // OK
     } else {
       try {
-        conn = LogBook::Connection::open(_path);
-
-        if (conn != NULL) {
-          // begin transaction
-          conn->beginTransaction();
-
-          conn->createRunAttr(_instrument_name, _experiment_name, run,
-                              "DAQ Detector Totals", "Events", "Total number of events", events);
-
-          conn->createRunAttr(_instrument_name, _experiment_name, run,
-                              "DAQ Detector Totals", "Damaged", "Number of damaged events", damaged);
-
-          conn->createRunAttr(_instrument_name, _experiment_name, run,
-                              "DAQ Detector Totals", "Size", "Amount of data recorded [GB]", gigabytes);
-
-          returnVal = 0; // OK
-
-          // commit transaction
-          conn->commitTransaction();
-        } else {
-            printf("LogBook::Connection::connect() failed\n");
-        }
-
-      } catch (const LogBook::ValueTypeMismatch& e) {
-        printf ("Parameter type mismatch %s:\n", e.what());
-        returnVal = -1; // ERROR
-
-      } catch (const LogBook::WrongParams& e) {
-        printf ("Problem with parameters %s:\n", e.what());
-        returnVal = -1; // ERROR
-    
-      } catch (const LogBook::DatabaseError& e) {
-        printf ("Database operation failed: %s\n", e.what());
-        returnVal = -1; // ERROR
-      }
-
-      if (conn != NULL) {
-        // close connection
-        delete conn ;
+        _client->reportTotals(events, damaged, gigabytes);
+        returnVal = 0; // OK
+      } catch(const std::runtime_error& e){
+          printf("Caught exception %s\n", e.what());
+          returnVal = -1; // ERROR
       }
     }
   }
   return (returnVal);
 }
 
-//
-// GetExperimentNumber
-//
-unsigned int OfflineClient::GetExperimentNumber() {
-    return (_experiment_number);
+
+int OfflineClient::reportParams(int run, std::map<std::string, std::string> params) { 
+  int returnVal = -1;  // default return is ERROR
+
+  // sanity check
+  if (_client != NULL && !_experiment_name.empty()) {
+    // in case of NULL database, report nothing
+    if (_isTesting) {
+      returnVal = 0;  // OK
+    } else {
+      try {
+        _client->add_run_params(params);
+        returnVal = 0; // OK
+      } catch(const std::runtime_error& e){
+          printf("Caught exception %s\n", e.what());
+          returnVal = -1; // ERROR
+      }
+    }
+  }
+  return (returnVal);
 }
 
 //
 // GetExperimentName
 //
-const char * OfflineClient::GetExperimentName() {
-  return (_experiment_name);
+std::string OfflineClient::GetExperimentName() {
+  return _experiment_name;
 }
 
 //
 // GetInstrumentName
 //
-const char * OfflineClient::GetInstrumentName() {
-    return (_instrument_name);
-}
-
-//
-// GetPath
-//
-const char * OfflineClient::GetPath() {
-    return (_path);
+std::string OfflineClient::GetInstrumentName() {
+    return _pd.GetInstrumentName();
 }
 
 //
 // GetStationNumber
 //
 unsigned int OfflineClient::GetStationNumber() {
-    return (_station_number);
+    return _pd.GetStationNumber();
 }

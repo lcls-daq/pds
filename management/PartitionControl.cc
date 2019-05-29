@@ -103,17 +103,17 @@ namespace Pds {
   class ReportJob : public Routine {
   public:
     ReportJob(RunAllocator& allocator,
-              int expt, int run, int stream, int chunk, std::string& hostname, std::string& fname) :
+              int run, int stream, int chunk, std::string& hostname, std::string& fname) :
       _allocator(allocator),
-      _expt(expt), _run(run), _stream(stream), _chunk(chunk), _host_name(hostname), _fname(fname) {}
+      _run(run), _stream(stream), _chunk(chunk), _host_name(hostname), _fname(fname) {}
   public:
     void routine() {
-      _allocator.reportOpenFile(_expt,_run,_stream,_chunk,_host_name,_fname);
+      _allocator.reportOpenFile(_run,_stream,_chunk,_host_name,_fname);
       delete this;
     }
   private:
     RunAllocator& _allocator;
-    int _expt, _run, _stream, _chunk;
+    int _run, _stream, _chunk;
     std::string _host_name;
     std::string _fname;
   };
@@ -121,16 +121,16 @@ namespace Pds {
   class ReportDetectors : public Routine {
   public:
     ReportDetectors(RunAllocator& allocator,
-                    int expt, int run, std::vector<std::string>& names) :
-      _allocator(allocator), _expt(expt), _run(run), _names(names) {}
+                    int run, std::vector<std::string>& names) :
+      _allocator(allocator), _run(run), _names(names) {}
   public:
     void routine() {
-      _allocator.reportDetectors(_expt,_run,_names);
+      _allocator.reportDetectors(_run,_names);
       delete this;
     }
   private:
     RunAllocator& _allocator;
-    int _expt, _run, _stream, _chunk;
+    int _run, _stream, _chunk;
     std::vector<std::string> _names;
   };
 
@@ -397,7 +397,6 @@ PartitionControl::PartitionControl(unsigned platform,
   _control_cb     (&cb),
   _platform_cb    (0),
   _sequencer      (0),
-  _experiment     (0),
   _use_run_info   (true),
   _reportTask     (new Task(TaskObject("controlRep"))),
   _tmo            (tmo)
@@ -557,7 +556,7 @@ void  PartitionControl::set_runAllocator (RunAllocator* ra) {
   _runAllocator = ra;
 }
 
-void  PartitionControl::set_experiment   (unsigned experiment) {
+void  PartitionControl::set_experiment   (const std::string& experiment) {
   _experiment=experiment;
 }
 
@@ -628,7 +627,7 @@ void PartitionControl::message(const Node& hdr, const Message& msg)
         if (_runAllocator) {
           std::string hostname = dfo.host;
           std::string fname = dfo.path;
-          _reportTask->call(new ReportJob(*_runAllocator, dfo.expt, dfo.run, dfo.stream, dfo.chunk, hostname, fname));
+          _reportTask->call(new ReportJob(*_runAllocator, dfo.run, dfo.stream, dfo.chunk, hostname, fname));
         }
         break;
       }
@@ -674,9 +673,9 @@ void PartitionControl::_next()
     case Mapped    : _queue(TransitionId::Configure      ); break;
     case Configured: {
       if (_use_run_info) {
-        unsigned run = _runAllocator->alloc();
+        unsigned run = _runAllocator->beginRun();
         if (run!=RunAllocator::Error) {
-          RunInfo rinfo(run,_experiment); _queue(rinfo);
+          RunInfo rinfo(run,_experiment.c_str()); _queue(rinfo);
         }
       }
       else {
@@ -792,4 +791,3 @@ void PartitionControl::_eb_tmo_recovery()
     _tmo->routine();
   }
 }
-

@@ -80,7 +80,7 @@ namespace Pds {
     void  set_transition_payload(TransitionId::Value, Xtc*, void*);
     void  set_run          (unsigned run);
     void  set_runAllocator (RunAllocator* ra);
-    void  set_experiment   (unsigned experiment);
+    void  set_experiment   (const std::string& experiment);
     void  set_sequencer    (Sequencer* seq);
     void  use_run_info(bool);
   public: // Implements ControlLevel
@@ -114,7 +114,7 @@ namespace Pds {
     RunAllocator*     _runAllocator;
     Sequencer*        _sequencer;
     unsigned   _run;
-    unsigned   _experiment;
+    std::string _experiment;
     bool       _use_run_info;
     unsigned   _pulse_id;
     Task*      _reportTask;

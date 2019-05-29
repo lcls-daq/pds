@@ -17,7 +17,7 @@ class Pds::IocOccurrence : public Pds::Routine {
   public:
     IocOccurrence(IocControl *cntl);
     ~IocOccurrence();
-    void iocControlError(const std::string& msg, unsigned expt, unsigned run, unsigned stream, unsigned chunk);
+    void iocControlError(const std::string& msg, const std::string& expt, unsigned run, unsigned stream, unsigned chunk);
     void iocControlWarning(const std::string& msg);
     void routine();
 
@@ -26,10 +26,10 @@ class Pds::IocOccurrence : public Pds::Routine {
       friend class IocOccurrence;
       public:
         Message(const std::string& msg);
-        Message(const std::string& msg, unsigned expt, unsigned run, unsigned stream, unsigned chunk);
+        Message(const std::string& msg, const std::string& expt, unsigned run, unsigned stream, unsigned chunk);
       private:
         std::string _msg;
-        unsigned    _expt;
+        std::string _expt;
         unsigned    _run;
         unsigned    _stream;
         unsigned    _chunk;

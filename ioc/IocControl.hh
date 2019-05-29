@@ -20,7 +20,7 @@ namespace Pds {
     IocControl(const char* offlinerc,
                const char* instrument,
                unsigned    station,
-               unsigned    expt_id,
+               const char*    expt_name,
                const char* controlrc,
                unsigned    pv_ignore=0);
     ~IocControl();
@@ -50,7 +50,7 @@ namespace Pds {
     std::list<std::string> _offlinerc;   /// Logbook credentials
     std::string         _instrument;     /// Instrument
     unsigned            _station;        /// Instrument station
-    unsigned            _expt_id;        /// Experiment number
+    std::string         _expt_name;      /// Experiment name
     unsigned            _pv_ignore;      /// Ignore setting for scalar PV recording
     int                 _recording;      /// Are we recording now?
     int                 _initialized;    /// Are we properly initialized?

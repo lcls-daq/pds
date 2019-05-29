@@ -26,7 +26,7 @@ IocOccurrence::~IocOccurrence()
   delete _sem;
 }
 
-void IocOccurrence::iocControlError(const std::string& msg, unsigned expt, unsigned run, unsigned stream, unsigned chunk)
+void IocOccurrence::iocControlError(const std::string& msg, const std::string& expt, unsigned run, unsigned stream, unsigned chunk)
 {
   _sem->take();
   _messages.push_back(new Message(msg, expt, run, stream, chunk));
@@ -56,7 +56,7 @@ void IocOccurrence::routine()
   if(errm) {
     // send occurrence: file error
     if(errm->_error) {
-      DataFileError* occ = new (&_dataFileErrorPool) DataFileError(errm->_expt, errm->_run, errm->_stream, errm->_chunk);
+      DataFileError* occ = new (&_dataFileErrorPool) DataFileError(errm->_expt.c_str(), errm->_run, errm->_stream, errm->_chunk);
       _cntl->post(occ);
     }
     // send occurrence: user message
@@ -69,14 +69,14 @@ void IocOccurrence::routine()
 
 IocOccurrence::Message::Message(const std::string& msg) :
   _msg(msg),
-  _expt(0),
+  _expt(),
   _run(0),
   _stream(0),
   _chunk(0),
   _error(false)
 {}
 
-IocOccurrence::Message::Message(const std::string& msg, unsigned expt, unsigned run, unsigned stream, unsigned chunk) :
+IocOccurrence::Message::Message(const std::string& msg, const std::string& expt, unsigned run, unsigned stream, unsigned chunk) :
   _msg(msg),
   _expt(expt),
   _run(run),

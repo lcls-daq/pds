@@ -439,7 +439,7 @@ bool Module::configure_acquistion(uint64_t nframes, double trig_delay, double ex
   }
 
   printf("setting exposure time to %.6f seconds\n", exposure_time);
-  put_command_print("exptime", 0.000010);
+  put_command_print("exptime", exposure_time);
 
   return status() != ERROR;
 }

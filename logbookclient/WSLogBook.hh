@@ -2,14 +2,14 @@
 #ifndef WSLOGBOOK_HH
 #define WSLOGBOOK_HH
 
+#include <Python.h>
+
 #include <string>
 #include <list>
 #include <vector>
 #include <map>
 #include <iostream>
 #include <stdexcept>
-
-#include <Python.h>
 
 
 namespace Pds {

@@ -2,11 +2,11 @@
 #ifndef OFFLINECLIENT_HH
 #define OFFLINECLIENT_HH
 
-#include <vector>
-
 #include "pds/logbookclient/WSLogBook.hh"
 
-#define OFFLINECLIENT_DEFAULT_EXPNAME ((char *)NULL)
+#include <vector>
+
+#define OFFLINECLIENT_DEFAULT_EXPNAME ""
 #define OFFLINECLIENT_DEFAULT_EXPNUM  0
 #define OFFLINECLIENT_DEFAULT_STATION 0u
 #define OFFLINECLIENT_MAX_PARMS       1000

@@ -1,12 +1,11 @@
+#include "WSLogBook.hh"
+
 #include <strings.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <fstream>
-
-#include "WSLogBook.hh"
-
 
 
 using namespace Pds;

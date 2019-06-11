@@ -1,3 +1,4 @@
+#include "OfflineClient.hh"
 #include <string.h>
 #include <strings.h>
 #include <stdlib.h>
@@ -6,7 +7,6 @@
 #include "pds/client/Action.hh"
 #include "pdsdata/xtc/Xtc.hh"
 #include "pdsdata/xtc/TypeId.hh"
-#include "OfflineClient.hh"
 #include <stdio.h>
 
 using namespace Pds;

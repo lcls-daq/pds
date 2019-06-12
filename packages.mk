@@ -1,7 +1,7 @@
 # List of packages (low level first)
 packages := service collection xtc
-packages += config confignfs configsql mon vmon logbookclient
-packages += utility management client offlineclient
+packages += config confignfs configsql mon vmon
+packages += utility management client
 packages += ipimb camera evgr epicstools pgp imp
 packages += pnccd epicsArch
 packages += oceanoptics fli andor usdusb
@@ -23,7 +23,7 @@ packages += gsc16ai
 packages += quadadc
 
 ifneq ($(findstring x86_64,$(tgt_arch)),)
-  packages += firewire jungfrau uxi archon
+  packages += firewire jungfrau uxi archon logbookclient offlineclient
 ##  No DDL
 #  packages += phasics
 else

@@ -14,6 +14,7 @@ class LogbookClient:
         self.uid = uid
         self.passwd = passwd
         self.useKerberos = useKerberos
+        self.authHeaders = { "auth": requests.auth.HTTPBasicAuth(self.uid, self.passwd) }
 
         root = logging.getLogger()
         ch = logging.StreamHandler(sys.stdout)
@@ -29,12 +30,12 @@ class LogbookClient:
 
     def getActiveExperimentForInstrumentStation(self, instrument_name, station_num):
         logger.debug("Getting current active experiment for %s %s", instrument_name, station_num)
-        resp = requests.get(self.serverUrl + "lgbk/ws/activeexperiment_for_instrument_station", params={"instrument_name" : instrument_name, "station": station_num})
+        resp = requests.get(self.serverUrl + "lgbk/ws/activeexperiment_for_instrument_station", params={"instrument_name" : instrument_name, "station": station_num}, **self.authHeaders)
         return resp.json()["value"]["name"]
 
     def getExperimentDetails(self, experiment_name):
         logger.debug("Getting experiment details for experiment %s ", experiment_name)
-        resp = requests.get(self.serverUrl + "lgbk/{0}/ws/info".format(experiment_name))
+        resp = requests.get(self.serverUrl + "lgbk/{0}/ws/info".format(experiment_name), **self.authHeaders)
         info = resp.json()["value"]
         ret = {}
         ret["name"] = experiment_name
@@ -48,7 +49,7 @@ class LogbookClient:
 
     def getCurrentRun(self, experiment_name):
         logger.debug("Getting the current run for experiment %s ", experiment_name)
-        resp = requests.get(self.serverUrl + "run_control/{0}/ws/current_run".format(experiment_name))
+        resp = requests.get(self.serverUrl + "run_control/{0}/ws/current_run".format(experiment_name), **self.authHeaders)
         info = resp.json()
         if "value" in info and info["value"]:
             return int(info["value"]["num"])
@@ -57,22 +58,22 @@ class LogbookClient:
 
     def startRun(self, experiment_name, run_type=None):
         logger.debug("Starting a new run for experiment %s ", experiment_name)
-        resp = requests.get(self.serverUrl + "run_control/{0}/ws/start_run".format(experiment_name), params={"run_type": run_type} if run_type else None)
+        resp = requests.get(self.serverUrl + "run_control/{0}/ws/start_run".format(experiment_name), params={"run_type": run_type} if run_type else None, **self.authHeaders)
         info = resp.json()
         return int(info["value"]["num"])
 
     def endRun(self, experiment_name):
         logger.debug("Ending the current run for experiment %s ", experiment_name)
-        resp = requests.get(self.serverUrl + "run_control/{0}/ws/end_run".format(experiment_name))
+        resp = requests.get(self.serverUrl + "run_control/{0}/ws/end_run".format(experiment_name), **self.authHeaders)
         info = resp.json()
         return int(info["value"]["num"])
 
     def addRunParams(self, experiment_name, params):
         logger.debug("Adding %s run params for experiment %s ", len(params), experiment_name)
-        resp = requests.post(self.serverUrl + "run_control/{0}/ws/add_run_params".format(experiment_name), json=params)
+        resp = requests.post(self.serverUrl + "run_control/{0}/ws/add_run_params".format(experiment_name), json=params, **self.authHeaders)
         return resp.json()
 
     def registerFile(self, experiment_name, fileInfo):
         logger.debug("Registering file %s for experiment %s ", fileInfo["path"], experiment_name)
-        resp = requests.post(self.serverUrl + "/lgbk/{0}/ws/register_file".format(experiment_name), json=fileInfo)
+        resp = requests.post(self.serverUrl + "/lgbk/{0}/ws/register_file".format(experiment_name), json=fileInfo, **self.authHeaders)
         return resp.json()

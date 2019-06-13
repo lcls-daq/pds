@@ -118,7 +118,6 @@ OfflineClient::OfflineClient(const char* path, PartitionDescriptor& pd, const ch
 //
 OfflineClient::OfflineClient(const char* path, PartitionDescriptor& pd, bool verbose) :
     _pd(pd),
-    _experiment_name(OFFLINECLIENT_DEFAULT_EXPNAME),
     _client(NULL),
     _verbose(verbose),
     _isTesting(false)
@@ -131,6 +130,7 @@ OfflineClient::OfflineClient(const char* path, PartitionDescriptor& pd, bool ver
       try {
          _client = WSLogbookClient::createWSLogbookClient(path, _experiment_name.c_str(), _pd.GetInstrumentName().c_str(), _pd.GetStationNumber(), _verbose);
          _info = _client->get_experiment_details();
+         _experiment_name = _info.name;
       } catch(const std::runtime_error& e){
         fprintf(stderr, "Caught exception %s\n", e.what());
       }

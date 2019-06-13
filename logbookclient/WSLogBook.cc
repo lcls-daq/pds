@@ -6,6 +6,8 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <fstream>
+#include <unistd.h>
+#include <limits.h>
 
 
 using namespace Pds;
@@ -54,9 +56,9 @@ WSLogbookClient* WSLogbookClient::createWSLogbookClient(
 WSLogbookClient* WSLogbookClient::createWSLogbookClient( const std::string& configPath, const char* experiment_name, const char* instrument_name, const int station_num, bool verbose ) {
     std::map<std::string, std::string> configs;
     _parse_config_(configs, configPath, verbose);
-    std::vector<std::string> config_keys; config_keys.push_back("logbook_endpoint"); config_keys.push_back("logbook_uid"); config_keys.push_back("logbook_password"); config_keys.push_back("logbook_use_kerberos");
+    std::vector<std::string> config_keys; config_keys.push_back("logbook_endpoint"); config_keys.push_back("logbook_uid"); config_keys.push_back("logbook_pwd"); config_keys.push_back("logbook_use_kerberos");
     for(size_t i = 0; i < config_keys.size(); i++) {
-        if(configs.find(std::string(config_keys[i])) == configs.end()) throw std::runtime_error("Config file missing key '" + config_keys[i] + "' \n");
+        if(configs.find(std::string(config_keys[i])) == configs.end()) throw std::runtime_error("Config file " + configPath + " missing key '" + config_keys[i] + "' \n");
     }
     return createWSLogbookClient(
         configs[config_keys[0]].c_str(),
@@ -72,9 +74,34 @@ WSLogbookClient* WSLogbookClient::createWSLogbookClient( const std::string& conf
 
 void WSLogbookClient::__init__() {
     Py_Initialize(); // This may need to be moved upstream to a main function.
-    PyObject *sys_path = _CK_(PySys_GetObject("path"));
-    PyObject *module_path = _CKADD_(PyUnicode_FromString("."));
-    PyList_Append(sys_path, module_path);
+    std::string exepathstr;
+    char exepath[PATH_MAX];
+    ssize_t exepathlen = ::readlink("/proc/self/exe", exepath, sizeof(exepath)-1);
+    if (exepathlen != -1) {
+      exepath[exepathlen] = '\0';
+      exepathstr = std::string(exepath);
+    }
+    if(!exepathstr.empty()) {
+      exepathstr = exepathstr + "/../../../../../";
+      PyObject *osModule = _CK_(PyImport_ImportModule("os.path"));
+      PyObject *realPathFunc = _CK_(PyObject_GetAttrString(osModule, "realpath"));
+      PyObject *pArgs = _CK_(PyTuple_New(1));
+      PyObject *modp = _CK_(PyUnicode_FromString(exepathstr.c_str()));
+      PyTuple_SetItem(pArgs, 0, modp);
+      PyObject *module_path = _CKADD_(PyObject_CallObject(realPathFunc, pArgs));
+      PyObject* modUTF8 = _CK_(PyUnicode_AsUTF8String(module_path));
+      const char* resolvedPath= PyBytes_AsString(modUTF8);
+      Py_XDECREF(modUTF8);
+      // Py_XDECREF(modp);
+      // Py_XDECREF(pArgs);
+      // Py_XDECREF(realPathFunc);
+      // Py_XDECREF(osModule);
+      PyObject *sys_path = _CK_(PySys_GetObject("path"));
+      PyList_Append(sys_path, module_path);
+      if(_verbose) { std::cout << "Adding executable path " << resolvedPath  << " to Python sys path" << std::endl;  }
+    } else {
+      std::cerr << "Cannot determine location of the logbook client Python module; we may need to explicitly set PythonPath" << std::endl;
+    }
     pModule = _CKADD_(PyImport_ImportModule("pds.logbookclient.lgbk_client"), "After importing and loading the lgbk_client module\n");
     PyObject* pModuleDict = _CK_(PyModule_GetDict(pModule));
     PyObject* pInitFunc = _CK_(PyDict_GetItemString(pModuleDict, "LogbookClient"));

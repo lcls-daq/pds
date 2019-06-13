@@ -317,7 +317,7 @@ RunInfo::RunInfo(unsigned run, const char* expname) :
              sizeof(RunInfo)),
   _run(run)
 {
-  strncpy(_expname, expname, MaxExpName-1);
+  if(expname != NULL) { strncpy(_expname, expname, MaxExpName-1); }
 }
 unsigned RunInfo::run() {return _run;}
 const char* RunInfo::expname() {return _expname;}

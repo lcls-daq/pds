@@ -1,5 +1,7 @@
 #include "WSLogBook.hh"
 
+#include "pds/service/PathTools.hh"
+
 #include <strings.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -8,7 +10,6 @@
 #include <fstream>
 #include <unistd.h>
 #include <limits.h>
-
 
 using namespace Pds;
 
@@ -74,15 +75,8 @@ WSLogbookClient* WSLogbookClient::createWSLogbookClient( const std::string& conf
 
 void WSLogbookClient::__init__() {
     Py_Initialize(); // This may need to be moved upstream to a main function.
-    std::string exepathstr;
-    char exepath[PATH_MAX];
-    ssize_t exepathlen = ::readlink("/proc/self/exe", exepath, sizeof(exepath)-1);
-    if (exepathlen != -1) {
-      exepath[exepathlen] = '\0';
-      exepathstr = std::string(exepath);
-    }
+    std::string exepathstr = PathTools::getReleasePathStr();
     if(!exepathstr.empty()) {
-      exepathstr = exepathstr + "/../../../../../";
       PyObject *osModule = _CK_(PyImport_ImportModule("os.path"));
       PyObject *realPathFunc = _CK_(PyObject_GetAttrString(osModule, "realpath"));
       PyObject *pArgs = _CK_(PyTuple_New(1));

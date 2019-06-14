@@ -17,5 +17,4 @@ include $(RELEASE_DIR)/make/share/premake.mk
 else
 include constituents.mk
 include $(RELEASE_DIR)/make/sw/package.mk
-#include $(RELEASE_DIR)/make/sw/python3.mk
 endif

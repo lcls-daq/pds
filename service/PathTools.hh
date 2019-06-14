@@ -10,10 +10,12 @@ namespace Pds {
     static bool getReleasePath(char* buf, size_t bufsz);
     static bool getLibPath(const char* package, char* buf, size_t bufsz);
     static bool getBinPath(const char* package, char* buf, size_t bufsz);
+    static bool getPythonPath(char* buf, size_t bufsz);
     static std::string getBuildPathStr();
     static std::string getReleasePathStr();
     static std::string getLibPathStr(const char* package);
     static std::string getBinPathStr(const char* package);
+    static std::string getPythonPathStr();
   };
 };
 

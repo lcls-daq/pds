@@ -75,7 +75,7 @@ WSLogbookClient* WSLogbookClient::createWSLogbookClient( const std::string& conf
 
 void WSLogbookClient::__init__() {
     Py_Initialize(); // This may need to be moved upstream to a main function.
-    std::string exepathstr = PathTools::getReleasePathStr();
+    std::string exepathstr = PathTools::getPythonPathStr();
     if(!exepathstr.empty()) {
       PyObject *osModule = _CK_(PyImport_ImportModule("os.path"));
       PyObject *realPathFunc = _CK_(PyObject_GetAttrString(osModule, "realpath"));

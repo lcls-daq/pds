@@ -70,6 +70,11 @@ bool PathTools::getBinPath(const char* package, char* buf, size_t bufsz)
   return getRelativePath(3, relpath, buf, bufsz);
 }
 
+bool PathTools::getPythonPath(char* buf, size_t bufsz)
+{
+  return getRelativePath(3, "/pyenv/", buf, bufsz);
+}
+
 std::string PathTools::getBuildPathStr()
 {
   char dirpath[PATH_MAX];
@@ -101,6 +106,15 @@ std::string PathTools::getBinPathStr(const char* package)
 {
   char dirpath[PATH_MAX];
   if (getBinPath(package, dirpath, PATH_MAX))
+    return std::string(dirpath);
+  else
+    return std::string();
+}
+
+std::string PathTools::getPythonPathStr()
+{
+  char dirpath[PATH_MAX];
+  if (getPythonPath(dirpath, PATH_MAX))
     return std::string(dirpath);
   else
     return std::string();

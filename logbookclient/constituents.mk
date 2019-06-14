@@ -1,6 +1,8 @@
 tgtnames := lgctest
 libnames := logbookclient
 
+pymodnames := $(patsubst %.py,%,$(wildcard *.py))
+
 libsrcs_logbookclient := WSLogBook.cc
 libincs_logbookclient := python3/include/python3.6m
 

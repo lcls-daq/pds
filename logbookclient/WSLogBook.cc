@@ -137,14 +137,17 @@ WSLogbookClient::~WSLogbookClient() {
 }
 
 int WSLogbookClient::current_run() {
+    _sem.take();
     PyObject* pRet = _CK_(PyObject_CallMethod(pClient, "getCurrentRun", "s", _experimentName.c_str()), "After getting the current run");
     if (pRet == Py_None) return -1; // This is an indication to the caller that a current run does not exist.
     int crun = PyLong_AsLong(pRet);
     Py_XDECREF(pRet);
+    _sem.give();
     return crun;
 }
 
 int WSLogbookClient::start_run(const char* runtype) {
+    _sem.take();
     PyObject* pRet = NULL;
     if(runtype == NULL) {
         pRet = _CK_(PyObject_CallMethod(pClient, "startRun", "s", _experimentName.c_str()), "After starting a new run");
@@ -153,17 +156,21 @@ int WSLogbookClient::start_run(const char* runtype) {
     }
     int crun = PyLong_AsLong(pRet);
     Py_XDECREF(pRet);
+    _sem.give();
     return crun;
 }
 
 int WSLogbookClient::end_run() {
+    _sem.take();
     PyObject* pRet = _CK_(PyObject_CallMethod(pClient, "endRun", "s", _experimentName.c_str()), "After ending the current run");
     int crun = PyLong_AsLong(pRet);
     Py_XDECREF(pRet);
+    _sem.give();
     return crun;
 }
 
 void WSLogbookClient::add_run_params(std::map<std::string, std::string>& name_value_pairs) {
+    _sem.take();
     PyObject* pDict = PyDict_New();
     for (std::map<std::string, std::string>::iterator it = name_value_pairs.begin(); it != name_value_pairs.end(); ++it) {
         PyObject* val = PyUnicode_FromString(it->second.c_str());
@@ -173,18 +180,23 @@ void WSLogbookClient::add_run_params(std::map<std::string, std::string>& name_va
     PyObject* pRet = _CK_(PyObject_CallMethod(pClient, "addRunParams", "sO", _experimentName.c_str(), pDict), "After adding run parameters");
     Py_XDECREF(pDict);
     Py_XDECREF(pRet);
+    _sem.give();
     return;
 }
 
 void WSLogbookClient::add_run_params(std::map<std::string, VariantRunParam*>& name_value_pairs) {
+    _sem.take();
     PyObject* pDict = PyDict_New();
     for (std::map<std::string, VariantRunParam*>::iterator it = name_value_pairs.begin(); it != name_value_pairs.end(); ++it) {
         PyDict_SetItemString(pDict, it->first.c_str(), it->second->pValObj);
-        delete it->second; // We are responsible for freeing the VariantRunParam*
     }
     PyObject* pRet = _CK_(PyObject_CallMethod(pClient, "addRunParams", "sO", _experimentName.c_str(), pDict), "After adding run parameters");
     Py_XDECREF(pDict);
     Py_XDECREF(pRet);
+    for (std::map<std::string, VariantRunParam*>::iterator it = name_value_pairs.begin(); it != name_value_pairs.end(); ++it) {
+        delete it->second; // We are responsible for freeing the VariantRunParam*
+    }
+    _sem.give();
     return;
 }
 
@@ -205,12 +217,14 @@ void WSLogbookClient::reportTotals (long events, long damaged, double gigabytes)
 }
 
 void WSLogbookClient::report_open_file (const char* path, int stream, int chunk, const char* hostName, bool ffb) {
+    _sem.take();
     PyObject* pDict = PyDict_New();
     if(path != NULL) {
         PyObject* val = PyUnicode_FromString(path);
         PyDict_SetItemString(pDict, "path", val);
         Py_XDECREF(val);
     } else {
+        _sem.give();
         throw std::runtime_error("Cannot register a file without the path.");
     }
     if(stream >=0) {
@@ -235,6 +249,7 @@ void WSLogbookClient::report_open_file (const char* path, int stream, int chunk,
     PyObject* pRet = _CK_(PyObject_CallMethod(pClient, "registerFile", "sO", _experimentName.c_str(), pDict), "After registering file");
     Py_XDECREF(pDict);
     Py_XDECREF(pRet);
+    _sem.give();
 }
 
 
@@ -254,6 +269,7 @@ std::ostream& Pds::operator<<(std::ostream &strm, const ExperimentInfo &info) {
 PyObject* WSLogbookClient::_CK_(PyObject* obj, const char* msg) {
     if (!obj) {
         PyErr_Print();
+        _sem.give();
         throw std::runtime_error("Exception/error in the python runtime\n");
     }
     if(_verbose && ( msg != NULL) ) { printf(msg); }

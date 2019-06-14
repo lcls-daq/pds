@@ -69,7 +69,7 @@ class LogbookClient:
         return int(info["value"]["num"])
 
     def addRunParams(self, experiment_name, params):
-        logger.debug("Adding %s run params for experiment %s ", len(params), experiment_name)
+        logger.error("Adding %s run params for experiment %s ", len(params), experiment_name)
         resp = requests.post(self.serverUrl + "run_control/{0}/ws/add_run_params".format(experiment_name), json=params, **self.authHeaders)
         return resp.json()
 

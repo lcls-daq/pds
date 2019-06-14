@@ -11,6 +11,7 @@
 #include <iostream>
 #include <stdexcept>
 
+#include "pds/service/Semaphore.hh"
 
 namespace Pds {
      /**
@@ -100,7 +101,7 @@ namespace Pds {
         std::string instrument_name,
         const int station_num,
         bool verbose)
-    : _url(url), _uid(uid), _passwd(passwd), _useKerberos(useKerberos), _experimentName(experiment_name), _instrumentName(instrument_name), _stationNumber(station_num), _verbose(verbose) { }
+    : _url(url), _uid(uid), _passwd(passwd), _useKerberos(useKerberos), _experimentName(experiment_name), _instrumentName(instrument_name), _stationNumber(station_num), _verbose(verbose), _sem(Semaphore::FULL) { }
 
 
     std::string _url;
@@ -112,6 +113,7 @@ namespace Pds {
     int _stationNumber;
     bool _verbose;
     ExperimentInfo _info;
+    Semaphore     _sem;
 
     // Boilerplate
     // All the python objects that need to be cleaned up on exit; these will be cleaned up in reverse order.

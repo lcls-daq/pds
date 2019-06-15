@@ -74,28 +74,8 @@ WSLogbookClient* WSLogbookClient::createWSLogbookClient( const std::string& conf
 }
 
 void WSLogbookClient::__init__() {
+    PathTools::initPythonPath(); // Add the DAQ release's PYTHONPATH to the environment
     Py_Initialize(); // This may need to be moved upstream to a main function.
-    std::string exepathstr = PathTools::getPythonPathStr();
-    if(!exepathstr.empty()) {
-      PyObject *osModule = _CK_(PyImport_ImportModule("os.path"));
-      PyObject *realPathFunc = _CK_(PyObject_GetAttrString(osModule, "realpath"));
-      PyObject *pArgs = _CK_(PyTuple_New(1));
-      PyObject *modp = _CK_(PyUnicode_FromString(exepathstr.c_str()));
-      PyTuple_SetItem(pArgs, 0, modp);
-      PyObject *module_path = _CKADD_(PyObject_CallObject(realPathFunc, pArgs));
-      PyObject* modUTF8 = _CK_(PyUnicode_AsUTF8String(module_path));
-      const char* resolvedPath= PyBytes_AsString(modUTF8);
-      Py_XDECREF(modUTF8);
-      // Py_XDECREF(modp);
-      // Py_XDECREF(pArgs);
-      // Py_XDECREF(realPathFunc);
-      // Py_XDECREF(osModule);
-      PyObject *sys_path = _CK_(PySys_GetObject("path"));
-      PyList_Append(sys_path, module_path);
-      if(_verbose) { std::cout << "Adding executable path " << resolvedPath  << " to Python sys path" << std::endl;  }
-    } else {
-      std::cerr << "Cannot determine location of the logbook client Python module; we may need to explicitly set PythonPath" << std::endl;
-    }
     pModule = _CKADD_(PyImport_ImportModule("pds.logbookclient.lgbk_client"), "After importing and loading the lgbk_client module\n");
     PyObject* pModuleDict = _CK_(PyModule_GetDict(pModule));
     PyObject* pInitFunc = _CK_(PyDict_GetItemString(pModuleDict, "LogbookClient"));

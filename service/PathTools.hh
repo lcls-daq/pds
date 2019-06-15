@@ -16,6 +16,7 @@ namespace Pds {
     static std::string getLibPathStr(const char* package);
     static std::string getBinPathStr(const char* package);
     static std::string getPythonPathStr();
+    static void initPythonPath();
   };
 };
 

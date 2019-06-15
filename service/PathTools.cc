@@ -4,9 +4,15 @@
 #include <limits.h>
 #include <libgen.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sstream>
 
 using namespace Pds;
+
+static const unsigned BUILD_DEPTH = 3;
+static const unsigned RELEASE_DEPTH = 4;
+static bool init_needed = true;
 
 static bool getRelativePath(unsigned depth, const char* relative, char* buf, size_t bufsz)
 {
@@ -48,31 +54,31 @@ static bool getRelativePath(unsigned depth, const char* relative, char* buf, siz
 
 bool PathTools::getBuildPath(char* buf, size_t bufsz)
 {
-  return getRelativePath(3, NULL, buf, bufsz);
+  return getRelativePath(BUILD_DEPTH, NULL, buf, bufsz);
 }
 
 bool PathTools::getReleasePath(char* buf, size_t bufsz)
 {
-  return getRelativePath(4, NULL, buf, bufsz);
+  return getRelativePath(RELEASE_DEPTH, NULL, buf, bufsz);
 }
 
 bool PathTools::getLibPath(const char* package, char* buf, size_t bufsz)
 {
   char relpath[strlen(package) + 7];
   sprintf(relpath, "/%s/lib/", package);
-  return getRelativePath(3, relpath, buf, bufsz);
+  return getRelativePath(BUILD_DEPTH, relpath, buf, bufsz);
 }
 
 bool PathTools::getBinPath(const char* package, char* buf, size_t bufsz)
 {
   char relpath[strlen(package) + 7];
   sprintf(relpath, "/%s/bin/", package);
-  return getRelativePath(3, relpath, buf, bufsz);
+  return getRelativePath(BUILD_DEPTH, relpath, buf, bufsz);
 }
 
 bool PathTools::getPythonPath(char* buf, size_t bufsz)
 {
-  return getRelativePath(3, "/pyenv/", buf, bufsz);
+  return getRelativePath(BUILD_DEPTH, "/pyenv/", buf, bufsz);
 }
 
 std::string PathTools::getBuildPathStr()
@@ -118,4 +124,19 @@ std::string PathTools::getPythonPathStr()
     return std::string(dirpath);
   else
     return std::string();
+}
+
+void PathTools::initPythonPath()
+{
+  if (init_needed) {
+    std::string python_path = getPythonPathStr();
+    char* old_python_path = getenv("PYTHONPATH");
+    if (old_python_path) {
+      std::stringstream ss;
+      ss << python_path << ":" << old_python_path;
+      python_path = ss.str();
+    }
+    setenv("PYTHONPATH", python_path.c_str(), true);
+    init_needed = false;
+  }
 }

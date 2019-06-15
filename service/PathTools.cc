@@ -1,4 +1,5 @@
 #include "pds/service/PathTools.hh"
+#include "pds/service/Semaphore.hh"
 
 #include <unistd.h>
 #include <limits.h>
@@ -12,7 +13,8 @@ using namespace Pds;
 
 static const unsigned BUILD_DEPTH = 3;
 static const unsigned RELEASE_DEPTH = 4;
-static bool init_needed = true;
+static bool py_init_needed = true;
+static Semaphore py_init_sem(Semaphore::FULL);
 
 static bool getRelativePath(unsigned depth, const char* relative, char* buf, size_t bufsz)
 {
@@ -128,7 +130,8 @@ std::string PathTools::getPythonPathStr()
 
 void PathTools::initPythonPath()
 {
-  if (init_needed) {
+  py_init_sem.take();
+  if (py_init_needed) {
     std::string python_path = getPythonPathStr();
     char* old_python_path = getenv("PYTHONPATH");
     if (old_python_path) {
@@ -137,6 +140,7 @@ void PathTools::initPythonPath()
       python_path = ss.str();
     }
     setenv("PYTHONPATH", python_path.c_str(), true);
-    init_needed = false;
+    py_init_needed = false;
   }
+  py_init_sem.give();
 }

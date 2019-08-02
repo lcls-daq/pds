@@ -858,6 +858,7 @@ unsigned Module::get_frame_size() const
 }
 
 Detector::Detector(std::vector<Module*>& modules, bool use_threads, int thread_rtprio) :
+  _aborted(false),
   _use_threads(use_threads),
   _threads(0),
   _thread_attr(0),
@@ -931,6 +932,7 @@ Detector::~Detector()
 
 void Detector::shutdown()
 {
+  abort(); // kill any active frame waits
   for (unsigned i=0; i<_num_modules; i++) {
     _modules[i]->shutdown();
   }
@@ -953,7 +955,13 @@ void Detector::signal(int sig)
 
 void Detector::abort()
 {
+  _aborted = true;
   signal(JF_FRAME_WAIT_EXIT);
+}
+
+bool Detector::aborted() const
+{
+  return _aborted;
 }
 
 uint64_t Detector::sync_nframes()
@@ -1061,6 +1069,8 @@ bool Detector::get_frame(uint64_t* frame, uint16_t* data)
 
 bool Detector::get_frame(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data)
 {
+  // clear get_frame aborted flag
+  _aborted = false;
   if (_use_threads)
     return get_frame_thread(frame, metadata, data);
   else

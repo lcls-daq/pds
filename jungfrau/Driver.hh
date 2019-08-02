@@ -149,11 +149,13 @@ namespace Pds {
         const char** errors();
         void clear_errors();
         void abort();
+        bool aborted() const;
       private:
         void signal(int sig);
         bool get_frame_thread(uint64_t* framenum, JungfrauModInfoType* metadata, uint16_t* data);
         bool get_frame_poll(uint64_t* framenum, JungfrauModInfoType* metadata, uint16_t* data);
       private:
+        bool                  _aborted;
         bool                  _use_threads;
         pthread_t*            _threads;
         pthread_attr_t*       _thread_attr;

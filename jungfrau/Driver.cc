@@ -1,4 +1,5 @@
 #include "Driver.hh"
+#include "DataFormat.hh"
 #include "slsDetectorUsers.h"
 
 #include <sys/socket.h>
@@ -11,16 +12,12 @@
 #include <string.h>
 #include <errno.h>
 
-#define EVENTS_TO_BUFFER 10
-#define PACKET_NUM 128
-#define DATA_ELEM 4096
 #define CMD_LEN 128
 #define MSG_LEN 256
 #define ADCPHASE_HALF 72
 #define ADCPHASE_QUARTER 25
 #define CLKDIV_HALF 1
 #define CLKDIV_QUARTER 2
-#define FRAME_WAIT_EXIT -1
 
 // Temporary fixed sizes :(
 #define NUM_ROWS 512
@@ -56,31 +53,6 @@ static const char* ADCREG   = "adcreg";
 static const char* REG      = "reg";
 static const char* SETBIT   = "setbit";
 static const char* CLEARBIT = "clearbit";
-
-#pragma pack(push)
-#pragma pack(2)
-  struct jungfrau_header {
-    char emptyheader[6];
-    uint64_t framenum;
-    uint32_t exptime;
-    uint32_t packetnum;
-    uint64_t bunchid;
-    uint64_t timestamp;
-    uint16_t moduleID;
-    uint16_t xCoord;
-    uint16_t yCoord;
-    uint16_t zCoord;
-    uint32_t debug;
-    uint16_t roundRobin;
-    uint8_t detectortype;
-    uint8_t headerVersion;
-  };
-
-  struct jungfrau_dgram {
-    struct jungfrau_header header;
-    uint16_t data[DATA_ELEM];
-  };
-#pragma pack(pop)
 
 struct frame_thread_args {
   uint64_t* frame;
@@ -178,7 +150,8 @@ uint16_t DacsConfig::vdd_prot() const   { return _vdd_prot; }
 Module::Module(const int id, const char* control, const char* host, unsigned port, const char* mac, const char* det_ip, bool config_det_ip) :
   _id(id), _control(control), _host(host), _port(port), _mac(mac), _det_ip(det_ip),
   _socket(-1), _connected(false), _boot(true), _freerun(false), _poweron(false),
-  _sockbuf_sz(sizeof(jungfrau_dgram)*PACKET_NUM*EVENTS_TO_BUFFER), _readbuf_sz(sizeof(jungfrau_header)), _frame_sz(DATA_ELEM * sizeof(uint16_t)), _frame_elem(DATA_ELEM),
+  _sockbuf_sz(sizeof(jungfrau_dgram)*JF_PACKET_NUM*JF_EVENTS_TO_BUFFER), _readbuf_sz(sizeof(jungfrau_header)),
+  _frame_sz(JF_DATA_ELEM * sizeof(uint16_t)), _frame_elem(JF_DATA_ELEM),
   _speed(JungfrauConfigType::Quarter)
 {
   _readbuf = new char[_readbuf_sz];
@@ -186,8 +159,6 @@ Module::Module(const int id, const char* control, const char* host, unsigned por
   for (int i=0; i<MAX_JUNGFRAU_CMDS; i++) {
     _cmdbuf[i] = new char[CMD_LEN];
   }
-  _socket = ::socket(AF_INET, SOCK_DGRAM, 0);
-  ::setsockopt(_socket, SOL_SOCKET, SO_RCVBUF, &_sockbuf_sz, sizeof(unsigned));
 
   _det = new slsDetectorUsers(_id);
   std::string reply = put_command("hostname", _control);
@@ -197,8 +168,12 @@ Module::Module(const int id, const char* control, const char* host, unsigned por
 
     bool detmac_status = configure_mac(config_det_ip);
 
+    int nb = -1;
     hostent* entries = gethostbyname(host);
     if (entries) {
+      _socket = ::socket(AF_INET, SOCK_DGRAM, 0);
+      ::setsockopt(_socket, SOL_SOCKET, SO_RCVBUF, &_sockbuf_sz, sizeof(unsigned));
+
       unsigned addr = htonl(*(in_addr_t*)entries->h_addr_list[0]);
 
       sockaddr_in sa;
@@ -206,16 +181,17 @@ Module::Module(const int id, const char* control, const char* host, unsigned por
       sa.sin_addr.s_addr = htonl(addr);
       sa.sin_port        = htons(port);
 
-      int nb = ::bind(_socket, (sockaddr*)&sa, sizeof(sa));
-      if (nb<0) {
-        error_print("Error: failed to bind to Jungfrau data receiver at %s on port %d: %s\n", host, port, strerror(errno));
-      } else if (strncmp(control, reply.c_str(), strlen(control)) != 0) {
-        error_print("Error: failed to connect to Jungfrau control interface at %s: %s\n", control, reply.c_str());
-      } else if (strcmp(type.c_str(), "Jungfrau+") !=0) {
-        error_print("Error: detector at %s on port %d is not a Jungfrau: %s\n", host, port, type.c_str());
-      } else {
-        _connected=detmac_status;
-      }
+      nb = ::bind(_socket, (sockaddr*)&sa, sizeof(sa));
+    }
+
+    if (nb<0) {
+      error_print("Error: failed to bind to Jungfrau data receiver at %s on port %d: %s\n", host, port, strerror(errno));
+    } else if (strncmp(control, reply.c_str(), strlen(control)) != 0) {
+      error_print("Error: failed to connect to Jungfrau control interface at %s: %s\n", control, reply.c_str());
+    } else if (strcmp(type.c_str(), "Jungfrau+") !=0) {
+      error_print("Error: detector at %s on port %d is not a Jungfrau: %s\n", host, port, type.c_str());
+    } else {
+      _connected=detmac_status;
     }
   } else {
       error_print("Error: failed to connect to Jungfrau control interface of %s!\n", _control);
@@ -224,16 +200,13 @@ Module::Module(const int id, const char* control, const char* host, unsigned por
 
 Module::~Module()
 {
-  if (_socket >= 0) {
-    ::close(_socket);
-  }
+  shutdown();
   if (_readbuf) {
     delete[] _readbuf;
   }
   if (_msgbuf) {
     delete[] _msgbuf;
   }
-  shutdown();
   for (int i=0; i<MAX_JUNGFRAU_CMDS; i++) {
     if (_cmdbuf[i]) delete[] _cmdbuf[i];
   }
@@ -241,6 +214,10 @@ Module::~Module()
 
 void Module::shutdown()
 {
+  if (_socket >= 0) {
+    ::close(_socket);
+    _socket = -1;
+  }
   if (_det) {
     put_command("free", "0");
     delete _det;
@@ -761,7 +738,7 @@ void Module::flush()
     if (nb > 0) {
       count += 1;
     }
-  } while(nb>0);
+  } while (nb > 0);
   printf("flushed %u packets from socket buffer\n", count);
 }
 
@@ -805,11 +782,11 @@ bool Module::get_packet(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t
       return false;
     }
 
-    *last_packet = (header->packetnum == (PACKET_NUM -1));
+    *last_packet = (header->packetnum == (JF_PACKET_NUM -1));
     (*npackets)++;
   }
 
-  if ((*npackets == PACKET_NUM) && header) {
+  if ((*npackets == JF_PACKET_NUM) && header) {
     if (metadata) new(metadata) JungfrauModInfoType(header->timestamp, header->exptime, header->moduleID, header->xCoord, header->yCoord, header->zCoord);
   }
 
@@ -827,13 +804,13 @@ bool Module::get_frame(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t*
     get_packet(&cur_frame, metadata, data, &first_packet, &last_packet, &npackets);
   }
 
-  if (npackets == PACKET_NUM) {
+  if (npackets == JF_PACKET_NUM) {
     *frame = cur_frame;
   } else {
-    fprintf(stderr,"Error: frame %lu from Jungfrau at %s is incomplete, received %u out of %d expected\n", cur_frame, _host, npackets, PACKET_NUM);
+    fprintf(stderr,"Error: frame %lu from Jungfrau at %s is incomplete, received %u out of %d expected\n", cur_frame, _host, npackets, JF_PACKET_NUM);
   }
  
-  return (npackets == PACKET_NUM);
+  return (npackets == JF_PACKET_NUM);
 }
 
 const char* Module::error()
@@ -976,7 +953,7 @@ void Detector::signal(int sig)
 
 void Detector::abort()
 {
-  signal(FRAME_WAIT_EXIT);
+  signal(JF_FRAME_WAIT_EXIT);
 }
 
 uint64_t Detector::sync_nframes()
@@ -1166,7 +1143,7 @@ bool Detector::get_frame_poll(uint64_t* frame, JungfrauModInfoType* metadata, ui
     if(_pfds[_num_modules].revents & POLLIN) {
         int signal;
         ::read(_sigfd[0], &signal, sizeof(signal));
-        if (signal == FRAME_WAIT_EXIT) {
+        if (signal == JF_FRAME_WAIT_EXIT) {
           printf("received frame wait exit signal - canceling get_frame\n");
           return false;
         } else {
@@ -1182,14 +1159,16 @@ bool Detector::get_frame_poll(uint64_t* frame, JungfrauModInfoType* metadata, ui
             frame_unset = false;
           } else {
             if (*frame != (_module_frames[i] + _module_frames_offset[i])) {
-              fprintf(stderr,"Error: data out-of-order got data for module %u got frame %lu, but was expecting frame %lu\n", i, _module_frames[i] + _module_frames_offset[i], *frame);
+              fprintf(stderr,"Error: data out-of-order got data for module %u got frame %lu, but was expecting frame %lu\n",
+                      i, _module_frames[i] + _module_frames_offset[i], *frame);
               _module_last_packet[i] = true;
               drop_frame = true;
             }
           }
 
-          if (_module_last_packet[i] && (_module_npackets[i] != PACKET_NUM)) {
-            fprintf(stderr,"Error: frame %lu from module %u is incomplete, received %u out of %d expected\n", _module_frames[i] + _module_frames_offset[i], i, _module_npackets[i], PACKET_NUM);
+          if (_module_last_packet[i] && (_module_npackets[i] != JF_PACKET_NUM)) {
+            fprintf(stderr,"Error: frame %lu from module %u is incomplete, received %u out of %d expected\n",
+                    _module_frames[i] + _module_frames_offset[i], i, _module_npackets[i], JF_PACKET_NUM);
             drop_frame = true;
           }
         }
@@ -1309,9 +1288,6 @@ void Detector::clear_errors()
   }
 }
 
-#undef EVENTS_TO_BUFFER
-#undef PACKET_NUM
-#undef DATA_ELEM
 #undef CMD_LEN
 #undef MSG_LEN
 #undef ADCPHASE_HALF
@@ -1320,7 +1296,6 @@ void Detector::clear_errors()
 #undef CLKDIV_QUARTER
 #undef NUM_ROWS
 #undef NUM_COLUMNS
-#undef FRAME_WAIT_EXIT
 #undef get_command_print
 #undef put_command_print
 #undef get_register_print

@@ -48,7 +48,8 @@ namespace Pds {
     class Module {
       public:
         enum Status { IDLE, RUNNING, WAIT, DATA, ERROR };
-        Module(const int id, const char* control, const char* host, const unsigned port, const char* mac, const char* det_ip, bool config_det_ip=true);
+        Module(const int id, const char* control, const char* host, const unsigned port,
+               const char* mac, const char* det_ip, bool config_det_ip=true);
         ~Module();
         void shutdown();
         bool connected() const;

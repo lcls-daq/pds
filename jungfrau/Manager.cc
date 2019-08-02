@@ -57,6 +57,8 @@ namespace Pds {
           _metadata_ptr = (JungfrauModInfoType*) (_buffer + sizeof(JungfrauDataType));
           if (_detector.get_frame(_framenum_ptr, _metadata_ptr, _frame_ptr)) {
             _server.post(_buffer);
+          } else if(_detector.aborted() && !_abort) { // external abort so disable reader
+            _disable = true;
           } else if(!_abort) {
             fprintf(stderr, "Error: FrameReader failed to retrieve frame from Jungfrau receiver\n");
           }

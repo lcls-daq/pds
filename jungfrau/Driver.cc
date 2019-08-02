@@ -1,4 +1,5 @@
 #include "Driver.hh"
+#include "DataFormat.hh"
 #include "slsDetectorUsers.h"
 
 #include <sys/socket.h>
@@ -11,16 +12,13 @@
 #include <string.h>
 #include <errno.h>
 
-#define EVENTS_TO_BUFFER 10
-#define PACKET_NUM 128
-#define DATA_ELEM 4096
 #define CMD_LEN 128
 #define MSG_LEN 256
+#define ENDPOINT_LEN 64
 #define ADCPHASE_HALF 72
 #define ADCPHASE_QUARTER 25
 #define CLKDIV_HALF 1
 #define CLKDIV_QUARTER 2
-#define FRAME_WAIT_EXIT -1
 
 // Temporary fixed sizes :(
 #define NUM_ROWS 512
@@ -56,31 +54,6 @@ static const char* ADCREG   = "adcreg";
 static const char* REG      = "reg";
 static const char* SETBIT   = "setbit";
 static const char* CLEARBIT = "clearbit";
-
-#pragma pack(push)
-#pragma pack(2)
-  struct jungfrau_header {
-    char emptyheader[6];
-    uint64_t framenum;
-    uint32_t exptime;
-    uint32_t packetnum;
-    uint64_t bunchid;
-    uint64_t timestamp;
-    uint16_t moduleID;
-    uint16_t xCoord;
-    uint16_t yCoord;
-    uint16_t zCoord;
-    uint32_t debug;
-    uint16_t roundRobin;
-    uint8_t detectortype;
-    uint8_t headerVersion;
-  };
-
-  struct jungfrau_dgram {
-    struct jungfrau_header header;
-    uint16_t data[DATA_ELEM];
-  };
-#pragma pack(pop)
 
 struct frame_thread_args {
   uint64_t* frame;
@@ -175,19 +148,18 @@ uint16_t DacsConfig::vref_prech() const { return _vref_prech; }
 uint16_t DacsConfig::vin_com() const    { return _vin_com; }
 uint16_t DacsConfig::vdd_prot() const   { return _vdd_prot; }
 
-Module::Module(const int id, const char* control, const char* host, unsigned port, const char* mac, const char* det_ip, bool config_det_ip) :
+Module::Module(const int id, const char* control, const char* host, unsigned port, const char* mac, const char* det_ip, bool config_det_ip, void* socket) :
   _id(id), _control(control), _host(host), _port(port), _mac(mac), _det_ip(det_ip),
-  _socket(-1), _connected(false), _boot(true), _freerun(false), _poweron(false),
-  _sockbuf_sz(sizeof(jungfrau_dgram)*PACKET_NUM*EVENTS_TO_BUFFER), _readbuf_sz(sizeof(jungfrau_header)), _frame_sz(DATA_ELEM * sizeof(uint16_t)), _frame_elem(DATA_ELEM),
-  _speed(JungfrauConfigType::Quarter)
+  _socket(socket), _fd(-1), _connected(false), _boot(true), _freerun(false), _poweron(false), _pending(false),
+  _sockbuf_sz(sizeof(jungfrau_dgram)*JF_PACKET_NUM*JF_EVENTS_TO_BUFFER), _readbuf_sz(sizeof(jungfrau_header)),
+  _frame_sz(JF_DATA_ELEM * sizeof(uint16_t)), _frame_elem(JF_DATA_ELEM),
+  _endpoint(0), _speed(JungfrauConfigType::Quarter)
 {
   _readbuf = new char[_readbuf_sz];
   _msgbuf  = new char[MSG_LEN];
   for (int i=0; i<MAX_JUNGFRAU_CMDS; i++) {
     _cmdbuf[i] = new char[CMD_LEN];
   }
-  _socket = ::socket(AF_INET, SOCK_DGRAM, 0);
-  ::setsockopt(_socket, SOL_SOCKET, SO_RCVBUF, &_sockbuf_sz, sizeof(unsigned));
 
   _det = new slsDetectorUsers(_id);
   std::string reply = put_command("hostname", _control);
@@ -197,25 +169,40 @@ Module::Module(const int id, const char* control, const char* host, unsigned por
 
     bool detmac_status = configure_mac(config_det_ip);
 
-    hostent* entries = gethostbyname(host);
-    if (entries) {
-      unsigned addr = htonl(*(in_addr_t*)entries->h_addr_list[0]);
+    int nb = -1;
+    if (_socket) {
+      size_t endpoint_len = ENDPOINT_LEN;
+      _endpoint = new char[endpoint_len];
+      nb = zmq_getsockopt(_socket, ZMQ_LAST_ENDPOINT, _endpoint, &endpoint_len);
+    } else {
+      hostent* entries = gethostbyname(host);
+      if (entries) {
+        _fd = ::socket(AF_INET, SOCK_DGRAM, 0);
+        ::setsockopt(_fd, SOL_SOCKET, SO_RCVBUF, &_sockbuf_sz, sizeof(unsigned));
 
-      sockaddr_in sa;
-      sa.sin_family = AF_INET;
-      sa.sin_addr.s_addr = htonl(addr);
-      sa.sin_port        = htons(port);
+        unsigned addr = htonl(*(in_addr_t*)entries->h_addr_list[0]);
 
-      int nb = ::bind(_socket, (sockaddr*)&sa, sizeof(sa));
-      if (nb<0) {
-        error_print("Error: failed to bind to Jungfrau data receiver at %s on port %d: %s\n", host, port, strerror(errno));
-      } else if (strncmp(control, reply.c_str(), strlen(control)) != 0) {
-        error_print("Error: failed to connect to Jungfrau control interface at %s: %s\n", control, reply.c_str());
-      } else if (strcmp(type.c_str(), "Jungfrau+") !=0) {
-        error_print("Error: detector at %s on port %d is not a Jungfrau: %s\n", host, port, type.c_str());
-      } else {
-        _connected=detmac_status;
+        sockaddr_in sa;
+        sa.sin_family = AF_INET;
+        sa.sin_addr.s_addr = htonl(addr);
+        sa.sin_port        = htons(port);
+
+        nb = ::bind(_fd, (sockaddr*)&sa, sizeof(sa));
       }
+    }
+
+    if (nb<0) {
+      if (_socket) {
+        error_print("Error: failed to read endpoint of the Jungfrau zmq data receiver: %s\n", strerror(errno));
+      } else {
+        error_print("Error: failed to bind to Jungfrau data receiver at %s on port %d: %s\n", host, port, strerror(errno));
+      }
+    } else if (strncmp(control, reply.c_str(), strlen(control)) != 0) {
+      error_print("Error: failed to connect to Jungfrau control interface at %s: %s\n", control, reply.c_str());
+    } else if (strcmp(type.c_str(), "Jungfrau+") !=0) {
+      error_print("Error: detector at %s on port %d is not a Jungfrau: %s\n", host, port, type.c_str());
+    } else {
+      _connected=detmac_status;
     }
   } else {
       error_print("Error: failed to connect to Jungfrau control interface of %s!\n", _control);
@@ -224,16 +211,16 @@ Module::Module(const int id, const char* control, const char* host, unsigned por
 
 Module::~Module()
 {
-  if (_socket >= 0) {
-    ::close(_socket);
-  }
+  shutdown();
   if (_readbuf) {
     delete[] _readbuf;
   }
   if (_msgbuf) {
     delete[] _msgbuf;
   }
-  shutdown();
+  if (_endpoint) {
+    delete[] _endpoint;
+  }
   for (int i=0; i<MAX_JUNGFRAU_CMDS; i++) {
     if (_cmdbuf[i]) delete[] _cmdbuf[i];
   }
@@ -241,6 +228,14 @@ Module::~Module()
 
 void Module::shutdown()
 {
+  if (_socket) {
+    zmq_close(_socket);
+    _socket = 0;
+  }
+  if (_fd >= 0) {
+    ::close(_fd);
+    _fd = -1;
+  }
   if (_det) {
     put_command("free", "0");
     delete _det;
@@ -752,17 +747,50 @@ void Module::reset()
 
 void Module::flush()
 {
+  if (_socket) {
+    flush_socket();
+  } else {
+    flush_fd();
+  }
+}
+
+void Module::flush_fd()
+{
   ssize_t nb;
   struct sockaddr_in clientaddr;
   unsigned count = 0;
   socklen_t clientaddrlen = sizeof(clientaddr);
   do {
-    nb = ::recvfrom(_socket, _readbuf, sizeof(jungfrau_header), MSG_DONTWAIT, (struct sockaddr *)&clientaddr, &clientaddrlen);
+    nb = ::recvfrom(_fd, _readbuf, sizeof(jungfrau_header), MSG_DONTWAIT, (struct sockaddr *)&clientaddr, &clientaddrlen);
     if (nb > 0) {
       count += 1;
     }
-  } while(nb>0);
+  } while (nb > 0);
   printf("flushed %u packets from socket buffer\n", count);
+}
+
+void Module::flush_socket()
+{
+  int nb;
+  int64_t more = 0;
+  unsigned count = 0;
+  size_t more_size = sizeof more;
+  do {
+    nb = zmq_recv(_socket, _readbuf, _readbuf_sz, ZMQ_DONTWAIT);
+    if (nb > 0) {
+      do {
+        int rc = zmq_getsockopt(_socket, ZMQ_RCVMORE, &more, &more_size);
+        if (rc > 0 && more) {
+          rc = zmq_recv(_socket, _readbuf, _readbuf_sz, 0);
+        }
+        // if zmq command failed break out of loop
+        if (rc < 0) break;
+      } while (more);
+      count += 1;
+    }
+  } while (nb > 0);
+  _pending = false;
+  printf("flushed %u messages from socket buffer\n", count);
 }
 
 bool Module::get_frame(uint64_t* frame, uint16_t* data)
@@ -772,13 +800,22 @@ bool Module::get_frame(uint64_t* frame, uint16_t* data)
 
 bool Module::get_packet(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data, bool* first_packet, bool* last_packet, unsigned* npackets)
 {
+  if (_socket) {
+    return get_packet_socket(frame, metadata, data, first_packet, last_packet, npackets);
+  } else {
+    return get_packet_fd(frame, metadata, data, first_packet, last_packet, npackets);
+  }
+}
+
+bool Module::get_packet_fd(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data, bool* first_packet, bool* last_packet, unsigned* npackets)
+{
   int nb;
   struct sockaddr_in clientaddr;
   socklen_t clientaddrlen = sizeof(clientaddr);
   jungfrau_header* header = NULL;
   struct iovec dgram_vec[2];
 
-  nb = ::recvfrom(_socket, _readbuf, sizeof(jungfrau_header), MSG_PEEK, (struct sockaddr *)&clientaddr, &clientaddrlen);
+  nb = ::recvfrom(_fd, _readbuf, sizeof(jungfrau_header), MSG_PEEK, (struct sockaddr *)&clientaddr, &clientaddrlen);
   if (nb<0) {
     fprintf(stderr,"Error: failure receiving packet from Jungfru at %s on port %d: %s\n", _host, _port, strerror(errno));
     return false;
@@ -799,18 +836,88 @@ bool Module::get_packet(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t
     dgram_vec[1].iov_base = &data[_frame_elem*header->packetnum];
     dgram_vec[1].iov_len = sizeof(jungfrau_dgram) - sizeof(jungfrau_header);
 
-    nb = ::readv(_socket, dgram_vec, 2);
+    nb = ::readv(_fd, dgram_vec, 2);
     if (nb<0) {
       fprintf(stderr,"Error: failure receiving packet from Jungfru at %s on port %d: %s\n", _host, _port, strerror(errno));
       return false;
     }
 
-    *last_packet = (header->packetnum == (PACKET_NUM -1));
+    *last_packet = (header->packetnum == (JF_PACKET_NUM -1));
     (*npackets)++;
   }
 
-  if ((*npackets == PACKET_NUM) && header) {
+  if ((*npackets == JF_PACKET_NUM) && header) {
     if (metadata) new(metadata) JungfrauModInfoType(header->timestamp, header->exptime, header->moduleID, header->xCoord, header->yCoord, header->zCoord);
+  }
+
+  return true;
+}
+
+bool Module::get_packet_socket(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data, bool* first_packet, bool* last_packet, unsigned* npackets)
+{
+  int nb;
+  int64_t more = 0;
+  size_t more_size = sizeof more;
+  jungfrau_header* header = (jungfrau_header*) _readbuf;
+
+  if (!_pending) {
+    nb = zmq_recv(_socket, _readbuf, sizeof(jungfrau_header), 0);
+    if (nb<0) {
+      fprintf(stderr,"Error: failure receiving packet header from Jungfru zmq server at address %s: %s\n", _endpoint, strerror(errno));
+      return false;
+    } else {
+      _pending = true;
+    }
+  }
+
+  if (*first_packet) {
+    *frame = header->framenum;
+    *first_packet = false;
+  } else if(*frame != header->framenum) {
+    *last_packet = true;
+    fprintf(stderr,"Error: data out-of-order got data for frame %lu, but was expecting frame %lu from Jungfru at %s\n", header->framenum, *frame, _endpoint);
+    return false;
+  }
+
+  nb = zmq_getsockopt(_socket, ZMQ_RCVMORE, &more, &more_size);
+  if (nb < 0) {
+    fprintf(stderr,"Error: failure receiving packet payload from Jungfru zmq server at address %s: %s\n", _endpoint, strerror(errno));
+    return false;
+  } else if (!more) {
+    fprintf(stderr,"Error: received malformed packet from Jungfru zmq server at address %s: %s\n", _endpoint, strerror(errno));
+    return false;
+  } else {
+    nb = zmq_recv(_socket, &data[_frame_elem*header->packetnum], sizeof(jungfrau_dgram) - sizeof(jungfrau_header), 0);
+    if (nb<0) {
+      fprintf(stderr,"Error: failure receiving packet payload from Jungfru zmq server at address %s: %s\n", _endpoint, strerror(errno));
+      return false;
+    }
+
+    _pending = false;
+    *last_packet = (header->packetnum == (JF_PACKET_NUM -1));
+    (*npackets)++;
+  }
+
+  if ((*npackets == JF_PACKET_NUM) && header) {
+    if (metadata) new(metadata) JungfrauModInfoType(header->timestamp, header->exptime, header->moduleID, header->xCoord, header->yCoord, header->zCoord);
+  }
+
+  // check for unexpected additional parts for the zmq message
+  unsigned count = 0;
+  do {
+    nb = zmq_getsockopt(_socket, ZMQ_RCVMORE, &more, &more_size);
+    if (nb > 0 && more) {
+      count += 1;
+      nb = zmq_recv(_socket, _readbuf, _readbuf_sz, 0);
+    }
+    if (nb < 0) break;
+  } while(more);
+
+  // check if we found any unexpected message parts
+  if (count != 0) {
+    fprintf(stderr,"Error: received malformed packet with %u extra parts from Jungfru zmq server at address %s: %s\n",
+            count, _endpoint, strerror(errno));
+    return false;
   }
 
   return true;
@@ -827,13 +934,14 @@ bool Module::get_frame(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t*
     get_packet(&cur_frame, metadata, data, &first_packet, &last_packet, &npackets);
   }
 
-  if (npackets == PACKET_NUM) {
+  if (npackets == JF_PACKET_NUM) {
     *frame = cur_frame;
   } else {
-    fprintf(stderr,"Error: frame %lu from Jungfrau at %s is incomplete, received %u out of %d expected\n", cur_frame, _host, npackets, PACKET_NUM);
+    fprintf(stderr,"Error: frame %lu from Jungfrau at %s is incomplete, received %u out of %d expected\n",
+            cur_frame, _socket ? _endpoint : _host, npackets, JF_PACKET_NUM);
   }
  
-  return (npackets == PACKET_NUM);
+  return (npackets == JF_PACKET_NUM);
 }
 
 const char* Module::error()
@@ -855,9 +963,14 @@ void Module::clear_error()
   _msgbuf[0] = 0;
 }
 
-int Module::fd() const
+void* Module::socket() const
 {
   return _socket;
+}
+
+int Module::fd() const
+{
+  return _fd;
 }
 
 unsigned Module::get_num_rows() const
@@ -878,6 +991,53 @@ unsigned Module::get_num_pixels() const
 unsigned Module::get_frame_size() const
 {
   return NUM_ROWS * NUM_COLUMNS * sizeof(uint16_t);
+}
+
+void* Module::connect_socket(void* context, const char* host, const unsigned device, const unsigned module)
+{
+  void* socket = NULL;
+  if (context) {
+    unsigned port = calculate_zmq_port(device, module);
+    if (port) {
+      socket = zmq_socket(context, ZMQ_PUSH);
+      char endpoint[strlen(host) + 30];
+      snprintf(endpoint, sizeof(endpoint), "tcp://%s:%u", host, port);
+      if (zmq_connect(socket, endpoint) < 0) {
+        zmq_close(socket);
+        socket = NULL;
+      }
+    }
+  }
+
+  return socket;
+}
+
+void* Module::bind_socket(void* context, const char* host, const unsigned device, const unsigned module)
+{
+  void* socket = NULL;
+  if (context) {
+    unsigned port = calculate_zmq_port(device, module);
+    if (port) {
+      socket = zmq_socket(context, ZMQ_PULL);
+      char endpoint[strlen(host) + 30];
+      snprintf(endpoint, sizeof(endpoint), "tcp://%s:%u", host, port);
+      if (zmq_bind(socket, endpoint) < 0) {
+        zmq_close(socket);
+        socket = NULL;
+      }
+    }
+  }
+
+  return socket;
+}
+
+unsigned Module::calculate_zmq_port(const unsigned device, const unsigned module)
+{
+  if (module < JungfrauConfigType::MaxModulesPerDetector) {
+    return ZmqBasePort + JungfrauConfigType::MaxModulesPerDetector * device + module;
+  }
+
+  return 0;
 }
 
 Detector::Detector(std::vector<Module*>& modules, bool use_threads, int thread_rtprio) :
@@ -919,13 +1079,15 @@ Detector::Detector(std::vector<Module*>& modules, bool use_threads, int thread_r
       pthread_attr_setschedparam(_thread_attr, &params);
     }
   } else {
-    _pfds = new pollfd[_num_modules+1];
+    _pfds = new zmq_pollitem_t[_num_modules+1];
+    _pfds[_num_modules].socket   = 0;
     _pfds[_num_modules].fd       = _sigfd[0];
-    _pfds[_num_modules].events   = POLLIN;
+    _pfds[_num_modules].events   = ZMQ_POLLIN;
     _pfds[_num_modules].revents  = 0;
     for (unsigned i=0; i<_num_modules; i++) {
+      _pfds[i].socket   = _modules[i]->socket();
       _pfds[i].fd       = _modules[i]->fd();
-      _pfds[i].events   = POLLIN;
+      _pfds[i].events   = ZMQ_POLLIN;
       _pfds[i].revents  = 0;
     }
   }
@@ -976,7 +1138,7 @@ void Detector::signal(int sig)
 
 void Detector::abort()
 {
-  signal(FRAME_WAIT_EXIT);
+  signal(JF_FRAME_WAIT_EXIT);
 }
 
 uint64_t Detector::sync_nframes()
@@ -1157,16 +1319,16 @@ bool Detector::get_frame_poll(uint64_t* frame, JungfrauModInfoType* metadata, ui
 
   while(!frame_complete) {
     frame_complete = true;
-    npoll = ::poll(_pfds, (nfds_t) _num_modules+1, -1);
+    npoll = zmq_poll(_pfds, _num_modules+1, -1);
     if (npoll < 0) {
       fprintf(stderr,"Error: frame poller failed with error code: %s\n", strerror(errno));
       return false;
     }
 
-    if(_pfds[_num_modules].revents & POLLIN) {
+    if(_pfds[_num_modules].revents & ZMQ_POLLIN) {
         int signal;
         ::read(_sigfd[0], &signal, sizeof(signal));
-        if (signal == FRAME_WAIT_EXIT) {
+        if (signal == JF_FRAME_WAIT_EXIT) {
           printf("received frame wait exit signal - canceling get_frame\n");
           return false;
         } else {
@@ -1175,21 +1337,23 @@ bool Detector::get_frame_poll(uint64_t* frame, JungfrauModInfoType* metadata, ui
     }
 
     for (unsigned i=0; i<_num_modules; i++) {
-      if ((_pfds[i].revents & POLLIN) && (!_module_last_packet[i])) {
+      if ((_pfds[i].revents & ZMQ_POLLIN) && (!_module_last_packet[i])) {
         if (_modules[i]->get_packet(&_module_frames[i], metadata?&metadata[i]:NULL, _module_data[i], &_module_first_packet[i], &_module_last_packet[i], &_module_npackets[i])) {
           if (frame_unset) {
             *frame = _module_frames[i] + _module_frames_offset[i];
             frame_unset = false;
           } else {
             if (*frame != (_module_frames[i] + _module_frames_offset[i])) {
-              fprintf(stderr,"Error: data out-of-order got data for module %u got frame %lu, but was expecting frame %lu\n", i, _module_frames[i] + _module_frames_offset[i], *frame);
+              fprintf(stderr,"Error: data out-of-order got data for module %u got frame %lu, but was expecting frame %lu\n",
+                      i, _module_frames[i] + _module_frames_offset[i], *frame);
               _module_last_packet[i] = true;
               drop_frame = true;
             }
           }
 
-          if (_module_last_packet[i] && (_module_npackets[i] != PACKET_NUM)) {
-            fprintf(stderr,"Error: frame %lu from module %u is incomplete, received %u out of %d expected\n", _module_frames[i] + _module_frames_offset[i], i, _module_npackets[i], PACKET_NUM);
+          if (_module_last_packet[i] && (_module_npackets[i] != JF_PACKET_NUM)) {
+            fprintf(stderr,"Error: frame %lu from module %u is incomplete, received %u out of %d expected\n",
+                    _module_frames[i] + _module_frames_offset[i], i, _module_npackets[i], JF_PACKET_NUM);
             drop_frame = true;
           }
         }
@@ -1309,18 +1473,15 @@ void Detector::clear_errors()
   }
 }
 
-#undef EVENTS_TO_BUFFER
-#undef PACKET_NUM
-#undef DATA_ELEM
 #undef CMD_LEN
 #undef MSG_LEN
+#undef ENDPOINT_LEN
 #undef ADCPHASE_HALF
 #undef ADCPHASE_QUARTER
 #undef CLKDIV_HALF
 #undef CLKDIV_QUARTER
 #undef NUM_ROWS
 #undef NUM_COLUMNS
-#undef FRAME_WAIT_EXIT
 #undef get_command_print
 #undef put_command_print
 #undef get_register_print

@@ -3,7 +3,7 @@
 
 #include "pds/config/JungfrauConfigType.hh"
 
-#include <poll.h>
+#include <zmq.h>
 #include <stdint.h>
 #include <stdarg.h>
 #include <string>
@@ -48,7 +48,8 @@ namespace Pds {
     class Module {
       public:
         enum Status { IDLE, RUNNING, WAIT, DATA, ERROR };
-        Module(const int id, const char* control, const char* host, const unsigned port, const char* mac, const char* det_ip, bool config_det_ip=true);
+        Module(const int id, const char* control, const char* host, const unsigned port,
+               const char* mac, const char* det_ip, bool config_det_ip=true, void* socket=NULL);
         ~Module();
         void shutdown();
         bool connected() const;
@@ -93,12 +94,22 @@ namespace Pds {
         const char* error();
         void set_error(const char* fmt, ...);
         void clear_error();
+        void* socket() const;
         int fd() const;
         unsigned get_num_rows() const;
         unsigned get_num_columns() const;
         unsigned get_num_pixels() const;
         unsigned get_frame_size() const;
+
+        static const unsigned ZmqBasePort = 20000;
+        static void* connect_socket(void* context, const char* host, const unsigned device, const unsigned module);
+        static void* bind_socket(void* context, const char* host, const unsigned device, const unsigned module);
+        static unsigned calculate_zmq_port(const unsigned device, const unsigned module);
       private:
+        void flush_fd();
+        void flush_socket();
+        bool get_packet_fd(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data, bool* first_packet, bool* last_packet, unsigned* npackets);
+        bool get_packet_socket(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data, bool* first_packet, bool* last_packet, unsigned* npackets);
         std::string put_command_raw(int narg, int pos);
         std::string get_command_raw(int narg, int pos);
       private:
@@ -108,15 +119,18 @@ namespace Pds {
         const unsigned    _port;
         const char*       _mac;
         const char*       _det_ip;
-        int               _socket;
+        void*             _socket;
+        int               _fd;
         bool              _connected;
         bool              _boot;
         bool              _freerun;
         bool              _poweron;
+        bool              _pending;
         unsigned          _sockbuf_sz;
         unsigned          _readbuf_sz;
         unsigned          _frame_sz;
         unsigned          _frame_elem;
+        char*             _endpoint;
         char*             _readbuf;
         char*             _msgbuf;
         char*             _cmdbuf[MAX_JUNGFRAU_CMDS];
@@ -156,7 +170,7 @@ namespace Pds {
         bool                  _use_threads;
         pthread_t*            _threads;
         pthread_attr_t*       _thread_attr;
-        pollfd*               _pfds;
+        zmq_pollitem_t*       _pfds;
         int                   _sigfd[2];
         unsigned              _num_modules;
         uint64_t*             _module_frames;

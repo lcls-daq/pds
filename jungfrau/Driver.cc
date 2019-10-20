@@ -161,51 +161,59 @@ Module::Module(const int id, const char* control, const char* host, unsigned por
     _cmdbuf[i] = new char[CMD_LEN];
   }
 
-  _det = new slsDetectorUsers(_id);
-  std::string reply = put_command("hostname", _control);
-  // Check if detector control interface is present
-  if (!reply.empty()) {
-    std::string type  = get_command("type");
-
-    bool detmac_status = configure_mac(config_det_ip);
-
-    int nb = -1;
-    if (_socket) {
-      size_t endpoint_len = ENDPOINT_LEN;
-      _endpoint = new char[endpoint_len];
-      nb = zmq_getsockopt(_socket, ZMQ_LAST_ENDPOINT, _endpoint, &endpoint_len);
-    } else {
-      hostent* entries = gethostbyname(host);
-      if (entries) {
-        _fd = ::socket(AF_INET, SOCK_DGRAM, 0);
-        ::setsockopt(_fd, SOL_SOCKET, SO_RCVBUF, &_sockbuf_sz, sizeof(unsigned));
-
-        unsigned addr = htonl(*(in_addr_t*)entries->h_addr_list[0]);
-
-        sockaddr_in sa;
-        sa.sin_family = AF_INET;
-        sa.sin_addr.s_addr = htonl(addr);
-        sa.sin_port        = htons(port);
-
-        nb = ::bind(_fd, (sockaddr*)&sa, sizeof(sa));
-      }
-    }
-
-    if (nb<0) {
-      if (_socket) {
-        error_print("Error: failed to read endpoint of the Jungfrau zmq data receiver: %s\n", strerror(errno));
-      } else {
-        error_print("Error: failed to bind to Jungfrau data receiver at %s on port %d: %s\n", host, port, strerror(errno));
-      }
-    } else if (strncmp(control, reply.c_str(), strlen(control)) != 0) {
-      error_print("Error: failed to connect to Jungfrau control interface at %s: %s\n", control, reply.c_str());
-    } else if (strcmp(type.c_str(), "Jungfrau+") !=0) {
-      error_print("Error: detector at %s on port %d is not a Jungfrau: %s\n", host, port, type.c_str());
-    } else {
-      _connected=detmac_status;
-    }
+  int failed = 0;
+  _det = new slsDetectorUsers(failed, _id);
+  if (failed) {
+    error_print("Error: failed to allocate share memory for Jungfrau control interface of %s!\n", _control);
+    // cleanup detector after failure
+    delete _det;
+    _det = 0;
   } else {
+    std::string reply = put_command("hostname", _control);
+    // Check if detector control interface is present
+    if (!reply.empty()) {
+      std::string type  = _det->getDetectorType();
+
+      bool detmac_status = configure_mac(config_det_ip);
+
+      int nb = -1;
+      if (_socket) {
+        size_t endpoint_len = ENDPOINT_LEN;
+        _endpoint = new char[endpoint_len];
+        nb = zmq_getsockopt(_socket, ZMQ_LAST_ENDPOINT, _endpoint, &endpoint_len);
+      } else {
+        hostent* entries = gethostbyname(host);
+        if (entries) {
+          _fd = ::socket(AF_INET, SOCK_DGRAM, 0);
+          ::setsockopt(_fd, SOL_SOCKET, SO_RCVBUF, &_sockbuf_sz, sizeof(unsigned));
+
+          unsigned addr = htonl(*(in_addr_t*)entries->h_addr_list[0]);
+
+          sockaddr_in sa;
+          sa.sin_family = AF_INET;
+          sa.sin_addr.s_addr = htonl(addr);
+          sa.sin_port        = htons(port);
+
+          nb = ::bind(_fd, (sockaddr*)&sa, sizeof(sa));
+        }
+      }
+
+      if (nb<0) {
+        if (_socket) {
+          error_print("Error: failed to read endpoint of the Jungfrau zmq data receiver: %s\n", strerror(errno));
+        } else {
+          error_print("Error: failed to bind to Jungfrau data receiver at %s on port %d: %s\n", host, port, strerror(errno));
+        }
+      } else if (strncmp(control, reply.c_str(), strlen(control)) != 0) {
+        error_print("Error: failed to connect to Jungfrau control interface at %s: %s\n", control, reply.c_str());
+      } else if (strcmp(type.c_str(), "Jungfrau+") !=0) {
+        error_print("Error: detector at %s on port %d is not a Jungfrau: %s\n", host, port, type.c_str());
+      } else {
+        _connected=detmac_status;
+      }
+    } else {
       error_print("Error: failed to connect to Jungfrau control interface of %s!\n", _control);
+    }
   }
 }
 
@@ -240,6 +248,15 @@ void Module::shutdown()
     put_command("free", "0");
     delete _det;
     _det = 0;
+  }
+}
+
+bool Module::allocated() const
+{
+  if (_det) {
+    return true;
+  } else {
+    return false;
   }
 }
 
@@ -1121,6 +1138,14 @@ void Detector::shutdown()
   for (unsigned i=0; i<_num_modules; i++) {
     _modules[i]->shutdown();
   }
+}
+
+bool Detector::allocated() const
+{
+  for (unsigned i=0; i<_num_modules; i++) {
+    if(!_modules[i]->allocated()) return false;
+  }
+  return true;
 }
 
 bool Detector::connected() const

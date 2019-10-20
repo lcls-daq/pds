@@ -52,6 +52,7 @@ namespace Pds {
                const char* mac, const char* det_ip, bool config_det_ip=true, void* socket=NULL);
         ~Module();
         void shutdown();
+        bool allocated() const;
         bool connected() const;
         bool check_config();
         bool configure_mac(bool config_det_ip=true);
@@ -144,6 +145,7 @@ namespace Pds {
         Detector(std::vector<Module*>& modules, bool use_threads, int thread_rtprio=0);
         ~Detector();
         void shutdown();
+        bool allocated() const;
         bool connected() const;
         bool configure(uint64_t nframes, JungfrauConfigType::GainMode gain, JungfrauConfigType::SpeedMode speed, double trig_delay, double exposure_time, double exposure_period, uint32_t bias, const DacsConfig& dac_config);
         bool check_size(uint32_t num_modules, uint32_t num_rows, uint32_t num_columns) const;

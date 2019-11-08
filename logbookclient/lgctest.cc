@@ -83,7 +83,7 @@ int main( int argc, char** argv ) {
         client->reportTotals(12345, 1234, 314.15926);
         std::cout << "After reporting detector totals" << std::endl;
         char fname[255];
-        sprintf(fname,"%s/%s/xtc/e%s-r%04d-s%02d-c%02d.xtc", "XPP", client->current_experiment().c_str(), client->current_experiment().c_str(), 0, 0, 0);
+        sprintf(fname,"%s/%s/xtc/%s-r%04d-s%02d-c%02d.xtc", "XPP", client->current_experiment().c_str(), client->current_experiment().c_str(), 0, 0, 0);
         client->report_open_file(fname, 0, 0, "sample_hostname", true);
         std::cout << "After registering file" << std::endl;
         std::cout << "Starting a new run of type TEST: " << client->start_run("TEST") << std::endl;

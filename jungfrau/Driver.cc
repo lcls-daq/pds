@@ -797,11 +797,17 @@ void Module::flush_socket()
     if (nb > 0) {
       do {
         int rc = zmq_getsockopt(_socket, ZMQ_RCVMORE, &more, &more_size);
-        if (rc > 0 && more) {
-          rc = zmq_recv(_socket, _readbuf, _readbuf_sz, 0);
-        }
         // if zmq command failed break out of loop
-        if (rc < 0) break;
+        if (rc < 0) {
+          fprintf(stderr, "Error: unable to read RCVMORE state of zmq socket during flush: %s\n", strerror(errno));
+          break;
+        } else if (more) {
+          rc = zmq_recv(_socket, _readbuf, _readbuf_sz, 0);
+          if (rc < 0) {
+            fprintf(stderr, "Error: failure read from zmq socket during flush: %s\n", strerror(errno));
+            break;
+          }
+        }
       } while (more);
       count += 1;
     }
@@ -923,11 +929,17 @@ bool Module::get_packet_socket(uint64_t* frame, JungfrauModInfoType* metadata, u
   unsigned count = 0;
   do {
     nb = zmq_getsockopt(_socket, ZMQ_RCVMORE, &more, &more_size);
-    if (nb > 0 && more) {
+    if (nb < 0) {
+      fprintf(stderr,"Error: failure reading RCVMORE state of zmq server at address %s: %s\n", _endpoint, strerror(errno));
+      break;
+    } else if (more) {
       count += 1;
       nb = zmq_recv(_socket, _readbuf, _readbuf_sz, 0);
+      fprintf(stderr,"Error: failure receiving packet extra parts from Jungfru zmq server at address %s: %s\n", _endpoint, strerror(errno));
+      if (nb < 0) {
+        break;
+      }
     }
-    if (nb < 0) break;
   } while(more);
 
   // check if we found any unexpected message parts

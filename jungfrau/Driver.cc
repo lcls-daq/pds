@@ -744,7 +744,7 @@ void Module::reset()
   printf(" done\n");
 }
 
-void Module::flush()
+unsigned Module::flush()
 {
   ssize_t nb;
   struct sockaddr_in clientaddr;
@@ -756,7 +756,7 @@ void Module::flush()
       count += 1;
     }
   } while (nb > 0);
-  printf("flushed %u packets from socket buffer\n", count);
+  return count;
 }
 
 bool Module::get_frame(uint64_t* frame, uint16_t* data)
@@ -1258,10 +1258,32 @@ bool Detector::stop()
 
 void Detector::flush()
 {
+  unsigned counts[_num_modules];
+  for (unsigned i=0; i<_num_modules; i++) counts[i] = 0;
+
   printf("Flushing any remaining data from module socket buffers\n");
+  if (_use_threads) {
+    for (unsigned i=0; i<_num_modules; i++) {
+      printf("flushing data socket of module %u\n", i);
+      counts[i] += _modules[i]->flush();
+    }
+  } else {
+    int npoll = 0;
+    do {
+    npoll = ::poll(_pfds, (nfds_t) _num_modules+1, 500);
+      if (npoll < 0) {
+        fprintf(stderr,"Error: frame poller failed with error code: %s\n", strerror(errno));
+      } else {
+        for (unsigned i=0; i<_num_modules; i++) {
+          if (_pfds[i].revents & POLLIN)
+            counts[i] += _modules[i]->flush();
+        }
+      }
+    } while (npoll>0);
+  }
+
   for (unsigned i=0; i<_num_modules; i++) {
-    printf("flushing data socket of module %u\n", i);
-    _modules[i]->flush();
+    printf("flushed %u packets from module %u\n", counts[i], i);
   }
 }
 

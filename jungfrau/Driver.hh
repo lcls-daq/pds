@@ -87,7 +87,7 @@ namespace Pds {
         std::string status_str();
         bool start();
         bool stop();
-        void flush();
+        unsigned flush();
         void reset();
         bool get_packet(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data, bool* first_packet, bool* last_packet, unsigned* npackets);
         bool get_frame(uint64_t* framenum, uint16_t* data);

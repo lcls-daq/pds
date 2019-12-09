@@ -87,7 +87,7 @@ namespace Pds {
         std::string status_str();
         bool start();
         bool stop();
-        void flush();
+        unsigned flush();
         void reset();
         bool get_packet(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data, bool* first_packet, bool* last_packet, unsigned* npackets);
         bool get_frame(uint64_t* framenum, uint16_t* data);
@@ -107,8 +107,8 @@ namespace Pds {
         static void* bind_socket(void* context, const char* host, const unsigned device, const unsigned module);
         static unsigned calculate_zmq_port(const unsigned device, const unsigned module);
       private:
-        void flush_fd();
-        void flush_socket();
+        unsigned flush_fd();
+        unsigned flush_socket();
         bool get_packet_fd(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data, bool* first_packet, bool* last_packet, unsigned* npackets);
         bool get_packet_socket(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data, bool* first_packet, bool* last_packet, unsigned* npackets);
         std::string put_command_raw(int narg, int pos);

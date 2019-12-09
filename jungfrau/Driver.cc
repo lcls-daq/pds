@@ -762,16 +762,16 @@ void Module::reset()
   printf(" done\n");
 }
 
-void Module::flush()
+unsigned Module::flush()
 {
   if (_socket) {
-    flush_socket();
+    return flush_socket();
   } else {
-    flush_fd();
+    return flush_fd();
   }
 }
 
-void Module::flush_fd()
+unsigned Module::flush_fd()
 {
   ssize_t nb;
   struct sockaddr_in clientaddr;
@@ -783,10 +783,10 @@ void Module::flush_fd()
       count += 1;
     }
   } while (nb > 0);
-  printf("flushed %u packets from socket buffer\n", count);
+  return count;
 }
 
-void Module::flush_socket()
+unsigned Module::flush_socket()
 {
   int nb;
   int64_t more = 0;
@@ -813,7 +813,7 @@ void Module::flush_socket()
     }
   } while (nb > 0);
   _pending = false;
-  printf("flushed %u messages from socket buffer\n", count);
+  return count;
 }
 
 bool Module::get_frame(uint64_t* frame, uint16_t* data)
@@ -1455,10 +1455,32 @@ bool Detector::stop()
 
 void Detector::flush()
 {
+  unsigned counts[_num_modules];
+  for (unsigned i=0; i<_num_modules; i++) counts[i] = 0;
+
   printf("Flushing any remaining data from module socket buffers\n");
+  if (_use_threads) {
+    for (unsigned i=0; i<_num_modules; i++) {
+      printf("flushing data socket of module %u\n", i);
+      counts[i] += _modules[i]->flush();
+    }
+  } else {
+    int npoll = 0;
+    do {
+    npoll = zmq_poll(_pfds, _num_modules+1, 500);
+      if (npoll < 0) {
+        fprintf(stderr,"Error: frame poller failed with error code: %s\n", strerror(errno));
+      } else {
+        for (unsigned i=0; i<_num_modules; i++) {
+          if (_pfds[i].revents & ZMQ_POLLIN)
+            counts[i] += _modules[i]->flush();
+        }
+      }
+    } while (npoll>0);
+  }
+
   for (unsigned i=0; i<_num_modules; i++) {
-    printf("flushing data socket of module %u\n", i);
-    _modules[i]->flush();
+    printf("flushed %u packets from module %u\n", counts[i], i);
   }
 }
 

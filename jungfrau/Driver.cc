@@ -171,7 +171,7 @@ Module::Module(const int id, const char* control, const char* host, unsigned por
     std::string reply = put_command("hostname", _control);
     // Check if detector control interface is present
     if (!reply.empty()) {
-      std::string type  = get_command("type");
+      std::string type  = _det->getDetectorType();
 
       bool detmac_status = configure_mac(config_det_ip);
 

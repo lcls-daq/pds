@@ -1,7 +1,7 @@
 #ifndef Pds_Jungfrau_DataFormat_hh
 #define Pds_Jungfrau_DataFormat_hh
 
-#define JF_EVENTS_TO_BUFFER 10
+#define JF_EVENTS_TO_BUFFER 120
 #define JF_PACKET_NUM 128
 #define JF_DATA_ELEM 4096
 #define JF_FRAME_WAIT_EXIT -1

@@ -10,7 +10,8 @@
 using namespace Pds::Jungfrau;
 
 Server::Server( const Src& client )
-  : _xtc( _jungfrauDataType, client ), _count(0), _framesz(0), _last_frame(0), _first_frame(true)
+  : _xtc( _jungfrauDataType, client ), _count(0), _framesz(0), _last_frame(0), _first_frame(true),
+    _nbuf_free(0), _nbuf_pending(0)
 {
   _xtc.extent = sizeof(JungfrauDataType) + sizeof(Xtc);
   int err = ::pipe(_pfd);
@@ -55,6 +56,8 @@ int Server::fetch( char* payload, int flags )
 
   _last_frame = current_frame;
 
+  _nbuf_free++;
+  _nbuf_pending--;
   ::write(_pfd[3], &ptr, sizeof(ptr));
 
   return xtc.extent;
@@ -76,15 +79,29 @@ void Server::setFrame(uint64_t frame)
   _first_frame = false;
 }
 
+void* Server::dequeue()
+{
+  void* ptr;
+  int len = ::read(_pfd[2], &ptr, sizeof(ptr));
+  if (len != sizeof(ptr)) {
+    fprintf(stderr, "Error: read() returned %d in %s\n", len, __FUNCTION__);
+    return NULL;
+  } else {
+    _nbuf_free--;
+    return ptr;
+  }
+}
+
+void Server::enqueue(const void* ptr)
+{
+  _nbuf_free++;
+  ::write(_pfd[3], &ptr, sizeof(ptr));
+}
+
 void Server::post(const void* ptr)
 {
-  void* ret_ptr;
+  _nbuf_pending++;
   ::write(_pfd[1], &ptr, sizeof(ptr));
-  // wait for the reciever to finish using the posted buffer
-  ::read(_pfd[2], &ret_ptr, sizeof(ret_ptr));
-  if (ptr != ret_ptr) {
-    fprintf(stderr, "Error: server post did not return expected pointer %p instead of %p\n", ret_ptr, ptr);
-  }
 }
 
 void Server::set_frame_sz(unsigned sz)

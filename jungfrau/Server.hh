@@ -35,6 +35,12 @@ namespace Pds {
       void resetCount();
       void setFrame(uint64_t);
 
+      void* dequeue();
+      void enqueue(const void*);
+
+      int num_pending_buffers() const { return _nbuf_pending; }
+      int num_free_buffers() const    { return _nbuf_free; }
+
       void post(const void*);
 
       void set_frame_sz(unsigned);
@@ -44,7 +50,9 @@ namespace Pds {
       unsigned  _count;
       unsigned  _framesz;
       uint64_t  _last_frame;
-      bool      _first_frame; 
+      bool      _first_frame;
+      int       _nbuf_free;
+      int       _nbuf_pending;
       int       _pfd[4];
     };
   }

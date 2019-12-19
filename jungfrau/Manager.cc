@@ -22,6 +22,7 @@ namespace Pds {
     class FrameReader : public Routine {
     public:
       FrameReader(Detector& detector, Server& server, Task* task) :
+        _nbuffers(10),
         _task(task),
         _detector(detector),
         _server(server),
@@ -31,6 +32,7 @@ namespace Pds {
         _frame_sz(0),
         _entry_sz(0),
         _buffer(0),
+        _buffers(0),
         _frame_ptr(0),
         _framenum_ptr(0),
         _metadata_ptr(0)
@@ -38,11 +40,21 @@ namespace Pds {
         _header_sz = sizeof(JungfrauModuleInfoType) * _detector.get_num_modules();
         _frame_sz = _detector.get_frame_size();
         _entry_sz = sizeof(JungfrauDataType) + _header_sz + _frame_sz;
-        _buffer = new char[_entry_sz];
+        _buffers = new char*[_nbuffers];
+        for(unsigned i=0; i<_nbuffers; i++) {
+          _buffers[i] = new char[_entry_sz];
+          _server.enqueue(_buffers[i]);
+        }
         _server.set_frame_sz(_header_sz + _frame_sz);
       }
       virtual ~FrameReader() {
-        if (_buffer) delete[] _buffer;
+        if (_buffers) {
+          for(unsigned i=0; i<_nbuffers; i++) {
+            if (_buffers[i])
+              delete[] _buffers[i];
+          }
+          delete[] _buffers;
+        }
       }
       Task& task() { return *_task; }
       void enable () { _disable=false; _task->call(this); }
@@ -52,11 +64,13 @@ namespace Pds {
         if (_disable) {
           _abort=false;
         } else {
+          if(!_buffer) _buffer = (char*) _server.dequeue();
           _frame_ptr = (uint16_t*) (_buffer + sizeof(JungfrauDataType) + _header_sz);
           _framenum_ptr = (uint64_t*) _buffer;
           _metadata_ptr = (JungfrauModInfoType*) (_buffer + sizeof(JungfrauDataType));
           if (_detector.get_frame(_framenum_ptr, _metadata_ptr, _frame_ptr)) {
             _server.post(_buffer);
+            _buffer = 0;
           } else if(_detector.aborted() && !_abort) { // external abort so disable reader
             _disable = true;
           } else if(!_abort) {
@@ -66,17 +80,19 @@ namespace Pds {
         }
       }
     private:
-      Task*     _task;
-      Detector& _detector;
-      Server&   _server;
-      bool      _disable;
-      bool      _abort;
-      unsigned  _header_sz;
-      unsigned  _frame_sz;
-      unsigned  _entry_sz;
-      char*     _buffer;
-      uint16_t* _frame_ptr;
-      uint64_t* _framenum_ptr;
+      const unsigned  _nbuffers;
+      Task*           _task;
+      Detector&       _detector;
+      Server&         _server;
+      bool            _disable;
+      bool            _abort;
+      unsigned        _header_sz;
+      unsigned        _frame_sz;
+      unsigned        _entry_sz;
+      char*           _buffer;
+      char**          _buffers;
+      uint16_t*       _frame_ptr;
+      uint64_t*       _framenum_ptr;
       JungfrauModInfoType* _metadata_ptr;
     };
 
@@ -459,7 +475,7 @@ Manager::Manager(Detector& detector, Server& server, CfgClientNfs& cfg) : _fsm(*
 {
   Task* task = new Task(TaskObject("JungfrauReadout",35));
   L1Action* l1 = new L1Action(detector.get_num_modules(), *this);
-  FrameReader& reader = *new FrameReader(detector, server,task);
+  FrameReader& reader = *new FrameReader(detector, server, task);
 
   _fsm.callback(Pds::TransitionId::Map, new AllocAction(cfg));
   _fsm.callback(Pds::TransitionId::Configure  , new ConfigAction(*this, detector, server, reader, cfg, *l1));

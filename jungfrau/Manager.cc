@@ -116,12 +116,11 @@ namespace Pds {
 
     class L1Action : public Action, public Pds::XtcIterator {
     public:
-      static const unsigned skew_min_time = 0x1fffffff;
+      static const unsigned skew_min_time = 0x2fffffff;
       static const unsigned fid_rollover_secs = Pds::TimeStamp::MaxFiducials / 360;
       L1Action(unsigned num_modules, Manager& mgr) :
         _mgr(mgr),
         _lreset(true),
-        _calc_skew(true),
         _synced(true),
         _sync_msg(true),
         _unsycned_count(0),
@@ -173,17 +172,18 @@ namespace Pds {
             _lreset = false;
             _dgm_ts   = _in->datagram().seq.stamp().fiducials();
             _dgm_time = _in->datagram().seq.clock();
+            // reset module timestamps and skews
             for (unsigned i=0; i<_num_modules; i++) {
               _mod_ts[i] = mod_info[i].timestamp();
-              _skew[i] = 0;
-              _calc_skew = true;
+              _skew[i] = 1.0;
             }
           } else {
             bool mods_synced = true;
             bool frames_synced = true;
             uint64_t max_ts = 0;
             const double clkratio  = 360./10e6;
-            const double tolerance = 0.003;  // AC line rate jitter and Jungfrau clock drift
+            const double tdiff = 2.5e-5;    // the max allowed time difference (in seconds) between different modules in a frame
+            const double tolerance = 0.003; // AC line rate jitter and Jungfrau clock drift
             const unsigned maxdfid = 21600; // if there is more than 1 minute between triggers
             const unsigned maxunsync = 240;
 
@@ -201,19 +201,13 @@ namespace Pds {
             if (mods_synced) {
               // check for large timing differences between the modules
               for (unsigned i=0; i<_num_modules; i++) {
-                if (_calc_skew) {
-                  _skew[i] = double(max_ts) / mod_info[i].timestamp();
-                }
-                double fdelta = (max_ts - ((_calc_skew ? 1.0 : _skew[i]) * mod_info[i].timestamp())) / 10e6;
-                if (fabs(fdelta) > tolerance) {
+                double fdelta = (max_ts - (_skew[i] * mod_info[i].timestamp())) / 10e6;
+                if (fabs(fdelta) > tdiff && max_ts > skew_min_time && (_nfid < maxdfid || !_synced)) {
                   printf("  framesync error for module %u: offset of %g seconds\n", i, fabs(fdelta));
                   frames_synced = false;
+                } else {
+                  _skew[i] = double(max_ts) / mod_info[i].timestamp();
                 }
-              }
-              // the skew between the clocks of modules seem to increase at constant rate
-              // once the clock value is high enough we can calculate it to enough precision
-              if (max_ts > skew_min_time) {
-                _calc_skew = false;
               }
             }
 
@@ -247,7 +241,6 @@ namespace Pds {
     private:
       Manager&    _mgr;
       bool        _lreset;
-      bool        _calc_skew;
       bool        _synced;
       bool        _sync_msg;
       unsigned    _unsycned_count;

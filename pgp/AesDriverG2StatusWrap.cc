@@ -66,7 +66,7 @@ namespace Pds {
     }
 
     int AesDriverG2StatusWrap::allocateVC(unsigned vcm, unsigned lm) {
-      unsigned char maskBytes[32];
+      unsigned char maskBytes[DMA_MASK_SIZE];
       unsigned lane = _pgp->portOffset();
       dmaInitMaskBytes(maskBytes);
       for(unsigned i=0; i<4; i++) {

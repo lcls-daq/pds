@@ -244,7 +244,7 @@ namespace Pds {
     }
 
     int AesDriverG3StatusWrap::allocateVC(unsigned vcm, unsigned lm) {
-      unsigned char maskBytes[32];
+      unsigned char maskBytes[DMA_MASK_SIZE];
       unsigned lane = portOffset;  // _lane?
       dmaInitMaskBytes(maskBytes);
       for(unsigned i=0; i<G3_NUMBER_OF_LANES; i++) {

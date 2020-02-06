@@ -85,6 +85,12 @@ class LogbookClient:
         return __parse_resp_json__(resp)
 
     def registerFile(self, experiment_name, fileInfo):
-        logger.debug("Registering file %s for experiment %s ", fileInfo["path"], experiment_name)
+        abspath = fileInfo["absolute_path"]
+        logger.debug("Registering file with absolute path %s for experiment %s ", abspath, experiment_name)
+        if experiment_name in abspath and abspath.find(experiment_name) > 5:
+            fileInfo["path"] = abspath[abspath.find(experiment_name)-5:]
+            logger.debug("Stripping out the prefix to generate the path %s", fileInfo["path"])
+        else:
+            fileInfo["path"] = abspath
         resp = requests.post(self.serverUrl + "/lgbk/{0}/ws/register_file".format(experiment_name), json=fileInfo, **self.authHeaders)
         return __parse_resp_json__(resp)

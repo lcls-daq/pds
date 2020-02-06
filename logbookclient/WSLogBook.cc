@@ -194,31 +194,23 @@ void WSLogbookClient::report_open_file (const char* path, int stream, int chunk,
     _sem.take();
     PyObject* pDict = PyDict_New();
     if(path != NULL) {
+        // Pass in the path as an absolute path. The python code will generate the path
         PyObject* val = PyUnicode_FromString(path);
-        PyDict_SetItemString(pDict, "path", val);
+        PyDict_SetItemString(pDict, "absolute_path", val);
         Py_XDECREF(val);
     } else {
         _sem.give();
         throw std::runtime_error("Cannot register a file without the path.");
     }
-    if(stream >=0) {
-        PyObject* val = PyLong_FromLong(stream);
-        PyDict_SetItemString(pDict, "stream", val);
-        Py_XDECREF(val);
-    }
-    if(chunk >=0) {
-        PyObject* val = PyLong_FromLong(chunk);
-        PyDict_SetItemString(pDict, "chunk", val);
-        Py_XDECREF(val);
-    }
     if(hostName != NULL) {
         PyObject* val = PyUnicode_FromString(hostName);
-        PyDict_SetItemString(pDict, "hostName", val);
+        PyDict_SetItemString(pDict, "hostname", val);
         Py_XDECREF(val);
     }
-    if(ffb) {
-        PyDict_SetItemString(pDict, "ffb", Py_True);
-    }
+
+    PyObject* gen = PyLong_FromLong(1);
+    PyDict_SetItemString(pDict, "gen", gen);
+    Py_XDECREF(gen);
 
     PyObject* pRet = _CK_(PyObject_CallMethod(pClient, "registerFile", "sO", _experimentName.c_str(), pDict), "After registering file");
     Py_XDECREF(pDict);

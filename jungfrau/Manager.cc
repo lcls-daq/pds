@@ -263,7 +263,7 @@ namespace Pds {
         _cfg(cfg),
         _l1(l1),
         _enable(reader),
-        _cfgtc(_jungfrauConfigType,cfg.src()),
+        _cfgtc(_jungfrauConfigType,server.client()),
         _occPool(sizeof(UserMessage),1),
         _error(false) {}
       ~ConfigAction() {}

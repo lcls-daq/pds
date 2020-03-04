@@ -92,6 +92,7 @@ namespace Pds {
         bool get_packet(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t* data, bool* first_packet, bool* last_packet, unsigned* npackets);
         bool get_frame(uint64_t* framenum, uint16_t* data);
         bool get_frame(uint64_t* framenum, JungfrauModInfoType* metadata, uint16_t* data);
+        const char* get_hostname() const;
         const char* error();
         void set_error(const char* fmt, ...);
         void clear_error();
@@ -148,6 +149,7 @@ namespace Pds {
         unsigned get_num_pixels() const;
         unsigned get_frame_size() const;
         uint64_t sync_nframes();
+        const char* get_hostname(unsigned module) const;
         const char** errors();
         void clear_errors();
         void abort();

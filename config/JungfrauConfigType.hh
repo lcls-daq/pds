@@ -12,6 +12,11 @@ static Pds::TypeId _jungfrauConfigType(Pds::TypeId::Id_JungfrauConfig,
 				     JungfrauConfigType::Version);
 
 namespace Pds {
+  namespace JungfrauModConfig {
+    void setSerialNumber(JungfrauModConfigType&,
+                         uint64_t serialNumber);
+  }
+
   namespace JungfrauConfig {
     void setSize(JungfrauConfigType&,
                  unsigned modules,

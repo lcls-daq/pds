@@ -15,12 +15,6 @@ namespace Pds {
       static void merge(Damage& dest, const Damage& src);
     };
 
-    class SegmentInfo {
-    public:
-      static DetInfo parent(const DetInfo& child);
-      static DetInfo child(const DetInfo& parent, uint32_t index, uint32_t total);
-    };
-
     class SegmentConfig {
     public:
       SegmentConfig(const DetInfo& info,

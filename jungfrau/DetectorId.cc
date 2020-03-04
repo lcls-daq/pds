@@ -3,6 +3,9 @@
 using namespace Pds;
 using namespace Pds::Jungfrau;
 
+static const uint64_t MOD_ID_BITS = 16;
+static const uint64_t MOD_ID_MASK = (1<<MOD_ID_BITS) - 1;
+
 static const DetIdItem DEFAULTS[] = {
   DetIdItem("det-jungfrau4m-00", DetId(0x0050c246df50, 269)),
   DetIdItem("det-jungfrau4m-01", DetId(0x0050c246df51, 279)),
@@ -23,7 +26,7 @@ DetId::DetId(uint64_t id) :
 {}
 
 DetId::DetId(uint64_t board, uint64_t module) :
-  _id((board<<2) | (0xff & module))
+  _id((board<<MOD_ID_BITS) | (MOD_ID_MASK & module))
 {}
 
 DetId::~DetId()
@@ -36,12 +39,12 @@ uint64_t DetId::full() const
 
  uint64_t DetId::board() const
 {
-  return _id>>2;
+  return _id>>MOD_ID_BITS;
 }
 
 uint64_t DetId::module() const
 {
-  return 0xff & _id;
+  return MOD_ID_MASK & _id;
 }
 
 DetIdLookup::DetIdLookup()

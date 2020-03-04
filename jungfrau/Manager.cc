@@ -1,6 +1,7 @@
 #include "pds/jungfrau/Manager.hh"
 #include "pds/jungfrau/Driver.hh"
 #include "pds/jungfrau/Server.hh"
+#include "pds/jungfrau/DetectorId.hh"
 
 #include "pds/config/JungfrauConfigType.hh"
 #include "pds/config/JungfrauDataType.hh"
@@ -215,7 +216,9 @@ namespace Pds {
             _synced = mods_synced && frames_synced;
 
             if (!_synced) {
-              _in->datagram().xtc.damage.increase(Pds::Damage::OutOfSynch);
+              xtc->damage.increase(Pds::Damage::OutOfSynch);
+              // add the damage to the L1Accept datagram as well
+              _in->datagram().xtc.damage.increase(xtc->damage.value());
               _unsycned_count++;
               if ((_unsycned_count > maxunsync) && _sync_msg) {
                 printf("L1Action: Detector has been out of sync for %u frames - reconfiguration needed!\n", _unsycned_count);
@@ -256,11 +259,13 @@ namespace Pds {
 
     class ConfigAction : public Action {
     public:
-      ConfigAction(Manager& mgr, Detector& detector, Server& server, FrameReader& reader, CfgClientNfs& cfg, L1Action& l1) :
+      ConfigAction(Manager& mgr, Detector& detector, Server& server, FrameReader& reader,
+                   CfgClientNfs& cfg, DetIdLookup& lookup, L1Action& l1) :
         _mgr(mgr),
         _detector(detector),
         _server(server),
         _cfg(cfg),
+        _lookup(lookup),
         _l1(l1),
         _enable(reader),
         _cfgtc(_jungfrauConfigType,server.client()),
@@ -325,6 +330,16 @@ namespace Pds {
             }
 
             for (unsigned i=0; i<_detector.get_num_modules(); i++) {
+              const char* hostname = _detector.get_hostname(i);
+              if (hostname) {
+                if(_lookup.has(hostname))
+                  JungfrauModConfig::setSerialNumber(_module_config[i], _lookup[hostname].full());
+              } else {
+                printf("ConfigAction: module %d appears to have no hostname to use for serial number lookup!\n", i);
+                UserMessage* msg = new (&_occPool) UserMessage("Jungfrau Config Error: failed to lookup serial number!\n");
+                _mgr.appliance().post(msg);
+                _error = true;
+              }
               printf("Module %u version info:\n"
                      "  serial number:  0x%lx\n"
                      "  version number: 0x%lx\n"
@@ -370,6 +385,7 @@ namespace Pds {
       Detector&             _detector;
       Server&               _server;
       CfgClientNfs&         _cfg;
+      DetIdLookup&          _lookup;
       L1Action&             _l1;
       ReaderEnable          _enable;
       JungfrauConfigType    _config;
@@ -448,14 +464,15 @@ namespace Pds {
 
 using namespace Pds::Jungfrau;
 
-Manager::Manager(Detector& detector, Server& server, CfgClientNfs& cfg) : _fsm(*new Pds::Fsm())
+Manager::Manager(Detector& detector, Server& server, CfgClientNfs& cfg, DetIdLookup& lookup) :
+  _fsm(*new Pds::Fsm())
 {
   Task* task = new Task(TaskObject("JungfrauReadout",35));
   L1Action* l1 = new L1Action(detector.get_num_modules(), *this);
   FrameReader& reader = *new FrameReader(detector, server,task);
 
   _fsm.callback(Pds::TransitionId::Map, new AllocAction(cfg));
-  _fsm.callback(Pds::TransitionId::Configure  , new ConfigAction(*this, detector, server, reader, cfg, *l1));
+  _fsm.callback(Pds::TransitionId::Configure  , new ConfigAction(*this, detector, server, reader, cfg, lookup, *l1));
   _fsm.callback(Pds::TransitionId::Enable     , new EnableAction(detector, *l1));
   _fsm.callback(Pds::TransitionId::Disable    , new DisableAction(detector));
   _fsm.callback(Pds::TransitionId::Unconfigure, new UnconfigureAction(reader));

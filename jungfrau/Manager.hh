@@ -8,9 +8,10 @@ namespace Pds {
   namespace Jungfrau {
     class Detector;
     class Server;
+    class DetIdLookup;
     class Manager {
     public:
-      Manager (Detector&, Server&, CfgClientNfs&);
+      Manager (Detector&, Server&, CfgClientNfs&, DetIdLookup&);
       ~Manager();
     public:
       Appliance& appliance();

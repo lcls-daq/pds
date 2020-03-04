@@ -15,6 +15,8 @@ namespace Pds {
     const char*      lookup(const Src&) const;
     AliasConfigType* config(const PartitionConfigType* =0) const;
   private:
+    void             _insert_parent(const Alias::SrcAlias&);
+  private:
     std::list<Alias::SrcAlias> _list;
   };
 };

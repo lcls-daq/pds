@@ -671,13 +671,13 @@ uint64_t Module::serialnum()
 
 uint64_t Module::version()
 {
-  std::string reply = get_command("detectorversion");
+  std::string reply = get_command("softwareversion");
   return strtoull(reply.c_str(), NULL, 0);
 }
 
 uint64_t Module::firmware()
 {
-  std::string reply = get_command("softwareversion");
+  std::string reply = get_command("detectorversion");
   return strtoull(reply.c_str(), NULL, 0);
 }
 
@@ -828,6 +828,11 @@ bool Module::get_frame(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t*
   }
  
   return (npackets == JF_PACKET_NUM);
+}
+
+const char* Module::get_hostname() const
+{
+  return _control;
 }
 
 const char* Module::error()
@@ -1328,6 +1333,16 @@ unsigned Detector::get_frame_size() const
     total_frame_size += _modules[i]->get_frame_size();
   }
   return total_frame_size;
+}
+
+const char* Detector::get_hostname(unsigned module) const
+{
+  if (module < _num_modules) {
+    return _modules[module]->get_hostname();
+  } else {
+    fprintf(stderr,"Error: detector does not contain module %u - only %u modules in detector!\n", module, _num_modules);
+    return NULL;
+  }
 }
 
 const char** Detector::errors() 

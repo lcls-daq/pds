@@ -1,5 +1,13 @@
 #include "pds/config/JungfrauConfigType.hh"
 
+void Pds::JungfrauModConfig::setSerialNumber(JungfrauModConfigType& c,
+                                             uint64_t serialNumber)
+{
+  new(&c) JungfrauModConfigType(serialNumber,
+                                c.moduleVersion(),
+                                c.firmwareVersion());
+}
+
 void Pds::JungfrauConfig::setSize(JungfrauConfigType& c,
                                   unsigned modules,
                                   unsigned rows,

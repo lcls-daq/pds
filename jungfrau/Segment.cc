@@ -1,6 +1,7 @@
 #include "Segment.hh"
 
 #include "pdsdata/xtc/Xtc.hh"
+#include "pdsdata/xtc/SegmentInfo.hh"
 
 using namespace Pds;
 using namespace Pds::Jungfrau;
@@ -9,20 +10,6 @@ void DamageHelper::merge(Damage& dest, const Damage& src)
 {
   dest.increase(src.value());
   dest.userBits(src.userBits());
-}
-
-DetInfo SegmentInfo::parent(const DetInfo& child)
-{
-  return DetInfo(child.processId(), child.detector(), child.detId()>>4, DetInfo::Jungfrau, child.devId()>>4);
-}
-
-DetInfo SegmentInfo::child(const DetInfo& parent, uint32_t index, uint32_t total)
-{
-  return DetInfo(parent.processId(),
-                 parent.detector(),
-                 (parent.detId()<<4) | (0xf & total),
-                 DetInfo::JungfrauSegment,
-                 (parent.devId()<<4) | (0xf & index));
 }
 
 SegmentConfig::SegmentConfig(const DetInfo& info,
@@ -104,6 +91,7 @@ FrameCache::FrameCache(const JungfrauConfigType& config) :
   _mod_size(config.numPixels()/config.numberOfModules()),
   _nmods((1<<config.numberOfModules())-1),
   _mask(0),
+  _damage(0),
   _buffer(NULL),
   _data(NULL),
   _frame(NULL),
@@ -161,6 +149,7 @@ bool FrameCache::ready() const
 void FrameCache::reset()
 {
   _mask = 0;
+  _damage = 0;
 }
 
 Damage FrameCache::damage() const

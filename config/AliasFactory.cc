@@ -58,8 +58,14 @@ AliasConfigType* AliasFactory::config(const PartitionConfigType* partn) const
     if (partn) {
       ndarray<const Partition::Source,1> s(partn->sources());
       for(unsigned i=0; i<s.size(); i++) {
-        SegmentInfo parent(reinterpret_cast<const DetInfo&>(s[i]), false);
-        if ((it->src()==s[i].src()) || (it->src()==parent)) {
+        const SegmentInfo& det = reinterpret_cast<const SegmentInfo&>(s[i].src());
+        if (det.isChild()) {
+          DetInfo parent = SegmentInfo::parent(det, false);
+          if (it->src()==parent) {
+            lskip=false;
+            break;
+          }
+        } else if (it->src()==s[i].src()) {
           lskip=false;
           break;
         }

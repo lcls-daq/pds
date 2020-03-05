@@ -82,6 +82,7 @@ namespace Pds {
         char*         errorString();
         void          errorStringAppend(char*);
         void          clearErrorString();
+        static bool   checkVersion(bool, int);
         static void   portOffset(unsigned p) { _portOffset = p; }
         static unsigned portOffset() { return _portOffset; }
         bool          evrEnabled(bool);

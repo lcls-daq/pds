@@ -3,6 +3,7 @@
 #include <PgpDriver.h>
 #include <new>
 #include <stdio.h>
+#include <inttypes.h>
 
 //#define DBUG
 
@@ -76,14 +77,14 @@ Pds::Pgp::RegisterSlaveImportFrame* Protocol::read(unsigned size)
   pgpCardRx.flags   = 0;
   pgpCardRx.is32    = 0;
   pgpCardRx.dest    = 0;
+  pgpCardRx.ret     = 0;
   pgpCardRx.size = BufferWords*sizeof(uint32_t);
   pgpCardRx.data    = (uint64_t)(&(_readBuffer));
   pgpCardRx.is32    = sizeof(&pgpCardRx)==4;
   while (found == false) {
     int sret = select(_fd+1,&fds,NULL,NULL,&timeout);
     if (sret > 0) {
-      int readRet = ::read(_fd, &pgpCardRx, sizeof(struct DmaReadData));
-      if (readRet >= 0) {
+      if (::read(_fd, &pgpCardRx, sizeof(struct DmaReadData)) >= 0) {
         SrpV3::RegisterSlaveFrame* rsf = 
           reinterpret_cast<SrpV3::RegisterSlaveFrame*>(_readBuffer);
         if (rsf->opcode() == PgpRSBits::read) {
@@ -91,11 +92,11 @@ Pds::Pgp::RegisterSlaveImportFrame* Protocol::read(unsigned size)
           if (pgpCardRx.error) {
             printError(pgpCardRx.error, pgpCardRx.dest);
           } else {
-            //            rsf->print(readRet/sizeof(uint32_t));
+            //            rsf->print(pgpCardRx.ret/sizeof(uint32_t));
             // Sometimes we are missing the trailing word
-            if (readRet != int(size*sizeof(uint32_t))) {
-              printf("SrpV3::read read returned %u, we were looking for %u uint32s\n", readRet, size);
-              printf("\tDmaReadData: data(%llx)  dest(%x)  flags(%x)  index(%x)  error(%x)  size(%x)  is32(%x)\n",
+            if (pgpCardRx.ret != int(size*sizeof(uint32_t))) {
+              printf("SrpV3::read read returned %u, we were looking for %u uint32s\n", pgpCardRx.ret, size);
+              printf("\tDmaReadData: data(%"PRIx64")  dest(%x)  flags(%x)  index(%x)  error(%x)  size(%x)  is32(%x)\n",
                      pgpCardRx.data, pgpCardRx.dest, pgpCardRx.flags, pgpCardRx.index, pgpCardRx.error, pgpCardRx.size, pgpCardRx.is32);
               rsf->print();
             } else {

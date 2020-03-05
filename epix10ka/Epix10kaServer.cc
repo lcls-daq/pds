@@ -360,6 +360,7 @@ int Pds::Epix10kaServer::fetch( char* payload, int flags ) {
    pgpCardRx.flags  = 0;
    pgpCardRx.index  = 0;
    pgpCardRx.error  = 0;
+   pgpCardRx.ret    = 0;
    pgpCardRx.size = _payloadSize;
    pgpCardRx.is32   = sizeof(&pgpCardRx) == 4;
 
@@ -372,7 +373,9 @@ int Pds::Epix10kaServer::fetch( char* payload, int flags ) {
      }
      perror ("Epix10kaServer::fetch pgpCard read error");
      ret =  Ignore;
-   };
+   } else {
+     ret = pgpCardRx.ret;
+   }
 
 //   printf("Epix10kaServer got here 3, ret is %d, vc is %u\n", ret, pgpGetVc(pgpCardRx.dest));
    unsigned damageMask = 0;
@@ -546,6 +549,7 @@ unsigned Epix10kaServer::flushInputQueue(int f, bool flag) {
   pgpCardRx.flags  = 0;
   pgpCardRx.index  = 0;
   pgpCardRx.error  = 0;
+  pgpCardRx.ret    = 0;
   do {
     FD_ZERO(&fds);
     FD_SET(f,&fds);

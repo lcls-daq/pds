@@ -321,10 +321,11 @@ int Epix10ka2m::ServerSequence::fetch( char* payload, int flags ) {
    pgpCardRx.flags  = 0;
    pgpCardRx.index  = 0;
    pgpCardRx.error  = 0;
-   pgpCardRx.size = _payloadSize;
+   pgpCardRx.ret    = 0;
+   pgpCardRx.size   = _payloadSize;
    pgpCardRx.is32   = sizeof(&pgpCardRx) == 4;
 
-   if ((ret = read(fd(), &pgpCardRx, sizeof(DmaReadData))) < 0) {
+   if (read(fd(), &pgpCardRx, sizeof(DmaReadData)) < 0) {
      if (errno == ERESTART) {
        disable();
        _ignoreFetch = true;
@@ -333,7 +334,9 @@ int Epix10ka2m::ServerSequence::fetch( char* payload, int flags ) {
      }
      perror ("Epix10ka2m::ServerSequence::fetch pgpCard read error");
      ret =  Ignore;
-   };
+   } else {
+     ret = pgpCardRx.ret;
+   }
 
    unsigned damageMask = 0;
    if (pgpCardRx.error) {
@@ -503,6 +506,7 @@ unsigned Epix10ka2m::ServerSequence::flushInputQueue(int f, bool flag) {
   pgpCardRx.flags  = 0;
   pgpCardRx.index  = 0;
   pgpCardRx.error  = 0;
+  pgpCardRx.ret    = 0;
   do {
     FD_ZERO(&fds);
     FD_SET(f,&fds);

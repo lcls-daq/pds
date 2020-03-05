@@ -212,6 +212,7 @@ int Pds::Cspad2x2Server::fetch( char* payload, int flags ) {
      dmaReadData.flags  = 0;
      dmaReadData.index  = 0;
      dmaReadData.error  = 0;
+     dmaReadData.ret    = 0;
      pgpRxBuff = &dmaReadData;
      pgpRxSize = sizeof(DmaReadData);
    } else {
@@ -240,6 +241,8 @@ int Pds::Cspad2x2Server::fetch( char* payload, int flags ) {
      ret =  Ignore;
    } else if (!_use_aes) {
      ret *= sizeof(__u32); // correct for pgpcard read not returning # of bytes
+   } else {
+     ret = dmaReadData.ret;
    }
    Pds::Pgp::DataImportFrame* data = (Pds::Pgp::DataImportFrame*)(payload + xtcSize);
 
@@ -343,6 +346,7 @@ unsigned Cspad2x2Server::flushInputQueue(int f, bool printFlag) {
     dmaReadData.flags  = 0;
     dmaReadData.index  = 0;
     dmaReadData.error  = 0;
+    dmaReadData.ret    = 0;
     pgpRxBuff = &dmaReadData;
     pgpRxSize = sizeof(DmaReadData);
   } else {

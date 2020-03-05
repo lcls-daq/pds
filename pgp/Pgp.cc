@@ -198,12 +198,13 @@ void     Pgp::Pgp::printStatus() {
     pgpCardRx.flags   = 0;
     pgpCardRx.is32    = 0;
     pgpCardRx.dest    = 0;
+    pgpCardRx.ret     = 0;
     pgpCardRx.size = ::Pgp::BufferWords*sizeof(uint32_t);
     pgpCardRx.data    = (uint64_t)(&(::Pgp::_readBuffer));
     pgpCardRx.is32    = sizeof(&pgpCardRx)==4;
     while (found == false) {
       if ((sret = select(::Pgp::_fd+1,&fds,NULL,NULL,&timeout)) > 0) {
-        if ((readRet = ::read(::Pgp::_fd, &pgpCardRx, sizeof(struct DmaReadData))) >= 0) {
+        if (::read(::Pgp::_fd, &pgpCardRx, sizeof(struct DmaReadData)) >= 0) {
           if ((ret->waiting() == ::PgpRSBits::Waiting) || (ret->opcode() == ::PgpRSBits::read)) {
             //          printf("DMA Read Data\n");
             //          printf(" \tpgpCardRx.data\t0x%llx\n", (uint64_t)pgpCardRx.data);
@@ -215,6 +216,7 @@ void     Pgp::Pgp::printStatus() {
             //          printf(" \tpgpCardRx.is32\t0x%x\n", pgpCardRx.is32);
             //          uint32_t* u = (uint32_t*)pgpCardRx.data;
             //          printf("data->0x%x 0x%x 0x%x\n", u[0], u[1], u[2]);
+            readRet = pgpCardRx.ret; // this where the size of the data is now
             found = true;
             if (pgpCardRx.error) {
               printError(pgpCardRx.error, pgpCardRx.dest);
@@ -445,3 +447,10 @@ int Pgp::Pgp::IoctlCommand(unsigned c, long long unsigned a) {
   }
 }
 
+bool Pgp::Pgp::checkVersion(bool use_aes, int fd) {
+  if (use_aes && (dmaCheckVersion(fd) < 0)) {
+    return false;
+  } else {
+    return true;
+  }
+}

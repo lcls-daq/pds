@@ -250,6 +250,7 @@ int Pds::EpixServer::fetch( char* payload, int flags ) {
      dmaReadData.flags  = 0;
      dmaReadData.index  = 0;
      dmaReadData.error  = 0;
+     dmaReadData.ret    = 0;
      pgpRxBuff = &dmaReadData;
      pgpRxSize = sizeof(DmaReadData);
    } else {
@@ -278,6 +279,8 @@ int Pds::EpixServer::fetch( char* payload, int flags ) {
      ret =  Ignore;
    } else if (!_use_aes) {
      ret *= sizeof(__u32);
+   } else {
+     ret = dmaReadData.ret;
    }
 
    if (_ignoreFetch) return Ignore;
@@ -379,6 +382,7 @@ unsigned EpixServer::flushInputQueue(int f) {
     dmaReadData.flags  = 0;
     dmaReadData.index  = 0;
     dmaReadData.error  = 0;
+    dmaReadData.ret    = 0;
     pgpRxBuff = &dmaReadData;
     pgpRxSize = sizeof(DmaReadData);
   } else {

@@ -2,6 +2,7 @@
 #include "pds/pgp/RegisterSlaveImportFrame.hh"
 #include <PgpDriver.h>
 #include <new>
+#define __STDC_FORMAT_MACROS
 #include <stdio.h>
 #include <inttypes.h>
 

@@ -1,4 +1,9 @@
+ifneq ($(findstring x86_64,$(tgt_arch)),)
 libnames := jungfrau jungfrauseg
+else
+libnames := jungfrauseg
+endif
+
 
 libsrcs_jungfrauseg := Segment.cc
 libincs_jungfrauseg := pdsdata/include ndarray/include boost/include

@@ -21,9 +21,10 @@ packages += pvdaq
 packages += monreq
 packages += gsc16ai
 packages += quadadc
+packages += jungfrau
 
 ifneq ($(findstring x86_64,$(tgt_arch)),)
-  packages += firewire jungfrau uxi archon logbookclient offlineclient
+  packages += firewire uxi archon logbookclient offlineclient
 ##  No DDL
 #  packages += phasics
 else

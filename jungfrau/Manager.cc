@@ -2,10 +2,10 @@
 #include "pds/jungfrau/Driver.hh"
 #include "pds/jungfrau/Server.hh"
 #include "pds/jungfrau/DetectorId.hh"
+#include "pds/jungfrau/ConfigCache.hh"
 
 #include "pds/config/JungfrauConfigType.hh"
 #include "pds/config/JungfrauDataType.hh"
-#include "pds/config/CfgClientNfs.hh"
 #include "pds/client/Action.hh"
 #include "pds/client/Fsm.hh"
 #include "pds/utility/Appliance.hh"
@@ -105,14 +105,14 @@ namespace Pds {
 
     class AllocAction : public Action {
     public:
-      AllocAction(CfgClientNfs& cfg) : _cfg(cfg) {}
+      AllocAction(ConfigCache& cfg) : _cfg(cfg) {}
       Transition* fire(Transition* tr) {
         const Allocate& alloc = reinterpret_cast<const Allocate&>(*tr);
-        _cfg.initialize(alloc.allocation());
+        _cfg.init(alloc.allocation());
         return tr;
       }
     private:
-      CfgClientNfs& _cfg;
+      ConfigCache& _cfg;
     };
 
     class L1Action : public Action, public Pds::XtcIterator {
@@ -260,159 +260,131 @@ namespace Pds {
     class ConfigAction : public Action {
     public:
       ConfigAction(Manager& mgr, Detector& detector, Server& server, FrameReader& reader,
-                   CfgClientNfs& cfg, DetIdLookup& lookup, L1Action& l1) :
+                   ConfigCache& cfg, L1Action& l1) :
         _mgr(mgr),
         _detector(detector),
         _server(server),
         _cfg(cfg),
-        _lookup(lookup),
         _l1(l1),
         _enable(reader),
-        _cfgtc(_jungfrauConfigType,server.client()),
-        _occPool(sizeof(UserMessage),1),
-        _error(false) {}
+        _occPool(sizeof(UserMessage),1) {}
       ~ConfigAction() {}
       InDatagram* fire(InDatagram* dg) {
-        if (_error) {
-          printf("*** Found configuration errors\n");
-          dg->datagram().xtc.damage.increase(Pds::Damage::UserDefined);
-        } else {
-          // insert assumes we have enough space in the input datagram
-          dg->insert(_cfgtc,    &_config);
-        }
+        _cfg.record(dg);
         return dg;
       }
       Transition* fire(Transition* tr) {
-        _error = false;
 
-        int len = _cfg.fetch( *tr, _jungfrauConfigType, &_config, sizeof(_config) );
-
+        int len = _cfg.fetch(tr);
         if (len <= 0) {
-          _error = true;
-
           printf("ConfigAction: failed to retrieve configuration: (%d) %s.\n", errno, strerror(errno));
 
           UserMessage* msg = new (&_occPool) UserMessage("Jungfrau Config Error: failed to retrieve configuration.\n");
           _mgr.appliance().post(msg);
         } else {
-          _cfgtc.extent = sizeof(Xtc) + sizeof(JungfrauConfigType);
-          unsigned nrows = 0;
-          unsigned ncols = 0;
-          bool mod_size_set = false;
-
-          for (unsigned i=0; i<_detector.get_num_modules(); i++) {
-            if (!mod_size_set) {
-              nrows = _detector.get_num_rows(i);
-              ncols = _detector.get_num_columns(i);
-              mod_size_set = true;
-            } else if ((_detector.get_num_rows(i) != nrows) || (_detector.get_num_columns(i) != ncols)) {
-              _error = true;
-              printf("ConfigAction: detector modules with different shapes are not supported! (%u x %u) vs (%u x %u)\n", nrows, ncols, _detector.get_num_rows(i), _detector.get_num_columns(i));
-              UserMessage* msg = new (&_occPool) UserMessage("Jungfrau Config Error: modules with different shapes are not supported!\n");
-              _mgr.appliance().post(msg);
-            }
-          }
-
-          if (!mod_size_set) {
-            _error = true;
-            printf("ConfigAction: detector seems to have no modules to configure!\n");
-            UserMessage* msg = new (&_occPool) UserMessage("Jungfrau Config Error: detector seems to have no modules to configure!\n");
-            _mgr.appliance().post(msg);
-          }
-
-          if (!_error) {
-            // Retrieve the module specific read-only configuration info to update config object
-            if (!_detector.get_module_config(_module_config)) {
-              printf("ConfigAction: failed to retrieve module version information!\n");
-              UserMessage* msg = new (&_occPool) UserMessage("Jungfrau Config Error: failed to retrieve module version information!\n");
-              _mgr.appliance().post(msg);
-              _error = true;
-            }
-
-            for (unsigned i=0; i<_detector.get_num_modules(); i++) {
-              const char* hostname = _detector.get_hostname(i);
-              if (hostname) {
-                if(_lookup.has(hostname))
-                  JungfrauModConfig::setSerialNumber(_module_config[i], _lookup[hostname].full());
-              } else {
-                printf("ConfigAction: module %d appears to have no hostname to use for serial number lookup!\n", i);
-                UserMessage* msg = new (&_occPool) UserMessage("Jungfrau Config Error: failed to lookup serial number!\n");
-                _mgr.appliance().post(msg);
-                _error = true;
-              }
-              printf("Module %u version info:\n"
-                     "  serial number:  0x%lx\n"
-                     "  version number: 0x%lx\n"
-                     "  firmware:       0x%lx\n",
-                     i,
-                     _module_config[i].serialNumber(),
-                     _module_config[i].moduleVersion(),
-                     _module_config[i].firmwareVersion());
-            }
-
-            _server.setFrame(_detector.sync_nframes());
-
-            JungfrauConfig::setSize(_config, _detector.get_num_modules(), nrows, ncols, _module_config);
-            DacsConfig dacs_config(_config.vb_ds(), _config.vb_comp(), _config.vb_pixbuf(), _config.vref_ds(),
-                                   _config.vref_comp(), _config.vref_prech(), _config.vin_com(), _config.vdd_prot());
-            if(!_detector.configure(0, _config.gainMode(), _config.speedMode(), _config.triggerDelay(), _config.exposureTime(), _config.exposurePeriod(), _config.biasVoltage(), dacs_config) ||
-               !_detector.check_size(_config.numberOfModules(), _config.numberOfRowsPerModule(), _config.numberOfColumnsPerModule())) {
-              _error = true;
-
-              printf("ConfigAction: failed to apply configuration.\n");
-
-              const char** errors = _detector.errors();
-              for (unsigned i=0; i<_detector.get_num_modules(); i++) {
-                if (strlen(errors[i])) {
-                  UserMessage* msg = new (&_occPool) UserMessage("Jungfrau Config "); 
-                  msg->append(errors[i]);
-                  _mgr.appliance().post(msg);
-                }
-              }
-              _detector.clear_errors();
-            }
-          }
-
-          _l1.reset();
           _server.resetCount();
-          _detector.flush();
-          _enable.call();
+          if (!_cfg.scanning() && _cfg.configure()) {
+            _server.setFrame(_detector.sync_nframes());
+            _l1.reset();
+            _detector.flush();
+            _enable.call();
+          }
         }
+
         return tr;
       }
     private:
       Manager&              _mgr;
       Detector&             _detector;
       Server&               _server;
-      CfgClientNfs&         _cfg;
-      DetIdLookup&          _lookup;
+      ConfigCache&          _cfg;
       L1Action&             _l1;
       ReaderEnable          _enable;
-      JungfrauConfigType    _config;
-      JungfrauModConfigType _module_config[JungfrauConfigType::MaxModulesPerDetector];
-      Xtc                   _cfgtc;
       GenericPool           _occPool;
-      bool                  _error;
     };
 
-    class UnconfigureAction : public Action {
+    class BeginCalibCycleAction : public Action {
     public:
-      UnconfigureAction(FrameReader& reader): _disable(reader), _error(false) { }
-      ~UnconfigureAction() { }
+      BeginCalibCycleAction(Detector& detector, Server& server, FrameReader& reader,
+                            ConfigCache& cfg, L1Action& l1):
+        _detector(detector),
+        _server(server),
+        _cfg(cfg),
+        _l1(l1),
+        _enable(reader) {}
+      ~BeginCalibCycleAction() {}
       InDatagram* fire(InDatagram* dg) {
-        if (_error) {
-          printf("UnconfigureAction: failed to disable Jungfrau.\n");
-          dg->datagram().xtc.damage.increase(Pds::Damage::UserDefined);
+        if (_cfg.scanning() && _cfg.changed()) {
+          _cfg.record(dg);
         }
         return dg;
       }
       Transition* fire(Transition* tr) {
-        _disable.call();
+        if (_cfg.scanning()) {
+          bool error = false;
+          if (_cfg.changed()) {
+            error = !_cfg.configure();
+          }
+
+          if (error) {
+            printf("BeginCalibCycleAction: failed to configure Jungfrau during scan!\n");
+          } else {
+            _server.setFrame(_detector.sync_nframes());
+            _l1.reset();
+            _detector.flush();
+            _enable.call();
+          }
+        }
+
+        return tr;
+      }
+    private:
+        Detector&             _detector;
+        Server&               _server;
+        ConfigCache&          _cfg;
+        L1Action&             _l1;
+        ReaderEnable          _enable;
+    };
+
+    class EndCalibCycleAction : public Action {
+    public:
+      EndCalibCycleAction(FrameReader& reader, ConfigCache& cfg):
+        _disable(reader),
+        _cfg(cfg) {}
+      ~EndCalibCycleAction() {}
+      InDatagram* fire(InDatagram* dg) {
+        return dg;
+      }
+      Transition* fire(Transition* tr) {
+        _cfg.next();
+        if (_cfg.scanning()) {
+          _disable.call();
+        }
         return tr;
       }
     private:
       ReaderDisable _disable;
-      bool          _error;
+      ConfigCache&  _cfg;
+    };
+
+    class UnconfigureAction : public Action {
+    public:
+      UnconfigureAction(FrameReader& reader, ConfigCache& cfg):
+        _disable(reader),
+        _cfg(cfg) {}
+      ~UnconfigureAction() {}
+      InDatagram* fire(InDatagram* dg) {
+        return dg;
+      }
+      Transition* fire(Transition* tr) {
+        if (!_cfg.scanning()) {
+          _disable.call();
+        }
+        return tr;
+      }
+    private:
+      ReaderDisable _disable;
+      ConfigCache&  _cfg;
     };
 
     class EnableAction : public Action {
@@ -464,19 +436,22 @@ namespace Pds {
 
 using namespace Pds::Jungfrau;
 
-Manager::Manager(Detector& detector, Server& server, CfgClientNfs& cfg, DetIdLookup& lookup) :
+Manager::Manager(Detector& detector, Server& server, DetIdLookup& lookup) :
   _fsm(*new Pds::Fsm())
 {
   Task* task = new Task(TaskObject("JungfrauReadout",35));
   L1Action* l1 = new L1Action(detector.get_num_modules(), *this);
   FrameReader& reader = *new FrameReader(detector, server,task);
+  ConfigCache& cfg = *new ConfigCache(server.client(), detector, lookup, *this);
 
-  _fsm.callback(Pds::TransitionId::Map, new AllocAction(cfg));
-  _fsm.callback(Pds::TransitionId::Configure  , new ConfigAction(*this, detector, server, reader, cfg, lookup, *l1));
-  _fsm.callback(Pds::TransitionId::Enable     , new EnableAction(detector, *l1));
-  _fsm.callback(Pds::TransitionId::Disable    , new DisableAction(detector));
-  _fsm.callback(Pds::TransitionId::Unconfigure, new UnconfigureAction(reader));
-  _fsm.callback(Pds::TransitionId::L1Accept , l1);
+  _fsm.callback(Pds::TransitionId::Map,             new AllocAction(cfg));
+  _fsm.callback(Pds::TransitionId::Configure,       new ConfigAction(*this, detector, server, reader, cfg, *l1));
+  _fsm.callback(Pds::TransitionId::Enable,          new EnableAction(detector, *l1));
+  _fsm.callback(Pds::TransitionId::Disable,         new DisableAction(detector));
+  _fsm.callback(Pds::TransitionId::BeginCalibCycle, new BeginCalibCycleAction(detector, server, reader, cfg, *l1));
+  _fsm.callback(Pds::TransitionId::EndCalibCycle,   new EndCalibCycleAction(reader, cfg));
+  _fsm.callback(Pds::TransitionId::Unconfigure,     new UnconfigureAction(reader, cfg));
+  _fsm.callback(Pds::TransitionId::L1Accept,        l1);
 }
 
 Manager::~Manager() {}

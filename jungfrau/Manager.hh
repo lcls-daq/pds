@@ -3,7 +3,6 @@
 
 namespace Pds {
   class Appliance;
-  class CfgClientNfs;
   class Fsm;
   namespace Jungfrau {
     class Detector;
@@ -11,7 +10,7 @@ namespace Pds {
     class DetIdLookup;
     class Manager {
     public:
-      Manager (Detector&, Server&, CfgClientNfs&, DetIdLookup&);
+      Manager (Detector&, Server&, DetIdLookup&);
       ~Manager();
     public:
       Appliance& appliance();

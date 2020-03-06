@@ -315,7 +315,8 @@ RunInfo::RunInfo(unsigned run, const char* expname) :
   Transition(TransitionId::BeginRun, Transition::Execute,
              none(TransitionId::BeginRun), run,
              sizeof(RunInfo)),
-  _run(run)
+  _run(run),
+  _expname()
 {
   if(expname != NULL) { strncpy(_expname, expname, MaxExpName-1); }
 }

@@ -177,7 +177,7 @@ void WSLogbookClient::add_run_params(std::map<std::string, VariantRunParam*>& na
 void WSLogbookClient::reportDetectors (std::vector<std::string>& names) {
     std::map<std::string, VariantRunParam*> name_value_pairs;
     for(std::vector<std::string>::iterator it = names.begin(); it != names.end(); ++it) {
-        name_value_pairs[std::string("DAQ Detectors/BldEb-0|") + *it] = new VariantRunParam(true);
+        name_value_pairs[std::string("DAQ Detectors/") + *it] = new VariantRunParam(true);
     }
     add_run_params(name_value_pairs);
 }

@@ -87,6 +87,7 @@ namespace Pds {
     void add_run_params(std::map<std::string, VariantRunParam*>& name_value_pairs); // The variant version of the same. For simplicity, we expect a VariantRunParam* which this method will take the responsibility to free
     void reportDetectors (std::vector<std::string>& names); // Basically, add_run_params with boolean True's for the passed in names.
     void reportTotals (long events, long damaged, double gigabytes); // Basically, add_run_params with pre-defined names for some detector aggregates.
+    void add_update_run_param_descriptions(std::map<std::string, std::string>& name_description_pairs); // Use this for registering the descriptions for the run parameters. These ususally come from an EPICSArch.txt file of some kind and a usually specific to an experiment.
 
     // Register the file with the server. Note we flip the order of the argument around.
     void report_open_file (const char* path, int stream=-1, int chunk=-1, const char* hostName=NULL, bool ffb=false);

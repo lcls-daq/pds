@@ -26,6 +26,7 @@ class LogbookClient:
         self.passwd = passwd
         self.useKerberos = useKerberos
         self.authHeaders = { "auth": requests.auth.HTTPBasicAuth(self.uid, self.passwd) }
+        self.run_parameter_descriptions = { }
 
         root = logging.getLogger()
         ch = logging.StreamHandler(sys.stdout)
@@ -83,6 +84,20 @@ class LogbookClient:
         logger.info("Adding %s run params for experiment %s ", len(params), experiment_name)
         resp = requests.post(self.serverUrl + "run_control/{0}/ws/add_run_params".format(experiment_name), json=params, **self.authHeaders)
         return __parse_resp_json__(resp)
+
+    def addUpdateRunParamDescriptions(self, experiment_name, param_descs):
+        changed_param_descs = {}
+        for k, v in param_descs.items():
+            if self.run_parameter_descriptions.get(k, None) != v:
+               changed_param_descs[k] = v 
+        if len(changed_param_descs) <= 0:
+            return {}
+        logger.info("Adding/updating %s run param descriptions for experiment %s ", len(changed_param_descs), experiment_name)
+        resp = requests.post(self.serverUrl + "run_control/{0}/ws/add_update_run_param_descriptions".format(experiment_name), json=changed_param_descs, **self.authHeaders)
+        ret = __parse_resp_json__(resp)
+        for k, v in changed_param_descs.items():
+            self.run_parameter_descriptions[k] = v
+        return ret
 
     def registerFile(self, experiment_name, fileInfo):
         abspath = fileInfo["absolute_path"]

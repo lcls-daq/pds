@@ -218,6 +218,20 @@ void WSLogbookClient::report_open_file (const char* path, int stream, int chunk,
     _sem.give();
 }
 
+void WSLogbookClient::add_update_run_param_descriptions(std::map<std::string, std::string>& name_description_pairs) {
+    _sem.take();
+    PyObject* pDict = PyDict_New();
+    for (std::map<std::string, std::string>::iterator it = name_description_pairs.begin(); it != name_description_pairs.end(); ++it) {
+        PyObject* val = PyUnicode_FromString(it->second.c_str());
+        PyDict_SetItemString(pDict, it->first.c_str(), val);
+        Py_XDECREF(val);
+    }
+    PyObject* pRet = _CK_(PyObject_CallMethod(pClient, "addUpdateRunParamDescriptions", "sO", _experimentName.c_str(), pDict), "After adding/updating run parameter descriptions");
+    Py_XDECREF(pDict);
+    Py_XDECREF(pRet);
+    _sem.give();
+    return;
+}
 
 std::ostream& Pds::operator<<(std::ostream &strm, const ExperimentInfo &info) {
     return strm

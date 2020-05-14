@@ -36,7 +36,7 @@ namespace Pds {
     int BeginNewRun(unsigned int *runNumber);
     int EndCurrentRun();
     int reportOpenFile (std::string& dirpath, int run, int stream, int chunk, std::string& host, bool ffb=false);
-    int reportParams (int run, std::map<std::string, std::string> params);
+    int reportParams (int run, std::map<std::string, std::string>& params, std::map<std::string, std::string>& param_descriptions);
     int reportDetectors (int run, std::vector<std::string>& names);
     int reportTotals (int run, long events, long damaged, double gigabytes);
 

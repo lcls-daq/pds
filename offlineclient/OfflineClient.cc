@@ -284,7 +284,7 @@ int OfflineClient::reportTotals (int run, long events, long damaged, double giga
 }
 
 
-int OfflineClient::reportParams(int run, std::map<std::string, std::string> params) { 
+int OfflineClient::reportParams(int run, std::map<std::string, std::string>& params, std::map<std::string, std::string>& param_descriptions) { 
   int returnVal = -1;  // default return is ERROR
 
   // sanity check
@@ -295,6 +295,7 @@ int OfflineClient::reportParams(int run, std::map<std::string, std::string> para
     } else {
       try {
         _client->add_run_params(params);
+        _client->add_update_run_param_descriptions(param_descriptions);
         returnVal = 0; // OK
       } catch(const std::runtime_error& e){
           printf("Caught exception %s\n", e.what());

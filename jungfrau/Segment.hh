@@ -19,7 +19,8 @@ namespace Pds {
     public:
       SegmentConfig(const DetInfo& info,
                     const Damage& damage,
-                    const JungfrauConfigType& config);
+                    const JungfrauConfigType& config,
+                    bool transient=false);
       ~SegmentConfig();
 
       const DetInfo& info() const;
@@ -28,12 +29,14 @@ namespace Pds {
       unsigned index() const;
       unsigned detSize() const;
       bool verify(const JungfrauConfigType& config) const;
+      bool transient() const;
       Damage damage() const;
     private:
       const DetInfo            _info;
       const Damage             _damage;
       const JungfrauConfigType _config;
       const DetInfo            _parent;
+      bool                     _transient;
     };
 
     class FrameCache {
@@ -67,6 +70,8 @@ namespace Pds {
     typedef FrameCacheMap::iterator FrameCacheIter;
     typedef std::map<DetInfo, DetInfo> ParentMap;
     typedef ParentMap::const_iterator ParentIter;
+    typedef std::map<DetInfo, bool> TransientMap;
+    typedef TransientMap::const_iterator  TransientIter;
   }
 }
 #endif

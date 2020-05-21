@@ -14,11 +14,13 @@ void DamageHelper::merge(Damage& dest, const Damage& src)
 
 SegmentConfig::SegmentConfig(const DetInfo& info,
                              const Damage& damage,
-                             const JungfrauConfigType& config) :
+                             const JungfrauConfigType& config,
+                             bool transient) :
   _info(info),
   _damage(damage),
   _config(config),
-  _parent(SegmentInfo::parent(info))
+  _parent(SegmentInfo::parent(info)),
+  _transient(transient)
 {}
 
 SegmentConfig::~SegmentConfig()
@@ -41,12 +43,12 @@ const JungfrauConfigType& SegmentConfig::config() const
 
 unsigned SegmentConfig::index() const
 {
-  return _info.devId() & 0xf;
+  return SegmentInfo::get_device_index(_info);
 }
 
 unsigned SegmentConfig::detSize() const
 {
-  return _info.detId() & 0xf;
+  return SegmentInfo::get_device_total(_info);
 }
 
 Damage SegmentConfig::damage() const
@@ -84,6 +86,11 @@ bool SegmentConfig::verify(const JungfrauConfigType& config) const
     return false;
   else
     return false;
+}
+
+bool SegmentConfig::transient() const
+{
+  return _transient;
 }
 
 FrameCache::FrameCache(const JungfrauConfigType& config) :

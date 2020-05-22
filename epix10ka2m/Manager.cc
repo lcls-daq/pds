@@ -190,7 +190,7 @@ InDatagram* ConfigAction::fire(InDatagram* in) {
     sprintf(message, "Epix10ka2M  on host %s failed to configure!\n", getenv("HOSTNAME"));
     UserMessage* umsg = new (_occPool) UserMessage;
     umsg->append(message);
-    umsg->append(DetInfo::name(static_cast<const DetInfo&>(_server[0]->xtc().src)));
+    umsg->append(DetInfo::name(static_cast<const DetInfo&>(_server[0]->client())));
     umsg->append("\n");
     for(SrvL::const_iterator it=_server.begin(); it!=_server.end(); it++) {
       umsg->append((*it)->configurator()->pgp()->errorString());
@@ -233,7 +233,7 @@ InDatagram* BeginCalibCycleAction::fire(InDatagram* in) {
     sprintf(message, "Epix10ka2M  on host %s failed to configure!\n", getenv("HOSTNAME"));
     UserMessage* umsg = new (_occPool) UserMessage;
     umsg->append(message);
-    umsg->append(DetInfo::name(static_cast<const DetInfo&>(_server[0]->xtc().src)));
+    umsg->append(DetInfo::name(static_cast<const DetInfo&>(_server[0]->client())));
     umsg->append("\n");
     for(SrvL::const_iterator it=_server.begin(); it!=_server.end(); it++) {
       umsg->append((*it)->configurator()->pgp()->errorString());
@@ -286,7 +286,7 @@ InDatagram* EndCalibCycleAction::fire(InDatagram* in) {
     (*it)->disable();
   return in;
 }
-
+#ifdef DBUG
 static void _dump32(const void* p, unsigned nw)
 {
   const uint32_t* u = reinterpret_cast<const uint32_t*>(p);
@@ -294,7 +294,7 @@ static void _dump32(const void* p, unsigned nw)
     printf("%08x%c", u[i], (i%8)==7 ? '\n':' ');
   if (nw%8) printf("\n");
 }
-
+#endif
 InDatagram* L1Action::fire(InDatagram* in) {
   //  Create a new datagram from the pool
   Datagram&   dg = in->datagram();

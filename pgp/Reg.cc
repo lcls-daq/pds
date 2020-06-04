@@ -47,11 +47,18 @@ Reg& Reg::operator=(unsigned v) {
 Reg::operator unsigned() const {
   uint64_t addr = reinterpret_cast<uint64_t>(this);
   uint32_t v;
-  if (_pgp->readRegister(DESTV, addr, _tid++, &v)) {
-    std::stringstream o;
-    o << "Pgp::Reg read error @ address " << std::hex << addr << "[" << v << "] dest[" << std::hex << _dest->dest() << "] pgp[" << PGPV << "]";
-    printf("Reg::unsigned: %s\n",o.str().c_str());
-    throw o.str();
+  unsigned errorCount = 0;
+  while (true) {
+    if (_pgp->readRegister(DESTV, addr, _tid++, &v)) {
+      std::stringstream o;
+      o << "Pgp::Reg read error @ address " << std::hex << addr
+        << "[" << v << "] dest[" << std::hex << _dest->dest() << "] pgp["
+        << PGPV << "] errorCount[" << ++errorCount << "]";
+      printf("Reg::unsigned: %s\n",o.str().c_str());
+      if (errorCount > 3)
+        throw o.str();
+    } else {
+      return v;
+    }
   }
-  return v;
 }

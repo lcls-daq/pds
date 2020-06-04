@@ -14,7 +14,11 @@ namespace Pds {
     class Manager;
     class ConfigCache : public CfgCache {
     public:
-      ConfigCache(const Src& src, Detector& detector, DetIdLookup& lookup, Manager& mgr);
+      ConfigCache(const Src& dbsrc,
+                  const Src& xtcsrc,
+                  Detector& detector,
+                  DetIdLookup& lookup,
+                  Manager& mgr);
       virtual ~ConfigCache();
     public:
       bool configure();

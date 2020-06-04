@@ -23,6 +23,21 @@ CfgCache::CfgCache(const Src&    src,
 {
 }
 
+CfgCache::CfgCache(const Src&    dbsrc,
+       const Src&    xtcsrc,
+       const TypeId& id,
+       int           size) :
+  _config    (dbsrc),
+  _type      (id),
+  _configtc  (id, xtcsrc),
+  _bsize     (size),
+  _buffer    (new char[size]),
+  _cur_config(0),
+  _end_config(0),
+  _changed   (false),
+  _scanning  (false)
+{
+}
 
 CfgCache::~CfgCache()
 {

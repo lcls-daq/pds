@@ -16,6 +16,10 @@ namespace Pds {
     CfgCache(const Src&    src,
 	     const TypeId& id,
 	     int           size);
+    CfgCache(const Src&    dbsrc,
+        const Src& xtcsrc,
+        const TypeId& id,
+        int           size);
     virtual ~CfgCache();
   public:
     bool        changed() const;

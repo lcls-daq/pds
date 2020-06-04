@@ -436,13 +436,13 @@ namespace Pds {
 
 using namespace Pds::Jungfrau;
 
-Manager::Manager(Detector& detector, Server& server, DetIdLookup& lookup) :
+Manager::Manager(const Src& configSrc, Detector& detector, Server& server, DetIdLookup& lookup) :
   _fsm(*new Pds::Fsm())
 {
   Task* task = new Task(TaskObject("JungfrauReadout",35));
   L1Action* l1 = new L1Action(detector.get_num_modules(), *this);
   FrameReader& reader = *new FrameReader(detector, server,task);
-  ConfigCache& cfg = *new ConfigCache(server.client(), detector, lookup, *this);
+  ConfigCache& cfg = *new ConfigCache(configSrc, server.client(), detector, lookup, *this);
 
   _fsm.callback(Pds::TransitionId::Map,             new AllocAction(cfg));
   _fsm.callback(Pds::TransitionId::Configure,       new ConfigAction(*this, detector, server, reader, cfg, *l1));

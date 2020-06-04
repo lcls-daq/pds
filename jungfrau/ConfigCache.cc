@@ -10,8 +10,12 @@ using namespace Pds::Jungfrau;
 
 enum {StaticALlocationNumberOfConfigurationsForScanning=100};
 
-ConfigCache::ConfigCache(const Src& src, Detector& detector, DetIdLookup& lookup, Manager& mgr) :
-  CfgCache(src, _jungfrauConfigType, StaticALlocationNumberOfConfigurationsForScanning * sizeof(JungfrauConfigType)),
+ConfigCache::ConfigCache(const Src& dbsrc,
+                         const Src& xtcsrc,
+                         Detector& detector,
+                         DetIdLookup& lookup,
+                         Manager& mgr) :
+  CfgCache(dbsrc, xtcsrc, _jungfrauConfigType, StaticALlocationNumberOfConfigurationsForScanning * sizeof(JungfrauConfigType)),
   _occPool(sizeof(UserMessage),1),
   _detector(detector),
   _lookup(lookup),

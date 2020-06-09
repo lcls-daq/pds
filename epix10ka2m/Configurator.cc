@@ -1145,9 +1145,10 @@ unsigned Configurator::_writeElemAsicPCA(const Pds::Epix::Config10ka& e,
             asicHisto[offset] += 1;
 
             Epix10kaAsic& asic = saci[offset];
-            asic.reg[RowCounterAddr] = myRow;                                CHKWRITE;
-            asic.reg[ColCounterAddr] = bankOffset | (myCol % PixelsPerBank); CHKWRITE;
-            asic.reg[PixelDataAddr ] = thisPix;                              CHKWRITE;
+            asic.reg[RowCounterAddr] = myRow;
+            asic.reg[ColCounterAddr] = bankOffset | (myCol % PixelsPerBank);
+            asic.reg[PixelDataAddr ] = thisPix;
+            CHKWRITE;
           }
         }
       }

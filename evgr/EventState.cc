@@ -44,6 +44,7 @@ void EventState::configure(const ndarray<const EventCodeType,1>& c)
       _codes[iRelease].bRelease=true;
   }
 
+  _codes[EVENT_CODE_HXR  ].bSpecial=true;
   _codes[EVENT_CODE_BEAM ].bSpecial=true;
   _codes[EVENT_CODE_BYKIK].bSpecial=true;
   _codes[EVENT_CODE_ALKIK].bSpecial=true;

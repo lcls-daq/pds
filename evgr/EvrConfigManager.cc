@@ -206,6 +206,7 @@ const EvrConfigType* EvrConfigManager::configure()
     
   if (!_bTurnOffBeamCodes)
     {
+      _er.SetFIFOEvent(ram, EVENT_CODE_HXR,   enable);
       _er.SetFIFOEvent(ram, EVENT_CODE_BEAM,  enable);
       _er.SetFIFOEvent(ram, EVENT_CODE_BYKIK, enable);
       _er.SetFIFOEvent(ram, EVENT_CODE_ALKIK, enable);

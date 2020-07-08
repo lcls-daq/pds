@@ -47,8 +47,7 @@ IocControl::IocControl(const char* offlinerc,
 #endif
 
     std::ifstream *in;
-    std::string line, host;
-    IocNode *curnode = NULL;
+    std::string line;
 
     /*
      * If we don't have a configuration file, we're not doing anything!
@@ -68,10 +67,6 @@ IocControl::IocControl(const char* offlinerc,
         return;
     }
     while (getline(*in, line)) {
-        size_t p = line.find("opr");
-        if (p != std::string::npos && p>=3)
-          line = line.replace(p-3,3,"dia");
-
         _offlinerc.push_back("logbook " + line + "\n");
     }
     delete in;
@@ -81,11 +76,22 @@ IocControl::IocControl(const char* offlinerc,
      * want here are the host and camera lines.  Everything else is
      * GUI, BLD, or PV-related.
      */
-    in = new std::ifstream(controlrc);
+    read_controlrc(controlrc);
+}
+
+// 0 = OK, -1 = ERROR
+int IocControl::read_controlrc(const char *file)
+{
+    std::ifstream *in;
+    std::string line, host;
+    IocNode *curnode = NULL;
+    int result = 0;
+
+    in = new std::ifstream(file);
     if (!in) {
         _report_error("IocControl: Cannot open controls configuration file " +
-                      (std::string) controlrc);
-        return;
+                      (std::string) file);
+        return -1;
     }
     while (getline(*in, line)) {
         std::istringstream ss(line);
@@ -111,9 +117,13 @@ IocControl::IocControl(const char* offlinerc,
           }
         } else if (arrayTokens[0] == "pv" && arrayTokens.size() >= 3 && curnode != NULL) {
             curnode->addPV(arrayTokens[1], line);
-        }
+        } else if (arrayTokens[0] == "include" && arrayTokens.size() >= 2) {
+	    if (read_controlrc(arrayTokens[1].c_str()))
+	        result = -1;
+	}
     }
     delete in;
+    return result;
 }
 
 IocControl::~IocControl()

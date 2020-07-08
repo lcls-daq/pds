@@ -25,6 +25,9 @@ namespace Pds {
                unsigned    pv_ignore=0);
     ~IocControl();
   public:
+    /// Read the control configuration file.
+    int read_controlrc(const char *controlrc);
+
     /// Write the global configuration to a new connection.
     void write_config(IocConnection *c, unsigned run, unsigned stream);
 

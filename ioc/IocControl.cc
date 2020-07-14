@@ -11,6 +11,7 @@
 #include<iterator> //for std::istream_iterator
 #include<iostream>
 #include<vector>
+#include<algorithm>
 
 //#define DBUG
 
@@ -45,6 +46,7 @@ IocControl::IocControl(const char* offlinerc,
   printf("IocControl::ctor offlinerc %s  instrument %s  controlrc %s\n",
          offlinerc, instrument, controlrc);
 #endif
+    std::transform(_instrument.begin(), _instrument.end(), _instrument.begin(), ::tolower);
 
     std::ifstream *in;
     std::string line;
@@ -145,7 +147,8 @@ void IocControl::write_config(IocConnection *c, unsigned run, unsigned stream)
     for(std::list<std::string>::iterator it=_offlinerc.begin();
         it!=_offlinerc.end(); it++)
         c->transmit(*it);
-    sprintf(buf, "output daq/xtc/%s-r%04d-s%02d\n", _expt_name.c_str(), run, stream);
+    sprintf(buf, "output %s/%s/xtc/%s-r%04d-s%02d\n",
+	    _instrument.c_str(), _expt_name.c_str(), _expt_name.c_str(), run, stream);
     c->transmit(buf);
     c->transmit("quiet\n");
     sprintf(buf, "pv ignore %d\n", _pv_ignore);

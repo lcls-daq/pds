@@ -736,18 +736,17 @@ unsigned Configurator::_writeConfig()
 
   q->_scopeCore.enable           = _q->scopeEnable();
   // q->_scopeCore.arm              = 1;
-  // q->_scopeCore.trig             = 1;
-  q->_scopeCore.trigEdge         = _q->scopeTrigEdge();
-  q->_scopeCore.trigChannel      = _q->scopeTrigChan();
-  q->_scopeCore.trigMode         = _q->scopeTrigMode();
-  q->_scopeCore.trigAdcThreshold = _q->scopeADCThreshold();
-  q->_scopeCore.trigHoldoff      = _q->scopeTrigHoldoff();
-  q->_scopeCore.trigOffset       = _q->scopeTrigOffset();
-  q->_scopeCore.traceLength      = _q->scopeTraceLength();
-  q->_scopeCore.skipSamples      = _q->scopeADCsamplesToSkip();
-  q->_scopeCore.inChannelA       = _q->scopeChanAwaveformSelect();
-  q->_scopeCore.inChannelB       = _q->scopeChanBwaveformSelect();
-  q->_scopeCore.trigDelay        = _q->scopeTrigDelay();
+  q->_scopeCore.trig             = ((_q->scopeTrigEdge()&1)<<1) |
+                                   ((_q->scopeTrigChan()&0xf)<<2) |
+                                   ((_q->scopeTrigMode()&3)<<6) |
+                                   ((_q->scopeADCThreshold()&0xffff)<<16);
+  q->_scopeCore.trigEdge         = ((_q->scopeTrigHoldoff()&0x1fff)<<0) |
+                                   ((_q->scopeTrigOffset()&0x1fff)<<13);
+  q->_scopeCore.trigChannel      = ((_q->scopeTraceLength()&0x1fff)<<0) |
+                                   ((_q->scopeADCsamplesToSkip()&0x1fff)<<13);
+  q->_scopeCore.trigMode         = ((_q->scopeChanAwaveformSelect()&0x1f)<<0) |
+                                   ((_q->scopeChanBwaveformSelect()&0x1f)<<5);
+  q->_scopeCore.trigAdcThreshold = ((_q->scopeTrigDelay()&0x1fff)<<0);
 
   if (ret == Success)
     ret = _checkWrittenConfig(true);

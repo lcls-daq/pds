@@ -35,7 +35,7 @@ namespace Pds {
     unsigned AesDriverG3StatusWrap::checkPciNegotiatedBandwidth() {
       this->read();
       unsigned val = pciStatus.pciLanes;
-      if (val != 4) {
+      if (val < 4) {
         sprintf(esp, "Negotiated bandwidth too low, %u\n Try reinstalling or replacing PGP G3 card\n", val);
         esp = es + strlen(es);
       }

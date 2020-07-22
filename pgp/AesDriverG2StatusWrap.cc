@@ -25,16 +25,13 @@ namespace Pds {
     }
 
     unsigned AesDriverG2StatusWrap::checkPciNegotiatedBandwidth() {
-      unsigned tmp, tmp2;
-      unsigned offset = (unsigned)offsetof(PgpCardG2Regs, pciStat2);
-      dmaReadRegister(_pgp->fd(), offset, (unsigned*)&(tmp) );
-      tmp2 = (tmp >> 4) & 0x3f;
-      if (tmp2 != 4) {
-        sprintf(esp, "Negotiated bandwidth too low, %u\n Try reinstalling or replacing PGP G2 card\n", tmp2);
-        printf("%s\tregister was %u, offset %u\n", esp, tmp, offset);
+      this->read();
+      unsigned val = pciStatus.pciLanes;
+      if (val < 4) {
+        sprintf(esp, "Negotiated bandwidth too low, %u\n Try reinstalling or replacing PGP G3 card\n", val);
         esp = es + strlen(es);
       }
-      return  tmp2;
+      return  val;
     }
 
     int AesDriverG2StatusWrap::resetPgpLane() {

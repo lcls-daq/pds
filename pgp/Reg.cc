@@ -25,6 +25,8 @@ boost::thread_specific_ptr<Destination> _dest;
 
 static unsigned     _tid  = 0;
 
+static const unsigned _backofftime = 500; // 0.5 ms
+
 void Reg::setPgp (PgpProto* p) { 
   SETPGP(p);
 }
@@ -57,6 +59,8 @@ Reg::operator unsigned() const {
       printf("Reg::unsigned: %s\n",o.str().c_str());
       if (errorCount > 3)
         throw o.str();
+      else
+        usleep(errorCount*_backofftime);
     } else {
       return v;
     }

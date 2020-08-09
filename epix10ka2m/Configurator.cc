@@ -421,41 +421,68 @@ Configurator::Configurator(int f, unsigned lane, unsigned quad, unsigned d) :
   Reg::setPgp(_protocol);
   Reg::setDest(_d.dest());
 
-  Quad* q = 0;
-  q->_quad_monitor.monitorEn       = 1;
-  q->_quad_monitor.monitorStreamEn = 1;
-  q->_quad_monitor.trigPrescaler   = 119;
-  //  q->_quad_monitor.monitorEn       = 0;
-  //  q->_quad_monitor.monitorStreamEn = 0;
+  // enable the monitoring stream
+  _enableMonitoring(true);
 
-  //  Quad::dumpMap();
+  try {
+    Quad* q = 0;
+    q->_quad_monitor.monitorEn       = 1;
+    q->_quad_monitor.monitorStreamEn = 1;
+    q->_quad_monitor.trigPrescaler   = 119;
+    //  q->_quad_monitor.monitorEn       = 0;
+    //  q->_quad_monitor.monitorStreamEn = 0;
 
-  PRINT_LINE("SHT31 Humidity %2u%%",
-             unsigned(q->_quad_monitor.shtHumRaw)*100>>16);
-  PRINT_LINE("SHT31 Temperature %5.1f degC",
-             float(unsigned(q->_quad_monitor.shtTempRaw))*175./65535. - 45.);
-  PRINT_LINE("NCT218 Local Temp %u degC",
-             unsigned(q->_quad_monitor.nctLocTempRaw));
-  PRINT_LINE("NCT218 Remote Temp %5.1f degC",
-             float(unsigned(q->_quad_monitor.nctRemTempHRaw)) +
-             float(unsigned(q->_quad_monitor.nctRemTempLRaw))/256.);
-  char buff[32];
-  for(unsigned i=0; i<4; i++) {
-    sprintf(buff,"ASIC_A%d_2V5_Current",i);
-    float v = float(unsigned(q->_quad_monitor.ad7949DataRaw[i]));
-    v *= 2500./16383./330.;
-    PRINT_LINE("%s %5.3fA",buff,v);
+    //  Quad::dumpMap();
+
+    PRINT_LINE("SHT31 Humidity %2u%%",
+               unsigned(q->_quad_monitor.shtHumRaw)*100>>16);
+    PRINT_LINE("SHT31 Temperature %5.1f degC",
+               float(unsigned(q->_quad_monitor.shtTempRaw))*175./65535. - 45.);
+    PRINT_LINE("NCT218 Local Temp %u degC",
+               unsigned(q->_quad_monitor.nctLocTempRaw));
+    PRINT_LINE("NCT218 Remote Temp %5.1f degC",
+               float(unsigned(q->_quad_monitor.nctRemTempHRaw)) +
+               float(unsigned(q->_quad_monitor.nctRemTempLRaw))/256.);
+    char buff[32];
+    for(unsigned i=0; i<4; i++) {
+      sprintf(buff,"ASIC_A%d_2V5_Current",i);
+      float v = float(unsigned(q->_quad_monitor.ad7949DataRaw[i]));
+      v *= 2500./16383./330.;
+      PRINT_LINE("%s %5.3fA",buff,v);
+    }
+    for(unsigned i=0; i<2; i++) {
+      sprintf(buff,"ASIC_D%d_2V5_Current",i);
+      float v = float(unsigned(q->_quad_monitor.ad7949DataRaw[i+4]));
+      v *= 2500./16383./330.*500;
+      PRINT_LINE("%s %5.3fmA",buff,v);
+    }
   }
-  for(unsigned i=0; i<2; i++) {
-    sprintf(buff,"ASIC_D%d_2V5_Current",i);
-    float v = float(unsigned(q->_quad_monitor.ad7949DataRaw[i+4]));
-    v *= 2500./16383./330.*500;
-    PRINT_LINE("%s %5.3fmA",buff,v);
+  catch ( std::string& s) {
+    printf("%s caught exception %s\n", __PRETTY_FUNCTION__, s.c_str());
   }
+
 }
 
 Configurator::~Configurator() {
   evrLaneEnable(false);
+}
+
+unsigned Configurator::_enableMonitoring(bool enable)
+{
+  unsigned ret = Success;
+
+  Quad* q = 0;
+  try {
+    q->_quad_monitor.monitorEn       = enable ? 1 : 0;
+    q->_quad_monitor.monitorStreamEn = enable ? 1 : 0;
+    q->_quad_monitor.trigPrescaler   = 119;
+  }
+  catch(std::string& e) {
+    PRINT_LINE("Caught exception: %s",e.c_str());
+    ret |= Failure;
+  }
+
+  return ret;
 }
 
 unsigned Configurator::_resetFrontEnd() {
@@ -494,12 +521,17 @@ unsigned Configurator::_resetFrontEnd() {
 void Configurator::_resetSequenceCount() {
   Quad* pq = 0;
   _pgp->resetSequenceCount();
-  pq->_acqCore.acqCountReset   = 1;
-  pq->_rdoutCore.seqCountReset = 1;
-  usleep(1);
-  pq->_acqCore.acqCountReset   = 0;
-  pq->_rdoutCore.seqCountReset = 0;
-  usleep(1);
+  try {
+    pq->_acqCore.acqCountReset   = 1;
+    pq->_rdoutCore.seqCountReset = 1;
+    usleep(1);
+    pq->_acqCore.acqCountReset   = 0;
+    pq->_rdoutCore.seqCountReset = 0;
+    usleep(1);
+  }
+  catch( std::string& s ) {
+    printf("%s caught exception %s\n", __PRETTY_FUNCTION__, s.c_str());
+  }
 }
 
 uint32_t Configurator::_sequenceCount() {
@@ -586,6 +618,7 @@ unsigned Configurator::configure( const Epix::PgpEvrConfig&     p,
   PRINT_LINE("Configurator::configure %s reseting front end", first ? "" : "not ");
   if (first) {
     _resetFrontEnd();
+    _enableMonitoring(true);
     _first = true;
   }
 
@@ -621,10 +654,11 @@ unsigned Configurator::configure( const Epix::PgpEvrConfig&     p,
 
   ret |= this->_G3config(p);
 
-  //  ret |= _writeADCs();
+  //ret |= _writeADCs();
 
-  //  if (ret == 0) {
-  if (1) {
+  ret |= _checkADCs();
+
+  if (ret == 0) {
     _resetSequenceCount();
     if (printFlag) {
       clock_gettime(CLOCK_REALTIME, &end);
@@ -709,44 +743,50 @@ unsigned Configurator::_writeConfig()
   unsigned ret = Success;
 
   Quad* q = 0;
-  q->_systemRegs.trigEn          = 0;
-  q->_systemRegs.autoTrigEn      = 0;
-  q->_systemRegs.trigSrcSel      = _q->trigSrcSel();
-  q->_vguard_dac.dacRaw          = _q->vguardDac();
-  q->_acqCore.acqToAsicR0Delay   = _q->acqToAsicR0Delay();
-  q->_acqCore.asicR0Width        = _q->asicR0Width();
-  q->_acqCore.asicR0ToAsicAcq    = _q->asicR0ToAsicAcq();
-  q->_acqCore.asicAcqWidth       = _q->asicAcqWidth();
-  q->_acqCore.asicAcqLToPPmatL   = _q->asicAcqLToPPmatL();
-  q->_acqCore.asicPPmatToReadout = _q->asicPPmatToReadout();
-  q->_acqCore.asicRoClkHalfT     = _q->asicRoClkHalfT();
-  q->_acqCore.asicForce          = ((_q->asicAcqForce  ()<<0) |
-                                     (_q->asicR0Force   ()<<1) |
-                                     (_q->asicPPmatForce()<<2) |
-                                     (_q->asicSyncForce ()<<3) |
-                                     (_q->asicRoClkForce()<<4));
-  q->_acqCore.asicValue          = ((_q->asicAcqValue  ()<<0) |
-                                     (_q->asicR0Value   ()<<1) |
-                                     (_q->asicPPmatValue()<<2) |
-                                     (_q->asicSyncValue ()<<3) |
-                                     (_q->asicRoClkValue()<<4));
-  q->_rdoutCore.rdoutEn          = 1;
-  q->_rdoutCore.adcPipelineDelay = _q->adcPipelineDelay();
-  q->_rdoutCore.testData         = _q->testData();
+  try {
+    q->_systemRegs.trigEn          = 0;
+    q->_systemRegs.autoTrigEn      = 0;
+    q->_systemRegs.trigSrcSel      = _q->trigSrcSel();
+    q->_vguard_dac.dacRaw          = _q->vguardDac();
+    q->_acqCore.acqToAsicR0Delay   = _q->acqToAsicR0Delay();
+    q->_acqCore.asicR0Width        = _q->asicR0Width();
+    q->_acqCore.asicR0ToAsicAcq    = _q->asicR0ToAsicAcq();
+    q->_acqCore.asicAcqWidth       = _q->asicAcqWidth();
+    q->_acqCore.asicAcqLToPPmatL   = _q->asicAcqLToPPmatL();
+    q->_acqCore.asicPPmatToReadout = _q->asicPPmatToReadout();
+    q->_acqCore.asicRoClkHalfT     = _q->asicRoClkHalfT();
+    q->_acqCore.asicForce          = ((_q->asicAcqForce  ()<<0) |
+                                       (_q->asicR0Force   ()<<1) |
+                                       (_q->asicPPmatForce()<<2) |
+                                       (_q->asicSyncForce ()<<3) |
+                                       (_q->asicRoClkForce()<<4));
+    q->_acqCore.asicValue          = ((_q->asicAcqValue  ()<<0) |
+                                       (_q->asicR0Value   ()<<1) |
+                                       (_q->asicPPmatValue()<<2) |
+                                       (_q->asicSyncValue ()<<3) |
+                                       (_q->asicRoClkValue()<<4));
+    q->_rdoutCore.rdoutEn          = 1;
+    q->_rdoutCore.adcPipelineDelay = _q->adcPipelineDelay();
+    q->_rdoutCore.testData         = _q->testData();
 
-  q->_scopeCore.enable           = _q->scopeEnable();
-  // q->_scopeCore.arm              = 1;
-  q->_scopeCore.trig             = ((_q->scopeTrigEdge()&1)<<1) |
-                                   ((_q->scopeTrigChan()&0xf)<<2) |
-                                   ((_q->scopeTrigMode()&3)<<6) |
-                                   ((_q->scopeADCThreshold()&0xffff)<<16);
-  q->_scopeCore.trigEdge         = ((_q->scopeTrigHoldoff()&0x1fff)<<0) |
-                                   ((_q->scopeTrigOffset()&0x1fff)<<13);
-  q->_scopeCore.trigChannel      = ((_q->scopeTraceLength()&0x1fff)<<0) |
-                                   ((_q->scopeADCsamplesToSkip()&0x1fff)<<13);
-  q->_scopeCore.trigMode         = ((_q->scopeChanAwaveformSelect()&0x1f)<<0) |
-                                   ((_q->scopeChanBwaveformSelect()&0x1f)<<5);
-  q->_scopeCore.trigAdcThreshold = ((_q->scopeTrigDelay()&0x1fff)<<0);
+    q->_scopeCore.enable           = _q->scopeEnable();
+    // q->_scopeCore.arm              = 1;
+    q->_scopeCore.trig             = ((_q->scopeTrigEdge()&1)<<1) |
+                                     ((_q->scopeTrigChan()&0xf)<<2) |
+                                     ((_q->scopeTrigMode()&3)<<6) |
+                                     ((_q->scopeADCThreshold()&0xffff)<<16);
+    q->_scopeCore.trigEdge         = ((_q->scopeTrigHoldoff()&0x1fff)<<0) |
+                                     ((_q->scopeTrigOffset()&0x1fff)<<13);
+    q->_scopeCore.trigChannel      = ((_q->scopeTraceLength()&0x1fff)<<0) |
+                                     ((_q->scopeADCsamplesToSkip()&0x1fff)<<13);
+    q->_scopeCore.trigMode         = ((_q->scopeChanAwaveformSelect()&0x1f)<<0) |
+                                     ((_q->scopeChanBwaveformSelect()&0x1f)<<5);
+    q->_scopeCore.trigAdcThreshold = ((_q->scopeTrigDelay()&0x1fff)<<0);
+  }
+  catch(std::string& e) {
+    PRINT_LINE("Caught exception: %s",e.c_str());
+    ret |= Failure;
+  }
 
   if (ret == Success)
     ret = _checkWrittenConfig(true);
@@ -761,24 +801,31 @@ unsigned Configurator::_checkWrittenConfig(bool writeBack) {
 
   //  Readback configuration
   Quad* q = 0;
-  {
-    Epix10kaQuadConfig& c = *const_cast<Epix10kaQuadConfig*>(_q);
-    uint32_t* u = reinterpret_cast<uint32_t*>(&c);
-    u[3] = q->_axiVersion._deviceDna[0];
-    u[4] = q->_axiVersion._deviceDna[1];
-  }
-  for(unsigned ia=0; ia<4; ia++)
-    if (_e[ia].asicMask() & 0xf) {
-      Epix::Config10ka& e = _e[ia];
-      uint32_t* u = reinterpret_cast<uint32_t*>(&e);
-      u[0] = q->_systemRegs.carrierId[ia].lo;
-      u[1] = q->_systemRegs.carrierId[ia].hi;
-      if (u[0]==0 && u[1]==0) {  // Failed to read ID, assign from position
-        u[0]=0xfffffff0 | (_d.lane()<<2) | ia;
-        u[1]=0xffffffff;
-        PRINT_LINE("Elem %d carrier Id == 0; set to %08x.%08x",ia,u[1],u[0]);
-      }
+
+  try {
+    {
+      Epix10kaQuadConfig& c = *const_cast<Epix10kaQuadConfig*>(_q);
+      uint32_t* u = reinterpret_cast<uint32_t*>(&c);
+      u[3] = q->_axiVersion._deviceDna[0];
+      u[4] = q->_axiVersion._deviceDna[1];
     }
+    for(unsigned ia=0; ia<4; ia++)
+      if (_e[ia].asicMask() & 0xf) {
+        Epix::Config10ka& e = _e[ia];
+        uint32_t* u = reinterpret_cast<uint32_t*>(&e);
+        u[0] = q->_systemRegs.carrierId[ia].lo;
+        u[1] = q->_systemRegs.carrierId[ia].hi;
+        if (u[0]==0 && u[1]==0) {  // Failed to read ID, assign from position
+          u[0]=0xfffffff0 | (_d.lane()<<2) | ia;
+          u[1]=0xffffffff;
+          PRINT_LINE("Elem %d carrier Id == 0; set to %08x.%08x",ia,u[1],u[0]);
+        }
+      }
+  }
+  catch(std::string& e) {
+    PRINT_LINE("Caught exception: %s",e.c_str());
+    ret |= Failure;
+  }
 
   return ret;
 }
@@ -840,6 +887,35 @@ unsigned Configurator::_writeADCs()
   }
 #endif
   return 0;
+}
+
+unsigned Configurator::_checkADCs()
+{
+  unsigned ret = Success;
+  Quad* q = 0;
+
+  try {
+    unsigned tmo=0;
+    do {
+      usleep(1000);
+      if (q->_systemRegs.adcTestFail == 1) {
+        PRINT_STR("Adc Test Failed - restarting!");
+        q->_systemRegs.adcReqStart = 1;
+        usleep(1);
+        q->_systemRegs.adcReqStart = 0;
+      } else if (++tmo > 1000) {
+        PRINT_STR("Adc Test Timedout");
+        return 1;
+      }
+    } while(q->_systemRegs.adcTestDone == 0);
+    PRINT_LINE("Adc Test Done after %u cycles",tmo);
+  }
+  catch(std::string& e) {
+    PRINT_LINE("Caught exception: %s",e.c_str());
+    ret |= Failure;
+  }
+
+  return ret;
 }
 
 unsigned Configurator::_writeASIC() 
@@ -1029,7 +1105,12 @@ void Configurator::dumpFrontEnd() {
   int ret = Success;
   if (_debug & 0x100) {
     pgp()->printStatus();
-    PRINT_LINE("Sequence Count(%u), Acquisition Count(%u)", _sequenceCount(), _acquisitionCount());
+    try {
+      PRINT_LINE("Sequence Count(%u), Acquisition Count(%u)", _sequenceCount(), _acquisitionCount());
+    }
+    catch (std::string& s) {
+      printf("%s caught exception %s\n", __PRETTY_FUNCTION__, s.c_str());
+    }
   }
   clock_gettime(CLOCK_REALTIME, &end);
   uint64_t diff = timeDiff(&end, &start) + 50000LL;
@@ -1095,18 +1176,34 @@ unsigned Configurator::_writeElemAsicPCA(const Pds::Epix::Config10ka& e,
   // program the entire array to the most popular setting
   // note, that this is necessary because the global pixel write does not work in this device and programming
   //   one pixel in one bank also programs the same pixel in the other banks
-  for (unsigned index=0; index<e.numberOfAsics(); index++)
-    if (e.asicMask()&(1<<index)) {
-      Epix10kaAsic& asic = saci[index];
-      asic.reg[PrepareMultiConfigAddr] = 0;
-      CHKWRITE;
-    }
-  for (unsigned index=0; index<e.numberOfAsics(); index++)
-    if (e.asicMask()&(1<<index)) {
-      Epix10kaAsic& asic = saci[index];
-      asic.reg[WriteWholeMatricAddr] = pixel;
-      CHKWRITE; 
-    }
+  unsigned index=0;
+  try {
+    for (index=0; index<e.numberOfAsics(); index++)
+      if (e.asicMask()&(1<<index)) {
+        Epix10kaAsic& asic = saci[index];
+        asic.reg[PrepareMultiConfigAddr] = 0;
+        CHKWRITE;
+      }
+  }
+  catch (std::string& exc) {
+    PRINT_LINE("%s",exc.c_str());
+    PRINT_LINE("PrepareMultiConfigAddr write failed on asic %u", index);
+    ret |= Configurator::Failure;
+  }
+
+  try {
+    for (index=0; index<e.numberOfAsics(); index++)
+      if (e.asicMask()&(1<<index)) {
+        Epix10kaAsic& asic = saci[index];
+        asic.reg[WriteWholeMatricAddr] = pixel;
+        CHKWRITE;
+      }
+  }
+  catch(std::string& exc) {
+    PRINT_LINE("%s",exc.c_str());
+    PRINT_LINE("WriteWholeMatricAddr failed on asic %u", index);
+    ret |= Configurator::Failure;
+  }
 
   // allow it queue up writeAhead commands
   unsigned row=0,col=0;

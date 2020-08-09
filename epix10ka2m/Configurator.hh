@@ -212,6 +212,7 @@ namespace Pds {
       uint32_t             enviroData(unsigned);
     private:
       unsigned             _resetFrontEnd();
+      unsigned             _enableMonitoring(bool);
       void                 _resetSequenceCount();
       uint32_t             _sequenceCount();
       uint32_t             _acquisitionCount();
@@ -219,6 +220,7 @@ namespace Pds {
       unsigned             _writeConfig();
       unsigned             _checkWrittenConfig(bool writeBack=true);
       unsigned             _writeADCs();
+      unsigned             _checkADCs();
       unsigned             _writeASIC();
       unsigned             _writePixelBits();
       unsigned             _checkWrittenASIC(bool writeBack=true);

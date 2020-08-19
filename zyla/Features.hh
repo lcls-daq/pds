@@ -54,6 +54,9 @@ namespace Pds {
     static const AT_WC* AT3_METADATA_TIMESTAMP = L"MetadataTimestamp";
     static const AT_WC* AT3_TIMESTAMP_CLOCK = L"TimestampClock";
     static const AT_WC* AT3_TIMESTAMP_FREQUENCY = L"TimestampClockFrequency";
+    // Additional features for iStar
+    static const AT_WC* AT3_MCP_GAIN  = L"MCPGain";
+    static const AT_WC* AT3_GATE_MODE = L"GateMode";
   }
 }
 

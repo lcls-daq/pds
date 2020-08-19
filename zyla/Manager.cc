@@ -5,6 +5,7 @@
 #include "pds/config/ZylaConfigType.hh"
 #include "pds/config/ZylaDataType.hh"
 #include "pds/config/CfgClientNfs.hh"
+#include "pds/epicstools/EpicsCA.hh"
 #include "pds/client/Action.hh"
 #include "pds/client/Fsm.hh"
 #include "pds/utility/Appliance.hh"
@@ -14,7 +15,7 @@
 #include "pdsdata/xtc/DetInfo.hh"
 
 #include <errno.h>
-
+#include <string>
 
 #define AT_MAX_MSG_LEN 256
 #define TIME_DIFF(start, end) (end.tv_nsec - start.tv_nsec) * 1.e-6 + (end.tv_sec - start.tv_sec) * 1.e3
@@ -131,10 +132,68 @@ namespace Pds {
       CfgClientNfs& _cfg;
     };
 
+#define PV_NAME(base,var) (std::string(base)+":"+std::string(var)).c_str()
+
+    class IstarConfig {
+    public:
+      IstarConfig(const char* base) :
+        _filename   (0),
+        _pv_gatemode(0),
+        _pv_mcpgain (0)
+      {
+        if (base[0]=='/')
+          _filename = base;
+        else {
+          _pv_gatemode = new Pds_Epics::EpicsCA(PV_NAME(base,"GateMode"),0);
+          _pv_mcpgain  = new Pds_Epics::EpicsCA(PV_NAME(base,"MCPGain" ),0);
+        }
+      }
+      ~IstarConfig()
+      {
+        if (!_filename) {
+          delete _pv_gatemode;
+          delete _pv_mcpgain;
+        }
+      }
+    public:
+      bool configure(Driver& driver)
+      {
+        Driver::GateMode gatemode;
+        int mcpgain;
+        if (_filename) {
+          FILE* f = fopen(_filename,"r");
+          int igm;
+          if (!f || fscanf(f,"%d %d", &igm, &mcpgain)!=2)
+            return false;
+          fclose(f);
+          gatemode = Driver::GateMode(igm);
+        }
+        else {
+          if (!_pv_gatemode->connected() || !_pv_mcpgain->connected()) {
+            fprintf(stderr, "ConfigAction: failed to connect to ISTAR PVs\n");
+            return false;
+          }
+          gatemode = Driver::GateMode(*(int*)_pv_gatemode->data());
+          mcpgain  = *(int*)_pv_mcpgain->data();
+        }
+        printf("Setting gatemode %u and mcpgain %u\n", gatemode, mcpgain);
+        if (!driver.set_gate_mode(gatemode) ||
+            !driver.set_mcp_gain (mcpgain)) {
+          fprintf(stderr, "ConfigAction: failed to set ISTAR config options\n");
+          return false;
+        }
+        return true;
+      }
+    private:
+      const char* _filename;
+      Pds_Epics::EpicsCA* _pv_gatemode;
+      Pds_Epics::EpicsCA* _pv_mcpgain;
+    };
+
     class ConfigAction : public Action {
     public:
       enum { MaxErrMsgLength=256 };
-      ConfigAction(Manager& mgr, Driver& driver, Server& server, FrameReader& reader, CfgClientNfs& cfg) :
+      ConfigAction(Manager& mgr, Driver& driver, Server& server, FrameReader& reader, CfgClientNfs& cfg, char* istaropt) :
         _mgr(mgr),
         _driver(driver),
         _server(server),
@@ -142,8 +201,14 @@ namespace Pds {
         _cfg(cfg),
         _cfgtc(_zylaConfigType,cfg.src()),
         _occPool(sizeof(UserMessage),1),
-        _error(false) {}
-      ~ConfigAction() {}
+        _error(false),
+        _istar(istaropt ? new IstarConfig(istaropt):0)
+      {
+      }
+      ~ConfigAction() 
+      {
+        if (_istar) delete _istar;
+      }
       InDatagram* fire(InDatagram* dg) {
         if (_error) {
           printf("*** Found configuration errors\n");
@@ -176,6 +241,16 @@ namespace Pds {
 #ifdef TIMING_DEBUG
           clock_gettime(CLOCK_REALTIME, &_time_start); // start timing configure
 #endif
+          if (_istar && !_istar->configure(_driver)) {
+            _error = true;
+            snprintf(_err_buffer,
+                     MaxErrMsgLength,
+                     "Zyla Config: failed to connect configure ISTAR options %s !",
+                     DetInfo::name(static_cast<const DetInfo&>(_cfgtc.src)));
+            UserMessage* msg = new (&_occPool) UserMessage(_err_buffer);
+            _mgr.appliance().post(msg);
+            return tr;
+          }
 
           if (!_driver.set_image(_config.width(),
                                  _config.height(),
@@ -344,6 +419,9 @@ namespace Pds {
       timespec            _time_start;
       timespec            _time_end;
 #endif
+      IstarConfig*        _istar;
+      Pds_Epics::EpicsCA* _pv_gatemode;
+      Pds_Epics::EpicsCA* _pv_mcpgain;
     };
 
     class EnableAction : public Action {
@@ -439,13 +517,13 @@ namespace Pds {
 
 using namespace Pds::Zyla;
 
-Manager::Manager(Driver& driver, Server& server, CfgClientNfs& cfg, bool wait_cooling) : _fsm(*new Pds::Fsm())
+Manager::Manager(Driver& driver, Server& server, CfgClientNfs& cfg, bool wait_cooling, char* pvbase) : _fsm(*new Pds::Fsm())
 {
   Task* task = new Task(TaskObject("ZylaReadout",35));
   FrameReader& reader = *new FrameReader(driver, server,task);
 
   _fsm.callback(Pds::TransitionId::Map, new AllocAction(cfg));
-  _fsm.callback(Pds::TransitionId::Configure, new ConfigAction(*this, driver, server, reader, cfg));
+  _fsm.callback(Pds::TransitionId::Configure, new ConfigAction(*this, driver, server, reader, cfg, pvbase));
   _fsm.callback(Pds::TransitionId::Enable   , new EnableAction(*this, driver, reader, wait_cooling));
   _fsm.callback(Pds::TransitionId::Disable  , new DisableAction(driver, reader));
 }

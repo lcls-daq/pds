@@ -27,6 +27,13 @@ namespace Pds {
         size_t frame_size() const;
         bool get_frame(AT_64& timestamp, uint16_t* data);
       public:
+        // Additional iStar camera features
+        enum GateMode { CWOn, CWOff, FireAndGate };
+        bool set_gate_mode(GateMode); // L"GateMode"
+        bool set_mcp_gain(unsigned gain);  // L"MCPGain" [ 0 to 4095 ]
+        // enum BitDepth { };
+        // bool set_bit_depth();  // AT3_PIXEL_ENCODING is 16 for Zyla, else new image format
+      public:
         AT_64 sensor_width() const;
         AT_64 sensor_height() const;
         AT_64 baseline() const;

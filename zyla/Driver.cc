@@ -228,6 +228,29 @@ bool Driver::set_readout(ZylaConfigType::ShutteringMode shutter, ZylaConfigType:
   return true;
 }
 
+bool Driver::set_gate_mode(GateMode mode)
+{
+  static const AT_WC* modeVal[] = { L"CWOn", L"CWOff", L"FireAndGate" };
+  if (!at_set_enum(AT3_GATE_MODE, modeVal[mode])) {
+    fprintf(stderr, "Unable to set the gate mode of the camera to %ls!\n", modeVal[mode]);
+    return false;
+  }
+  return true;
+}
+
+bool Driver::set_mcp_gain(unsigned gain)
+{
+  if (gain&~0xfff) {
+    fprintf(stderr, "MCP gain [%u] out of range 0-4095\n", gain);
+    return false;
+  }
+  if (!at_set_int(AT3_MCP_GAIN, gain)) {
+    fprintf(stderr, "Unable to set the MCP gain to value %u\n", gain);
+    return false;
+  }
+  return true;
+}
+
 bool Driver::configure(const AT_64 nframes)
 {
   AT_64 img_size_bytes;

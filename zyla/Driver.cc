@@ -230,11 +230,17 @@ bool Driver::set_readout(ZylaConfigType::ShutteringMode shutter, ZylaConfigType:
 
 bool Driver::set_gate_mode(GateMode mode)
 {
-  static const AT_WC* modeVal[] = { L"CWOn", L"CWOff", L"FireAndGate" };
+  static const AT_WC* modeVal[] = { L"CW Off", L"CW On", L"Fire And Gate" };
+  bool rval = at_check_implemented(AT3_GATE_MODE);
+  printf("Feature %ls %s implemented\n", AT3_GATE_MODE, rval ? "is" : "is not");
+  if (!rval)
+    return false;
+
   if (!at_set_enum(AT3_GATE_MODE, modeVal[mode])) {
     fprintf(stderr, "Unable to set the gate mode of the camera to %ls!\n", modeVal[mode]);
     return false;
   }
+  printf("Set gate mode %ls\n",modeVal);
   return true;
 }
 
@@ -248,6 +254,7 @@ bool Driver::set_mcp_gain(unsigned gain)
     fprintf(stderr, "Unable to set the MCP gain to value %u\n", gain);
     return false;
   }
+  printf("Set MCP gain %u\n",gain);
   return true;
 }
 

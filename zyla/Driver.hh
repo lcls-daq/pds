@@ -28,7 +28,7 @@ namespace Pds {
         bool get_frame(AT_64& timestamp, uint16_t* data);
       public:
         // Additional iStar camera features
-        enum GateMode { CWOn, CWOff, FireAndGate };
+        enum GateMode { CWOff, CWOn, FireAndGate };
         bool set_gate_mode(GateMode); // L"GateMode"
         bool set_mcp_gain(unsigned gain);  // L"MCPGain" [ 0 to 4095 ]
         // enum BitDepth { };

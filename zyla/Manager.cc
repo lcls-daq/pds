@@ -141,31 +141,39 @@ namespace Pds {
         _pv_gatemode(0),
         _pv_mcpgain (0)
       {
-        if (base[0]=='/')
-          _filename = base;
-        else {
-          _pv_gatemode = new Pds_Epics::EpicsCA(PV_NAME(base,"GateMode"),0);
-          _pv_mcpgain  = new Pds_Epics::EpicsCA(PV_NAME(base,"MCPGain" ),0);
+        if (base != NULL) {
+          if (base[0]=='/')
+            _filename = base;
+          else {
+            _pv_gatemode = new Pds_Epics::EpicsCA(PV_NAME(base,"GateMode"),0);
+            _pv_mcpgain  = new Pds_Epics::EpicsCA(PV_NAME(base,"MCPGain" ),0);
+          }
         }
       }
       ~IstarConfig()
       {
-        if (!_filename) {
-          delete _pv_gatemode;
-          delete _pv_mcpgain;
-        }
+        if (_pv_gatemode) delete _pv_gatemode;
+        if (_pv_mcpgain ) delete _pv_mcpgain;
       }
     public:
       bool configure(Driver& driver)
       {
+        if (!_filename && !_pv_gatemode)  // nothing to do
+          return true;
+
         Driver::GateMode gatemode;
         int mcpgain;
         if (_filename) {
+          int igm=-1;
           FILE* f = fopen(_filename,"r");
-          int igm;
-          if (!f || fscanf(f,"%d %d", &igm, &mcpgain)!=2)
-            return false;
+          char buff[256];
+          while( fgets(buff, 256, f) ) {
+            if (buff[0]=='#') continue;
+            if (sscanf(buff,"%d %d", &igm, &mcpgain)!=2)
+              return false;
+          }
           fclose(f);
+          if (igm<0) return false;
           gatemode = Driver::GateMode(igm);
         }
         else {
@@ -193,7 +201,7 @@ namespace Pds {
     class ConfigAction : public Action {
     public:
       enum { MaxErrMsgLength=256 };
-      ConfigAction(Manager& mgr, Driver& driver, Server& server, FrameReader& reader, CfgClientNfs& cfg, char* istaropt) :
+      ConfigAction(Manager& mgr, Driver& driver, Server& server, FrameReader& reader, CfgClientNfs& cfg, IstarConfig* istar) :
         _mgr(mgr),
         _driver(driver),
         _server(server),
@@ -202,7 +210,7 @@ namespace Pds {
         _cfgtc(_zylaConfigType,cfg.src()),
         _occPool(sizeof(UserMessage),1),
         _error(false),
-        _istar(istaropt ? new IstarConfig(istaropt):0)
+        _istar(istar)
       {
       }
       ~ConfigAction() 
@@ -241,7 +249,7 @@ namespace Pds {
 #ifdef TIMING_DEBUG
           clock_gettime(CLOCK_REALTIME, &_time_start); // start timing configure
 #endif
-          if (_istar && !_istar->configure(_driver)) {
+          if (!_istar->configure(_driver)) {
             _error = true;
             snprintf(_err_buffer,
                      MaxErrMsgLength,
@@ -420,8 +428,6 @@ namespace Pds {
       timespec            _time_end;
 #endif
       IstarConfig*        _istar;
-      Pds_Epics::EpicsCA* _pv_gatemode;
-      Pds_Epics::EpicsCA* _pv_mcpgain;
     };
 
     class EnableAction : public Action {
@@ -522,8 +528,9 @@ Manager::Manager(Driver& driver, Server& server, CfgClientNfs& cfg, bool wait_co
   Task* task = new Task(TaskObject("ZylaReadout",35));
   FrameReader& reader = *new FrameReader(driver, server,task);
 
+  IstarConfig* istar = new IstarConfig(pvbase);
   _fsm.callback(Pds::TransitionId::Map, new AllocAction(cfg));
-  _fsm.callback(Pds::TransitionId::Configure, new ConfigAction(*this, driver, server, reader, cfg, pvbase));
+  _fsm.callback(Pds::TransitionId::Configure , new ConfigAction(*this, driver, server, reader, cfg, istar));
   _fsm.callback(Pds::TransitionId::Enable   , new EnableAction(*this, driver, reader, wait_cooling));
   _fsm.callback(Pds::TransitionId::Disable  , new DisableAction(driver, reader));
 }

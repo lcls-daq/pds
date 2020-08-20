@@ -21,9 +21,18 @@
 #define TIME_DIFF(start, end) (end.tv_nsec - start.tv_nsec) * 1.e-6 + (end.tv_sec - start.tv_sec) * 1.e3
 //#define TIMING_DEBUG 1
 
-
 namespace Pds {
   namespace Zyla {
+    class MyMonitorCb : public Pds_Epics::PVMonitorCb {
+    public:
+      MyMonitorCb() {}
+      ~MyMonitorCb() {}
+    public:
+      void updated() {}
+    };
+
+    static MyMonitorCb* _mycb = new MyMonitorCb;
+
     class FrameReader : public Routine {
     public:
       FrameReader(Driver& driver, Server& server, Task* task) :
@@ -145,8 +154,13 @@ namespace Pds {
           if (base[0]=='/')
             _filename = base;
           else {
-            _pv_gatemode = new Pds_Epics::EpicsCA(PV_NAME(base,"GateMode"),0);
-            _pv_mcpgain  = new Pds_Epics::EpicsCA(PV_NAME(base,"MCPGain" ),0);
+            char pvname[64];
+            sprintf(pvname,"%s:%s",base,"GateMode");
+            printf("Connecting to %s\n",pvname);
+            _pv_gatemode = new Pds_Epics::EpicsCA(pvname,_mycb);
+            sprintf(pvname,"%s:%s",base,"MCPGain");
+            printf("Connecting to %s\n",pvname);
+            _pv_mcpgain  = new Pds_Epics::EpicsCA(pvname,_mycb);
           }
         }
       }
@@ -177,10 +191,14 @@ namespace Pds {
           gatemode = Driver::GateMode(igm);
         }
         else {
-          if (!_pv_gatemode->connected() || !_pv_mcpgain->connected()) {
+          unsigned ntries=0;
+          while (!_pv_gatemode->connected() || !_pv_mcpgain->connected()) {
             fprintf(stderr, "ConfigAction: failed to connect to ISTAR PVs\n");
-            return false;
+            if (++ntries==5)
+              return false;
+            sleep(1);
           }
+
           gatemode = Driver::GateMode(*(int*)_pv_gatemode->data());
           mcpgain  = *(int*)_pv_mcpgain->data();
         }
@@ -193,7 +211,7 @@ namespace Pds {
         return true;
       }
     private:
-      const char* _filename;
+      const char*         _filename;
       Pds_Epics::EpicsCA* _pv_gatemode;
       Pds_Epics::EpicsCA* _pv_mcpgain;
     };

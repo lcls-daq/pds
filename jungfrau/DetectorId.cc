@@ -23,6 +23,9 @@ static const DetIdItem DEFAULTS[] = {
   DetIdItem("cxi-jungfrau4m-05", DetId(0x0050c246df56, 287)),
   DetIdItem("cxi-jungfrau4m-06", DetId(0x0050c246df57, 289)),
   DetIdItem("cxi-jungfrau4m-07", DetId(0x0050c246df58, 254)),
+  DetIdItem("det-jungfrau-89"  , DetId(0x0050c246de81,  88)),
+  DetIdItem("det-jungfrau-91"  , DetId(0x0050c246de83,  68)),
+  DetIdItem("det-jungfrau-31"  , DetId(0x0050c246d8b3,  44)),
 };
 
 DetId::DetId() :

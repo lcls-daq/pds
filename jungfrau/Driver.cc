@@ -14,8 +14,6 @@
 
 #define CMD_LEN 128
 #define MSG_LEN 256
-#define ADCPHASE_HALF 72
-#define ADCPHASE_QUARTER 25
 #define CLKDIV_HALF 1
 #define CLKDIV_QUARTER 2
 
@@ -389,14 +387,10 @@ bool Module::configure_speed(JungfrauConfigType::SpeedMode speed, bool& sleep)
     case JungfrauConfigType::Quarter:
       printf("setting detector to quarter speed\n");
       put_command_print("clkdivider", CLKDIV_QUARTER);
-      printf("setting adcphase to %d\n", ADCPHASE_QUARTER);
-      put_command_print("adcphase", ADCPHASE_QUARTER);
       break;
     case JungfrauConfigType::Half:
       printf("setting detector to half speed\n");
       put_command_print("clkdivider", CLKDIV_HALF);
-      printf("setting adcphase to %d\n", ADCPHASE_HALF);
-      put_command_print("adcphase", ADCPHASE_HALF);
       break;
     default:
       error_print("Error: invalid clock speed setting for the camera %d\n", speed);
@@ -1362,8 +1356,6 @@ void Detector::clear_errors()
 
 #undef CMD_LEN
 #undef MSG_LEN
-#undef ADCPHASE_HALF
-#undef ADCPHASE_QUARTER
 #undef CLKDIV_HALF
 #undef CLKDIV_QUARTER
 #undef NUM_ROWS

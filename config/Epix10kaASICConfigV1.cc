@@ -179,6 +179,14 @@ namespace Pds {
 
     ASIC_ConfigV1::~ASIC_ConfigV1() {}
 
+    unsigned   ASIC_ConfigV1::offset(ASIC_ConfigV1::Registers r) const {
+      if (r >= ASIC_ConfigV1::NumberOfRegisters) {
+        printf("ASIC_ConfigV1::index parameter out of range!! %u\n", r);
+        return -1;
+      }
+      return _Aregs[r].offset;
+    }
+
     unsigned   ASIC_ConfigV1::get (ASIC_ConfigV1::Registers r) const {
       if (r >= ASIC_ConfigV1::NumberOfRegisters) {
         printf("ASIC_ConfigV1::get parameter out of range!! %u\n", r);

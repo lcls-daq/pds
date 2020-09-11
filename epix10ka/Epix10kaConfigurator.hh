@@ -209,6 +209,7 @@ namespace Pds {
         unsigned             writeASIC();
         unsigned             writePixelBits();
         unsigned             checkWrittenASIC(bool writeBack=true);
+        unsigned             checkIsEnASIC();
         unsigned             G3config(Epix10kaConfigType*);
         bool                 _robustReadVersion(unsigned index=0);
         bool                 _getAnAnswer(unsigned size = 4, unsigned count = 6);

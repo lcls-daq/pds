@@ -99,6 +99,7 @@ namespace Pds {
           NumberOfValues=26
         };
 
+        unsigned                    offset   (Registers) const;
         unsigned                    get      (Registers) const;
         void                        set      (Registers, unsigned);
         void                        clear    ();

@@ -315,6 +315,8 @@ unsigned Epix10kaConfigurator::configure( Epix10kaConfigType* c, unsigned first)
     enableRunTrigger(false);
     if (printFlag) printf("\n\twriting ASIC regs\n");
     ret |= writeASIC();
+    // make sure that IsEn bit is set to zero after ASIC write
+    ret |= checkIsEnASIC();
     loadRunTimeConfigAdditions(_runTimeConfigFileName);
     enableRunTrigger(true);
     if (printFlag) {
@@ -879,6 +881,49 @@ unsigned Epix10kaConfigurator::checkWrittenASIC(bool writeBack) {
     done = true;
   }
   if (!_pgp) printf("Epix10kaConfigurator::checkWrittenASIC found nil pgp\n");
+  return ret;
+}
+
+unsigned Epix10kaConfigurator::checkIsEnASIC() {
+  unsigned ret = Success;
+  if (_config && _pgp) {
+    _d.dest(Epix10kaDestination::Registers);
+    unsigned m = _config->asicMask();
+    for (unsigned index=0; index<_config->numberOfAsics(); index++) {
+      if (m&(1<<index)) {
+        Epix10kaASIC_ConfigShadow* confAsic = (Epix10kaASIC_ConfigShadow*) &( _config->asics(index));
+        if (confAsic->get(Epix10kaASIC_ConfigShadow::is_en) != 0) {
+          unsigned is_en_idx = confAsic->offset(Epix10kaASIC_ConfigShadow::is_en);
+          uint32_t* u = (uint32_t*) confAsic;
+          uint32_t a = AsicAddrBase + (AsicAddrOffset * index);
+          unsigned orig = confAsic->get(Epix10kaASIC_ConfigShadow::is_en);
+          unsigned rbv = 0;
+          printf("Epix10kaConfigurator::checkIsEnASIC setting is_en to zero(%u)\n", index);
+          confAsic->set(Epix10kaASIC_ConfigShadow::is_en, 0);
+          // write to the is_en bit
+          if (_pgp->writeRegister(&_d, a+AconfigAddrs[is_en_idx][0], u[is_en_idx])) {
+            printf("Epix10kaConfigurator::writeASIC failed on %s, ASIC %u\n",
+                   Epix10kaASIC_ConfigShadow::name(Epix10kaASIC_ConfigShadow::is_en), index);
+            ret |= Failure;
+          }
+          // read back the register with the is_en bit
+          if (_pgp->readRegister(&_d, a+AconfigAddrs[is_en_idx][0], 0xb000+(is_en_idx<<2)+index, &rbv, 1)) {
+            printf("Epix10kaConfigurator::checkIsEnASIC read %s failed on ASIC %u\n",
+                   Epix10kaASIC_ConfigShadow::name(Epix10kaASIC_ConfigShadow::is_en), index);
+            ret |= Failure;
+          }
+          // check the value of the register with the is_en bit
+          if (rbv != u[is_en_idx]) {
+            printf("Epix10kaConfigurator::checkIsEnASIC read %s on ASIC %u return unexpected value of %u - expected %u\n",
+                   Epix10kaASIC_ConfigShadow::name(Epix10kaASIC_ConfigShadow::is_en), index,
+                   rbv, u[is_en_idx]) ;
+            ret |= Failure;
+          }
+          confAsic->set(Epix10kaASIC_ConfigShadow::is_en, orig);
+        }
+      }
+    }
+  } else if (!_pgp) printf("Epix10kaConfigurator::checkIsEnASIC found nil pgp\n");
   return ret;
 }
 

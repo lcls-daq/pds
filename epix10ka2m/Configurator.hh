@@ -224,6 +224,7 @@ namespace Pds {
       unsigned             _writeASIC();
       unsigned             _writePixelBits();
       unsigned             _checkWrittenASIC(bool writeBack=true);
+      unsigned             _checkIsEnASIC();
       unsigned             _G3config(const Pds::Epix::PgpEvrConfig&);
       unsigned             _robustReadVersion(unsigned index=0);
       unsigned             _writeElemAsicPCA(const Pds::Epix::Config10ka& e, 

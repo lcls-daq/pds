@@ -966,8 +966,10 @@ unsigned Configurator::_writeASIC()
 
   ret |= _writePixelBits();
 
-  if (ret==Success) 
+  if (ret==Success) {
     ret |= _checkWrittenASIC(true);
+    ret |= _checkIsEnASIC();
+  }
 
   return ret;
 }
@@ -1071,6 +1073,50 @@ unsigned Configurator::_checkWrittenASIC(bool writeBack) {
       done = true;
     }
   }
+  return ret;
+}
+
+unsigned Configurator::_checkIsEnASIC()
+{
+  unsigned ret = Success;
+  Quad* q = 0;
+  PRINT_STR("Configurator::checkIsEnASIC Unsetting is_en bits after writePixelBits:");
+  for(unsigned ie=0; ie<4; ie++) {
+    const Pds::Epix::Config10ka& e = _e[ie];
+    unsigned m = e.asicMask();
+    for (unsigned index=0; index<e.numberOfAsics(); index++) {
+      if (m&(1<<index)) {
+        uint32_t* u = (uint32_t*) &e.asics(index);
+        unsigned ia = ie*4+index;
+        Epix10kaASIC_ConfigShadow* confAsic = (Epix10kaASIC_ConfigShadow*) &(e.asics(index));
+        if (confAsic->get(Epix10kaASIC_ConfigShadow::is_en) != 0) {
+          unsigned is_en_idx = confAsic->offset(Epix10kaASIC_ConfigShadow::is_en);
+          unsigned addr = AconfigAddrs[is_en_idx].addr;
+          Reg&     reg  = q->_asicSaci[ia].reg[addr];
+          unsigned orig = confAsic->get(Epix10kaASIC_ConfigShadow::is_en);
+          if (_debug & 1) PRINT_LINE("Configurator::checkIsEnASIC Unsetting is_en bit of addr(%p)", &reg);
+          confAsic->set(Epix10kaASIC_ConfigShadow::is_en, 0);
+          try {
+            if (_debug & 1) PRINT_LINE("%s writing addr(%p) data(0x%x)", __PRETTY_FUNCTION__, &reg, u[is_en_idx]);
+            reg = u[is_en_idx];
+            unsigned v = reg;
+            if (_debug & 1) PRINT_LINE("%s read addr(%p) data(0x%x)", __PRETTY_FUNCTION__, &reg, v);
+            if (v != u[is_en_idx]) {
+              PRINT_LINE("%s read addr(%p) return unexpected data: 0x%x vs expected 0x%x", __PRETTY_FUNCTION__,
+                         &reg, v, u[is_en_idx]);
+              ret |= Failure;
+            }
+          }
+          catch(std::string& e) {
+            PRINT_LINE("Caught exception: %s",e.c_str());
+            ret |= Failure;
+          }
+          confAsic->set(Epix10kaASIC_ConfigShadow::is_en, orig);
+        }
+      }
+    }
+  }
+
   return ret;
 }
 

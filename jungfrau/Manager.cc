@@ -283,11 +283,16 @@ namespace Pds {
           _mgr.appliance().post(msg);
         } else {
           _server.resetCount();
-          if (!_cfg.scanning() && _cfg.configure()) {
-            _server.setFrame(_detector.sync_nframes());
-            _l1.reset();
-            _detector.flush();
-            _enable.call();
+          if (_cfg.scanning()) {
+            // update the config object in the transition but don't apply to detector
+            _cfg.configure(false);
+          } else {
+            if (_cfg.configure()) {
+              _server.setFrame(_detector.sync_nframes());
+              _l1.reset();
+              _detector.flush();
+              _enable.call();
+            }
           }
         }
 

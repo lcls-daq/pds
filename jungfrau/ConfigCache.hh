@@ -21,7 +21,7 @@ namespace Pds {
                   Manager& mgr);
       virtual ~ConfigCache();
     public:
-      bool configure();
+      bool configure(bool apply=true);
     private:
       int   _size (void*) const;
     private:

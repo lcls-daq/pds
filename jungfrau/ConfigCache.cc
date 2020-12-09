@@ -25,7 +25,7 @@ ConfigCache::ConfigCache(const Src& dbsrc,
 ConfigCache::~ConfigCache()
 {}
 
-bool ConfigCache::configure()
+bool ConfigCache::configure(bool apply)
 {
   bool error = false;
   unsigned nrows = 0;
@@ -56,7 +56,7 @@ bool ConfigCache::configure()
   }
 
   if (!error) {
-    // Retrieve the module specific read-only configuration info to update config object
+    // Retrieve the module specific read-only configuration info to updated config object
     if (!_detector.get_module_config(module_config)) {
       printf("ConfigCache: failed to retrieve module version information!\n");
       UserMessage* msg = new (&_occPool) UserMessage("Jungfrau Config Error: failed to retrieve module version information!\n");
@@ -89,10 +89,10 @@ bool ConfigCache::configure()
     DacsConfig dacs_config(config.vb_ds(), config.vb_comp(), config.vb_pixbuf(), config.vref_ds(),
                            config.vref_comp(), config.vref_prech(), config.vin_com(), config.vdd_prot());
 
-    if (!_detector.configure(0, config.gainMode(), config.speedMode(),
-                             config.triggerDelay(), config.exposureTime(),
-                             config.exposurePeriod(), config.biasVoltage(),
-                             dacs_config)) {
+    if (apply && !_detector.configure(0, config.gainMode(), config.speedMode(),
+                                      config.triggerDelay(), config.exposureTime(),
+                                      config.exposurePeriod(), config.biasVoltage(),
+                                      dacs_config)) {
       error = true;
     }
 

@@ -1,7 +1,7 @@
 #ifndef Pds_Epix10ka2m_ConfigCache_hh
 #define Pds_Epix10ka2m_ConfigCache_hh
 
-#include "pds/config/CfgCache.hh"
+#include "pds/config/PgpCfgCache.hh"
 #include <vector>
 
 namespace Pds {
@@ -10,10 +10,10 @@ namespace Pds {
   namespace Epix10ka2m {
     class Server;
     class ConfigRoutine;
-    class ConfigCache : public CfgCache {
+    class ConfigCache : public PgpCfgCache {
     public:
       ConfigCache(const Src& src);
-      ~ConfigCache();
+      virtual ~ConfigCache();
     public:
       int  configure(const std::vector<Pds::Epix10ka2m::Server*>&);
       void reformat (const Datagram& in, Datagram& out) const;

@@ -15,6 +15,14 @@ using namespace Pds;
 
 enum {StaticALlocationNumberOfConfigurationsForScanning=105};
 
+static void updateDaqCode(Epix::PgpEvrConfig& cfg, unsigned code)
+{
+  new (&cfg) Epix::PgpEvrConfig(cfg.enable(),
+                                cfg.runCode(),
+                                (uint8_t) code,
+                                cfg.runDelay());
+}
+
 static TypeId __type(const Src& src)
 {
   const DetInfo& info = static_cast<const DetInfo&>(src);
@@ -64,8 +72,8 @@ namespace Pds {
 }
 
 Epix10ka2m::ConfigCache::ConfigCache(const Src& src) :
-  CfgCache(src, __type(src),
-           StaticALlocationNumberOfConfigurationsForScanning * __size(src)),
+  PgpCfgCache(src, __type(src),
+              StaticALlocationNumberOfConfigurationsForScanning * __size(src)),
   _cache  (0)
 {
   char buff[64];
@@ -111,6 +119,7 @@ int Epix10ka2m::ConfigCache::configure(const std::vector<Pds::Epix10ka2m::Server
       }
 #else
       Epix10ka2MConfigType* cfg = reinterpret_cast<Epix10ka2MConfigType*>(_cache);
+      updateDaqCode(const_cast<Epix::PgpEvrConfig&>(cfg->evr()), code());
       for(unsigned q=0; q<srv.size(); q++)
         _result |= srv[q]->configure( cfg->evr(), cfg->quad(q), const_cast<Epix::Config10ka*>(&cfg->elemCfg(q*4)) );
 #endif
@@ -121,6 +130,7 @@ int Epix10ka2m::ConfigCache::configure(const std::vector<Pds::Epix10ka2m::Server
       _cache = new char[c->_sizeof()];
       memcpy(_cache,c,c->_sizeof());
       Epix10kaQuadConfigType* cfg = reinterpret_cast<Epix10kaQuadConfigType*>(_cache);
+      updateDaqCode(const_cast<Epix::PgpEvrConfig&>(cfg->evr()), code());
       if ((result = srv[0]->configure( cfg->evr(), cfg->quad(), const_cast<Epix::Config10ka*>(&cfg->elemCfg(0)) ))) {
         _result |= result;
       };

@@ -61,6 +61,10 @@ namespace Pds {
   namespace Epix10kaConfig {
     void setDaqCode(Epix10kaConfigType&, uint32_t daqCode);
   }
+
+  namespace Epix100aConfig {
+    void setDaqCode(Epix100aConfigType&, uint32_t daqCode);
+  }
 }
 
 

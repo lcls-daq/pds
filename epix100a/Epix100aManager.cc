@@ -27,7 +27,7 @@
 #include "pdsdata/xtc/TypeId.hh"
 #include "pdsdata/xtc/Xtc.hh"
 #include "pdsdata/xtc/Damage.hh"
-#include "pds/config/CfgCache.hh"
+#include "pds/config/PgpCfgCache.hh"
 #include "pds/utility/Occurrence.hh"
 #include "pds/service/GenericPool.hh"
 
@@ -37,16 +37,24 @@ namespace Pds {
   class InDatagram;
 
 
-  class Epix100aConfigCache : public CfgCache {
+  class Epix100aConfigCache : public PgpCfgCache {
     public:
       enum {StaticALlocationNumberOfConfigurationsForScanning=100};
       Epix100aConfigCache(const Src& src) :
-        CfgCache(src, _epix100aConfigType, StaticALlocationNumberOfConfigurationsForScanning * __size()) {}
+        PgpCfgCache(src, _epix100aConfigType, StaticALlocationNumberOfConfigurationsForScanning * __size()) {}
     public:
-     void printCurrent() {
-       Epix100aConfigType* cfg = (Epix100aConfigType*)current();
-       printf("Epix100aConfigCache::printCurrent current 0x%x\n", (unsigned) (unsigned long)cfg);
-     }
+      void printCurrent() {
+        Epix100aConfigType* cfg = (Epix100aConfigType*)current();
+        printf("Epix100aConfigCache::printCurrent current 0x%x\n", (unsigned) (unsigned long)cfg);
+      }
+
+      Epix100aConfigType* config() {
+        Epix100aConfigType* cfg = (Epix100aConfigType*)current();
+        if (cfg) {
+          Epix100aConfig::setDaqCode(*cfg, code());
+        }
+        return cfg;
+      }
     private:
       int _size(void* tc) const { return ((Epix100aConfigType*)tc)->_sizeof(); }
       static int __size() {
@@ -165,7 +173,7 @@ class Epix100aConfigAction : public Action {
       printf("Epix100aConfigAction::fire(Transition) fetched %d\n", i);
       _server->resetOffset();
       if (_cfg.scanning() == false) {
-        if ((_result = _server->configure( (Epix100aConfigType*)_cfg.current()))) {
+        if ((_result = _server->configure(_cfg.config()))) {
           printf("\nEpix100aConfigAction::fire(tr) failed configuration\n");
         };
         if (_server->debug() & 0x10) _cfg.printCurrent();
@@ -225,7 +233,7 @@ class Epix100aBeginCalibCycleAction : public Action {
           printf("configured and ");
           _server->offset(_server->offset()+_server->myCount()+1);
           printf(" offset %u count %u\n", _server->offset(), _server->myCount());
-          if ((_result = _server->configure( (Epix100aConfigType*)_cfg.current()))) {
+          if ((_result = _server->configure(_cfg.config()))) {
             printf("\nEpix100aBeginCalibCycleAction::fire(tr) failed config\n");
           };
           if (_server->debug() & 0x10) _cfg.printCurrent();

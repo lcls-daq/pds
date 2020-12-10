@@ -10,7 +10,7 @@ namespace Pds {
     class Server;
     class Manager {
     public:
-      Manager (Driver&, Server&, CfgClientNfs&, bool, char* =0);
+      Manager (Driver&, Server&, CfgClientNfs&, bool);
       ~Manager();
     public:
       Appliance& appliance();

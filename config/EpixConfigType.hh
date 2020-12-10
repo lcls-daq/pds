@@ -57,5 +57,11 @@ typedef Pds::Epix::Config10kaQuadV1   Epix10kaQuadConfigType;
 static Pds::TypeId _epix10kaQuadConfigType(Pds::TypeId::Id_Epix10kaQuadConfig,
                                            Epix10kaQuadConfigType::Version);
 
+namespace Pds {
+  namespace Epix10kaConfig {
+    void setDaqCode(Epix10kaConfigType&, uint32_t daqCode);
+  }
+}
+
 
 #endif

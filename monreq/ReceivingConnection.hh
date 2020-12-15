@@ -54,8 +54,8 @@ namespace Pds {
       int _numberRequested;
       int _numberReceived;
       MonGroup* _group;
-	MonEntryScalar*   _numberRequested_count;
-	MonEntryScalar*   _numberReceived_count;
+      MonEntryScalar*   _numberRequested_count;
+      MonEntryScalar*   _numberReceived_count;
     };
 
   }

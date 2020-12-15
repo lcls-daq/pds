@@ -87,11 +87,14 @@ namespace Pds {
         delete _routine;
       };
     public:
+      void enable() { _enabled = true; }
+      void disable() { _enabled = false; }
       void initialize(unsigned, bool);
     private:
       Task&           _task;
       Routine*        _routine;
       Server*         _srvr;
+      bool            _enabled;
       bool            _printed;
     };
   };
@@ -103,29 +106,32 @@ Epix10ka2m::SyncSlave::SyncSlave(unsigned partition,
   _task(*task),
   _routine(new EvrSyncRoutine(partition,*this)),
   _srvr(srvr),
+  _enabled(false),
   _printed(false)
 {
   _task.call(_routine);
 }
 
 void Epix10ka2m::SyncSlave::initialize(unsigned target, bool enable) {
-  if (_srvr->g3sync() == true) {
-    _srvr->configurator()->fiducialTarget(target);
-    _srvr->configurator()->evrLaneEnable(enable);
-    unsigned fid = _srvr->configurator()->getCurrentFiducial();
-    printf("Epix10ka2m::SyncSlave target 0x%x, pgpcard fiducial 0x%x after %s\n",
-           target, fid, enable ? "enabling" : "disabling");
-    //if fiducial less than target or check for wrap
-    if ((fid < target) || ((fid > (0x1ffff-32-720-7)) && (target < (720+7)))) {
+  if (_enabled) {
+    if (_srvr->g3sync()) {
+      _srvr->configurator()->fiducialTarget(target);
+      _srvr->configurator()->evrLaneEnable(enable);
+      unsigned fid = _srvr->configurator()->getCurrentFiducial();
+      printf("Epix10ka2m::SyncSlave target 0x%x, pgpcard fiducial 0x%x after %s\n",
+             target, fid, enable ? "enabling" : "disabling");
+      //if fiducial less than target or check for wrap
+      if ((fid < target) || ((fid > (0x1ffff-32-720-7)) && (target < (720+7)))) {
+      } else {
+        printf("Fiducial was not before target so retrying four later than now ...\n");
+        _srvr->configurator()->fiducialTarget(fid+4);
+      }
+      _srvr->ignoreFetch(false);
     } else {
-      printf("Fiducial was not before target so retrying four later than now ...\n");
-      _srvr->configurator()->fiducialTarget(fid+4);
-    }
-    _srvr->ignoreFetch(false);
-  } else {
-    if (!_printed) {
-      printf("g3sync was not true\n");
-      _printed = true;
+      if (!_printed) {
+        printf("g3sync was not true\n");
+        _printed = true;
+      }
     }
   }
 }
@@ -262,7 +268,7 @@ void Epix10ka2m::ServerSequence::dumpFrontEnd() {
 
 void Epix10ka2m::ServerSequence::enable() {
   if (usleep(10000)<0) perror("Epix10ka2m::ServerSequence::enable ulseep failed\n");
-  //  _cnfgrtr->enableExternalTrigger(true);
+  if (_syncSlave) _syncSlave->enable();
   flushInputQueue(fd());
   _firstFetch = true;
   _countBase = 0;
@@ -272,8 +278,8 @@ void Epix10ka2m::ServerSequence::enable() {
 
 void Epix10ka2m::ServerSequence::disable() {
   _ignoreFetch = true;
+  if (_syncSlave) _syncSlave->disable();
   if (_cnfgrtr) {
-    //    _cnfgrtr->enableExternalTrigger(false);
     flushInputQueue(fd());
     if (usleep(10000)<0) perror("Epix10ka2m::ServerSequence::disable ulseep 1 failed\n");
     if (_debug & 0x20) printf("Epix10ka2m::ServerSequence::disable\n");

@@ -3,11 +3,8 @@
 
 #include "pds/config/CfgCache.hh"
 #include "pds/service/GenericPool.hh"
-#include <vector>
 
 namespace Pds {
-  class Datagram;
-  class Task;
   namespace Jungfrau {
     class Detector;
     class DetIdLookup;

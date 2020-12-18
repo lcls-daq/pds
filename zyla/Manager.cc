@@ -1,6 +1,7 @@
 #include "pds/zyla/Manager.hh"
 #include "pds/zyla/Driver.hh"
 #include "pds/zyla/Server.hh"
+#include "pds/zyla/ConfigCache.hh"
 
 #include "pds/config/ZylaConfigType.hh"
 #include "pds/config/ZylaDataType.hh"
@@ -121,211 +122,74 @@ namespace Pds {
 
     class AllocAction : public Action {
     public:
-      AllocAction(CfgClientNfs& cfg) : _cfg(cfg) {}
+      AllocAction(ConfigCache& cfg) : _cfg(cfg) {}
       Transition* fire(Transition* tr) {
         const Allocate& alloc = reinterpret_cast<const Allocate&>(*tr);
-        _cfg.initialize(alloc.allocation());
+        _cfg.init(alloc.allocation());
         return tr;
       }
     private:
-      CfgClientNfs& _cfg;
+      ConfigCache& _cfg;
     };
 
     class ConfigAction : public Action {
     public:
       enum { MaxErrMsgLength=256 };
-      ConfigAction(Manager& mgr, Driver& driver, Server& server, FrameReader& reader, CfgClientNfs& cfg) :
+      ConfigAction(Manager& mgr, Driver& driver, Server& server, FrameReader& reader, ConfigCache& cfg) :
         _mgr(mgr),
         _driver(driver),
         _server(server),
         _reader(reader),
         _cfg(cfg),
-        _cfgtc(_zylaConfigType,cfg.src()),
-        _occPool(sizeof(UserMessage),1),
-        _error(false) {}
+        _occPool(sizeof(UserMessage),1) {}
       ~ConfigAction() {}
       InDatagram* fire(InDatagram* dg) {
-        if (_error) {
-          printf("*** Found configuration errors\n");
-          dg->datagram().xtc.damage.increase(Pds::Damage::UserDefined);
-        } else {
-          // insert assumes we have enough space in the input datagram
-          dg->insert(_cfgtc,    &_config);
-        }
+        _cfg.record(dg);
         return dg;
       }
       Transition* fire(Transition* tr) {
-        _error = false;
 
-        int len = _cfg.fetch( *tr, _zylaConfigType, &_config, sizeof(_config) );
+        int len = _cfg.fetch(tr);
 
         if (len <= 0) {
-          _error = true;
-
-          fprintf(stderr, "ConfigAction: failed to retrieve configuration: (%d) %s.\n", errno, strerror(errno));
+          fprintf(stderr,
+                  "ConfigAction: failed to retrieve configuration: (%d) %s.\n",
+                  errno, strerror(errno));
 
           snprintf(_err_buffer,
                    MaxErrMsgLength,
                    "Zyla Config: failed to retrieve configuration for %s !",
-                   DetInfo::name(static_cast<const DetInfo&>(_cfgtc.src)));
+                   DetInfo::name(static_cast<const DetInfo&>(_server.client())));
           UserMessage* msg = new (&_occPool) UserMessage(_err_buffer);
           _mgr.appliance().post(msg);
         } else {
-          _cfgtc.extent = sizeof(Xtc) + sizeof(ZylaConfigType);
-
 #ifdef TIMING_DEBUG
           clock_gettime(CLOCK_REALTIME, &_time_start); // start timing configure
 #endif
-
-          if (!_driver.set_image(_config.width(),
-                                 _config.height(),
-                                 _config.orgX(),
-                                 _config.orgY(),
-                                 _config.binX(),
-                                 _config.binY(),
-                                 _config.noiseFilter(),
-                                 _config.blemishCorrection())) {
-            _error = true;
-            fprintf(stderr, "ConfigAction: failed to apply image/ROI configuration.\n");
-
-            snprintf(_err_buffer,
-                     MaxErrMsgLength,
-                     "Zyla Config: failed to apply image/ROI configuration for %s !",
-                     DetInfo::name(static_cast<const DetInfo&>(_cfgtc.src)));
-            UserMessage* msg = new (&_occPool) UserMessage(_err_buffer);
-            _mgr.appliance().post(msg);
-
-            return tr;
-          }
-
-          if (!_driver.set_readout(_config.shutter(), _config.readoutRate(), _config.gainMode())) {
-            _error = true;
-            fprintf(stderr, "ConfigAction: failed to apply readout configuration.\n");
-            snprintf(_err_buffer,
-                     MaxErrMsgLength,
-                     "Zyla Config: failed to apply readout configuration for %s !",
-                     DetInfo::name(static_cast<const DetInfo&>(_cfgtc.src)));
-            UserMessage* msg = new (&_occPool) UserMessage(_err_buffer);
-            _mgr.appliance().post(msg);
-
-            return tr;
-          }
-
-          // Test if a supported trigger mode for the camera has been chosen
-          if (_config.triggerMode() != ZylaConfigType::ExternalExposure && _config.triggerMode() != ZylaConfigType::External) {
-            _error = true;
-            fprintf(stderr, "ConfigAction: unsupported trigger configuration mode: %d.\n", _config.triggerMode());
-            snprintf(_err_buffer,
-                     MaxErrMsgLength,
-                     "Zyla Config: unsupported trigger configuration mode for %s !",
-                     DetInfo::name(static_cast<const DetInfo&>(_cfgtc.src)));
-            UserMessage* msg = new (&_occPool) UserMessage(_err_buffer);
-            _mgr.appliance().post(msg);
-
-            return tr;
-          }
-
-          if (!_driver.set_trigger(_config.triggerMode(), _config.triggerDelay(), _config.overlap())) {
-            _error = true;
-            fprintf(stderr, "ConfigAction: failed to apply trigger configuration.\n");
-            snprintf(_err_buffer,
-                     MaxErrMsgLength,
-                     "Zyla Config: failed to apply trigger configuration for %s !",
-                     DetInfo::name(static_cast<const DetInfo&>(_cfgtc.src)));
-            UserMessage* msg = new (&_occPool) UserMessage(_err_buffer);
-            _mgr.appliance().post(msg);
-
-            return tr;
-          }
-
-          if (!_driver.set_exposure(_config.exposureTime())) {
-            _error = true;
-            fprintf(stderr, "ConfigAction: failed to apply exposure time configuration.\n");
-            fprintf(stderr, "ConfigAction: Requested exposure of %.5f s is outside the allowed range of %.5f to %.5f s.\n",
-                    _config.exposureTime(), _driver.exposure_min(), _driver.exposure_max());
-            snprintf(_err_buffer,
-                     MaxErrMsgLength,
-                     "Zyla Config: failure setting exposure time for %s !\n"
-                     "\nRequested exposure of %.5f s is outside the range of %.5f to %.5f s allowed by the current camera settings.",
-                     DetInfo::name(static_cast<const DetInfo&>(_cfgtc.src)),
-                     _config.exposureTime(),
-                     _driver.exposure_min(),
-                     _driver.exposure_max());
-            UserMessage* msg = new (&_occPool) UserMessage(_err_buffer);
-            if (_driver.overlap_mode()) {
-              snprintf(_err_buffer, MaxErrMsgLength,
-                       "\n\nCamera is in overlap readout mode!\n"
-                       "Exposure time must be greater than the frame readout time of %.5f s + a bit extra in this mode.", _driver.readout_time());
-              msg->append(_err_buffer);
-            }
-            _mgr.appliance().post(msg);
-
-            return tr;
-          }
-
-          if (!_driver.set_cooling(_config.cooling(),
-                                   _config.setpoint(),
-                                   _config.fanSpeed())) {
-            _error = true;
-            fprintf(stderr, "ConfigAction: failed to apply cooling configuration.\n");
-            snprintf(_err_buffer,
-                     MaxErrMsgLength,
-                     "Zyla Config: failed to apply cooling configuration for %s !",
-                     DetInfo::name(static_cast<const DetInfo&>(_cfgtc.src)));
-            UserMessage* msg = new (&_occPool) UserMessage(_err_buffer);
-            _mgr.appliance().post(msg);
-
-            return tr;
-          }
-
-          if (!_driver.configure()) {
-            _error = true;
-            fprintf(stderr, "ConfigAction: failed to apply configuration.\n");
-            snprintf(_err_buffer,
-                     MaxErrMsgLength,
-                     "Zyla Config: failed to apply configuration for %s !",
-                     DetInfo::name(static_cast<const DetInfo&>(_cfgtc.src)));
-            UserMessage* msg = new (&_occPool) UserMessage(_err_buffer);
-            _mgr.appliance().post(msg);
-
-            return tr;
-          }
-
-          // Print cooling status info
-          if (_driver.cooling_on()) {
-            _driver.get_cooling_status(_wc_buffer, AT_MAX_MSG_LEN);
-            printf("Current cooling status (temp): %ls (%.2f C)\n", _wc_buffer, _driver.temperature());
-          }
-
-          // Print other configure info
-          printf("Image ROI (w,h)       : %lld, %lld\n", _driver.image_width(), _driver.image_height());
-          printf("          (orgX,orgY) : %lld, %lld\n", _driver.image_orgX(), _driver.image_orgY());
-          printf("          (binX,binY) : %lld, %lld\n", _driver.image_binX(), _driver.image_binY());
-          printf("Image exposure time (sec) : %g\n", _driver.exposure());
-          _driver.get_shutter_mode(_wc_buffer, AT_MAX_MSG_LEN);
-          printf("Shutter mode: %ls\n", _wc_buffer);
-          _driver.get_trigger_mode(_wc_buffer, AT_MAX_MSG_LEN);
-          printf("Trigger mode: %ls\n", _wc_buffer);
-          _driver.get_gain_mode(_wc_buffer, AT_MAX_MSG_LEN);
-          printf("Gain mode: %ls\n", _wc_buffer);
-          _driver.get_readout_rate(_wc_buffer, AT_MAX_MSG_LEN);
-          printf("Pixel readout rate: %ls\n", _wc_buffer);
-          if (_driver.overlap_mode()) {
-            printf("Camera readout set to overlap mode!\n");
-          }
-          printf("Estimated readout time for the camera (sec): %g\n", _driver.readout_time());
-
           _server.resetCount();
-          _server.set_frame_sz(_driver.frame_size() * sizeof(uint16_t));
-          _reader.reset_diff();
-          _reader.set_clock_rate(_driver.clock_rate());
-          _reader.set_frame_sz(_driver.frame_size() * sizeof(uint16_t));
-
+          if (_cfg.scanning()) {
+            // update the configuration objet in the transition (if needed)
+            _cfg.configure(false);
+          } else {
+            if (_cfg.configure()) {
+              _server.set_frame_sz(_driver.frame_size() * sizeof(uint16_t));
+              _reader.reset_diff();
+              _reader.set_clock_rate(_driver.clock_rate());
+              _reader.set_frame_sz(_driver.frame_size() * sizeof(uint16_t));
+            } else {
+              fprintf(stderr,
+                      "ConfigAction: Configuration of the detector failed!\n");
+              UserMessage* msg = new (&_occPool) UserMessage(_cfg.get_error());
+              _mgr.appliance().post(msg);
+            }
+          }
 #ifdef TIMING_DEBUG
           clock_gettime(CLOCK_REALTIME, &_time_end); // end timing configure
-          printf("Camera configuration completed in %6.1f ms\n", TIME_DIFF(_time_start, _time_end));
+          printf("Camera configuration completed in %6.1f ms\n",
+                 TIME_DIFF(_time_start, _time_end));
 #endif
         }
+
         return tr;
       }
     private:
@@ -333,13 +197,9 @@ namespace Pds {
       Driver&             _driver;
       Server&             _server;
       FrameReader&        _reader;
-      CfgClientNfs&       _cfg;
-      ZylaConfigType      _config;
-      Xtc                 _cfgtc;
+      ConfigCache&        _cfg;
       GenericPool         _occPool;
-      bool                _error;
       char                _err_buffer[MaxErrMsgLength];
-      AT_WC               _wc_buffer[AT_MAX_MSG_LEN];
 #ifdef TIMING_DEBUG
       timespec            _time_start;
       timespec            _time_end;
@@ -434,20 +294,87 @@ namespace Pds {
       timespec      _time_end;
 #endif
     };
+
+    class BeginCalibCycleAction : public Action {
+    public:
+      BeginCalibCycleAction(Driver& driver, Server& server,
+                            FrameReader& reader, ConfigCache& cfg) :
+        _driver(driver),
+        _server(server),
+        _reader(reader),
+        _cfg(cfg) {}
+      ~BeginCalibCycleAction() {}
+      InDatagram* fire(InDatagram* dg) {
+        if (_cfg.scanning() && _cfg.changed()) {
+          _cfg.record(dg);
+        }
+        return dg;
+      }
+      Transition* fire(Transition* tr) {
+        if (_cfg.scanning()) {
+          bool error = false;
+          if (_cfg.changed()) {
+            error = !_cfg.configure();
+          }
+
+          if (error) {
+            printf("BeginCalibCycleAction: failed to configure Zyla during scan!\n");
+          } else {
+            _server.set_frame_sz(_driver.frame_size() * sizeof(uint16_t));
+            _reader.reset_diff();
+            _reader.set_clock_rate(_driver.clock_rate());
+            _reader.set_frame_sz(_driver.frame_size() * sizeof(uint16_t));
+          }
+        }
+
+        return tr;
+      }
+    private:
+      Driver&       _driver;
+      Server&       _server;
+      FrameReader&  _reader;
+      ConfigCache&  _cfg;
+    };
+
+    class EndCalibCycleAction : public Action {
+    public:
+      EndCalibCycleAction(ConfigCache& cfg):
+        _cfg(cfg) {}
+      ~EndCalibCycleAction() {}
+      InDatagram* fire(InDatagram* dg) {
+        return dg;
+      }
+      Transition* fire(Transition* tr) {
+        _cfg.next();
+        return tr;
+      }
+    private:
+      ConfigCache&  _cfg;
+    };
   }
 }
 
 using namespace Pds::Zyla;
 
-Manager::Manager(Driver& driver, Server& server, CfgClientNfs& cfg, bool wait_cooling) : _fsm(*new Pds::Fsm())
+Manager::Manager(Driver& driver, Server& server,
+                 ConfigCache& cfg, bool wait_cooling) :
+  _fsm(*new Pds::Fsm())
 {
   Task* task = new Task(TaskObject("ZylaReadout",35));
   FrameReader& reader = *new FrameReader(driver, server,task);
 
-  _fsm.callback(Pds::TransitionId::Map, new AllocAction(cfg));
-  _fsm.callback(Pds::TransitionId::Configure, new ConfigAction(*this, driver, server, reader, cfg));
-  _fsm.callback(Pds::TransitionId::Enable   , new EnableAction(*this, driver, reader, wait_cooling));
-  _fsm.callback(Pds::TransitionId::Disable  , new DisableAction(driver, reader));
+  _fsm.callback(Pds::TransitionId::Map,
+                new AllocAction(cfg));
+  _fsm.callback(Pds::TransitionId::Configure,
+                new ConfigAction(*this, driver, server, reader, cfg));
+  _fsm.callback(Pds::TransitionId::Enable,
+                new EnableAction(*this, driver, reader, wait_cooling));
+  _fsm.callback(Pds::TransitionId::Disable,
+                new DisableAction(driver, reader));
+  _fsm.callback(Pds::TransitionId::BeginCalibCycle,
+                new BeginCalibCycleAction(driver, server, reader, cfg));
+  _fsm.callback(Pds::TransitionId::EndCalibCycle,
+                new EndCalibCycleAction(cfg));
 }
 
 Manager::~Manager() {}

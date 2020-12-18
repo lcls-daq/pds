@@ -1,9 +1,9 @@
 #ifndef Pds_Zyla_Driver_hh
 #define Pds_Zyla_Driver_hh
 
-#include "pds/config/ZylaConfigType.hh"
 #include "andor3/include/atutility.h"
 
+#include <stddef.h>
 #include <stdint.h>
 
 namespace Pds {
@@ -13,11 +13,73 @@ namespace Pds {
         Driver(AT_H cam, unsigned nbuffers=1);
         ~Driver();
       public:
+        enum FanSpeed {
+          Off,
+          Low,
+          On,
+          UnsupportedFanSpeed,
+        };
+        enum CoolingSetpoint {
+          Temp_0C,
+          Temp_Neg5C,
+          Temp_Neg10C,
+          Temp_Neg15C,
+          Temp_Neg20C,
+          Temp_Neg25C,
+          Temp_Neg30C,
+          Temp_Neg35C,
+          Temp_Neg40C,
+          UnsupportedTemp,
+        };
+        enum GainMode {
+          HighWellCap12Bit,
+          LowNoise12Bit,
+          LowNoiseHighWellCap16Bit,
+          UnsupportedGain,
+        };
+        enum TriggerMode {
+          Internal,
+          ExternalLevelTransition,
+          ExternalStart,
+          ExternalExposure,
+          Software,
+          Advanced,
+          External,
+          UnsupportedTrigger,
+        };
+        enum ShutteringMode {
+          Rolling,
+          Global,
+          UnsupportedShutter,
+        };
+        enum ReadoutRate {
+          Rate280MHz,
+          Rate200MHz,
+          Rate100MHz,
+          Rate10MHz,
+          UnsupportedReadout,
+        };
+        enum GateMode {
+          CWOn,
+          CWOff,
+          FireOnly,
+          GateOnly,
+          FireAndGate,
+          DDG,
+          UnsupportedGate,
+        };
+        enum InsertionDelay {
+          Normal,
+          Fast,
+          UnsupportedDelay,
+        };
+      public:
         bool set_image(AT_64 width, AT_64 height, AT_64 orgX, AT_64 orgY, AT_64 binX, AT_64 binY, bool noise_filter, bool blemish_correction, bool fast_frame=true);
-        bool set_cooling(bool enable, ZylaConfigType::CoolingSetpoint setpoint, ZylaConfigType::FanSpeed fan_speed);
-        bool set_trigger(ZylaConfigType::TriggerMode trigger, double trigger_delay, bool overlap);
+        bool set_cooling(bool enable, CoolingSetpoint setpoint, FanSpeed fan_speed);
+        bool set_trigger(TriggerMode trigger, double trigger_delay, bool overlap);
         bool set_exposure(double exposure_time);
-        bool set_readout(ZylaConfigType::ShutteringMode shutter, ZylaConfigType::ReadoutRate readout_rate, ZylaConfigType::GainMode gain);
+        bool set_readout(ShutteringMode shutter, ReadoutRate readout_rate, GainMode gain);
+        bool set_intensifier(GateMode gate, InsertionDelay delay, AT_64 mcp_gain, bool mcp_intelligate);
         bool configure(const AT_64 nframes=0);
         bool start();
         bool stop(bool flush_buffers=true);
@@ -26,13 +88,6 @@ namespace Pds {
         bool is_present() const;
         size_t frame_size() const;
         bool get_frame(AT_64& timestamp, uint16_t* data);
-      public:
-        // Additional iStar camera features
-        enum GateMode { CWOff, CWOn, FireAndGate };
-        bool set_gate_mode(GateMode); // L"GateMode"
-        bool set_mcp_gain(unsigned gain);  // L"MCPGain" [ 0 to 4095 ]
-        // enum BitDepth { };
-        // bool set_bit_depth();  // AT3_PIXEL_ENCODING is 16 for Zyla, else new image format
       public:
         AT_64 sensor_width() const;
         AT_64 sensor_height() const;
@@ -46,6 +101,7 @@ namespace Pds {
         AT_64 image_orgY() const;
         AT_64 image_binX() const;
         AT_64 image_binY() const;
+        AT_64 image_binning() const;
         double readout_time() const;
         double frame_rate() const;
         double pixel_height() const;
@@ -64,6 +120,7 @@ namespace Pds {
         bool get_trigger_mode(AT_WC* buffer, int buffer_size) const;
         bool get_gain_mode(AT_WC* buffer, int buffer_size) const;
         bool get_readout_rate(AT_WC* buffer, int buffer_size) const;
+        bool get_binning_mode(AT_WC* buffer, int buffer_size) const;
         bool get_name(AT_WC* buffer, int buffer_size) const;
         bool get_model(AT_WC* buffer, int buffer_size) const;
         bool get_family(AT_WC* buffer, int buffer_size) const;

@@ -4,9 +4,11 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include <wchar.h>
 
 #define LENGTH_FIELD_SIZE 4
 #define CID_FIELD_SIZE 4
@@ -38,7 +40,6 @@
       return false;                                                         \
     }                                                                       \
     break;
-
 
 namespace Pds {
   namespace Zyla {
@@ -121,22 +122,22 @@ bool Driver::set_image(AT_64 width, AT_64 height, AT_64 orgX, AT_64 orgY, AT_64 
   return true;
 }
 
-bool Driver::set_cooling(bool enable, ZylaConfigType::CoolingSetpoint setpoint, ZylaConfigType::FanSpeed fan_speed)
+bool Driver::set_cooling(bool enable, CoolingSetpoint setpoint, FanSpeed fan_speed)
 {
   // Enable cooling
   set_config_bool(AT3_SENSOR_COOLING, enable);
   // Set Cooling setpoint (only if cooling is enabled)
   if (at_check_write(AT3_TEMPERATURE_CONTROL) && enable) {
     switch(setpoint) {
-      set_enum_case(AT3_TEMPERATURE_CONTROL, ZylaConfigType::Temp_0C,     L"0.00");
-      set_enum_case(AT3_TEMPERATURE_CONTROL, ZylaConfigType::Temp_Neg5C,  L"-5.00");
-      set_enum_case(AT3_TEMPERATURE_CONTROL, ZylaConfigType::Temp_Neg10C, L"-10.00");
-      set_enum_case(AT3_TEMPERATURE_CONTROL, ZylaConfigType::Temp_Neg15C, L"-15.00");
-      set_enum_case(AT3_TEMPERATURE_CONTROL, ZylaConfigType::Temp_Neg20C, L"-20.00");
-      set_enum_case(AT3_TEMPERATURE_CONTROL, ZylaConfigType::Temp_Neg25C, L"-25.00");
-      set_enum_case(AT3_TEMPERATURE_CONTROL, ZylaConfigType::Temp_Neg30C, L"-30.00");
-      set_enum_case(AT3_TEMPERATURE_CONTROL, ZylaConfigType::Temp_Neg35C, L"-35.00");
-      set_enum_case(AT3_TEMPERATURE_CONTROL, ZylaConfigType::Temp_Neg40C, L"-40.00");
+      set_enum_case(AT3_TEMPERATURE_CONTROL, Temp_0C,     L"0.00");
+      set_enum_case(AT3_TEMPERATURE_CONTROL, Temp_Neg5C,  L"-5.00");
+      set_enum_case(AT3_TEMPERATURE_CONTROL, Temp_Neg10C, L"-10.00");
+      set_enum_case(AT3_TEMPERATURE_CONTROL, Temp_Neg15C, L"-15.00");
+      set_enum_case(AT3_TEMPERATURE_CONTROL, Temp_Neg20C, L"-20.00");
+      set_enum_case(AT3_TEMPERATURE_CONTROL, Temp_Neg25C, L"-25.00");
+      set_enum_case(AT3_TEMPERATURE_CONTROL, Temp_Neg30C, L"-30.00");
+      set_enum_case(AT3_TEMPERATURE_CONTROL, Temp_Neg35C, L"-35.00");
+      set_enum_case(AT3_TEMPERATURE_CONTROL, Temp_Neg40C, L"-40.00");
       default:
         fprintf(stderr, "Unknown cooling setpoint value: %d\n", setpoint);
         return false;
@@ -144,9 +145,9 @@ bool Driver::set_cooling(bool enable, ZylaConfigType::CoolingSetpoint setpoint, 
   }
   // Set Fan speed
   switch(fan_speed) {
-    set_enum_case(AT3_FAN_SPEED, ZylaConfigType::Off, L"Off");
-    set_enum_case(AT3_FAN_SPEED, ZylaConfigType::Low, L"Low");
-    set_enum_case(AT3_FAN_SPEED, ZylaConfigType::On,  L"On");
+    set_enum_case(AT3_FAN_SPEED, Off, L"Off");
+    set_enum_case(AT3_FAN_SPEED, Low, L"Low");
+    set_enum_case(AT3_FAN_SPEED, On,  L"On");
     default:
       fprintf(stderr, "Unknown fan_speed value: %d\n", fan_speed);
       return false;
@@ -154,17 +155,17 @@ bool Driver::set_cooling(bool enable, ZylaConfigType::CoolingSetpoint setpoint, 
   return true;
 }
 
-bool Driver::set_trigger(ZylaConfigType::TriggerMode trigger, double trigger_delay, bool overlap)
+bool Driver::set_trigger(TriggerMode trigger, double trigger_delay, bool overlap)
 {
   // Set the trigger mode
   switch(trigger) {
-    set_enum_case(AT3_TRIGGER_MODE, ZylaConfigType::Internal,                 L"Internal");
-    set_enum_case(AT3_TRIGGER_MODE, ZylaConfigType::ExternalLevelTransition,  L"External Level Transition");
-    set_enum_case(AT3_TRIGGER_MODE, ZylaConfigType::ExternalStart,            L"External Start");
-    set_enum_case(AT3_TRIGGER_MODE, ZylaConfigType::ExternalExposure,         L"External Exposure");
-    set_enum_case(AT3_TRIGGER_MODE, ZylaConfigType::Software,                 L"Software");
-    set_enum_case(AT3_TRIGGER_MODE, ZylaConfigType::Advanced,                 L"Advanced");
-    set_enum_case(AT3_TRIGGER_MODE, ZylaConfigType::External,                 L"External");
+    set_enum_case(AT3_TRIGGER_MODE, Internal,                 L"Internal");
+    set_enum_case(AT3_TRIGGER_MODE, ExternalLevelTransition,  L"External Level Transition");
+    set_enum_case(AT3_TRIGGER_MODE, ExternalStart,            L"External Start");
+    set_enum_case(AT3_TRIGGER_MODE, ExternalExposure,         L"External Exposure");
+    set_enum_case(AT3_TRIGGER_MODE, Software,                 L"Software");
+    set_enum_case(AT3_TRIGGER_MODE, Advanced,                 L"Advanced");
+    set_enum_case(AT3_TRIGGER_MODE, External,                 L"External");
     default:
       fprintf(stderr, "Unknown tigger setting value: %d\n", trigger);
       return false;
@@ -191,7 +192,7 @@ bool Driver::set_exposure(double exposure_time)
   return true;
 }
 
-bool Driver::set_readout(ZylaConfigType::ShutteringMode shutter, ZylaConfigType::ReadoutRate readout_rate, ZylaConfigType::GainMode gain)
+bool Driver::set_readout(ShutteringMode shutter, ReadoutRate readout_rate, GainMode gain)
 {
   if (!at_set_enum(AT3_PIXEL_ENCODING, AT3_PIXEL_MONO_16)) {
     fprintf(stderr, "Unable to set the pixel encoding of the camera to %ls!\n", AT3_PIXEL_MONO_16);
@@ -199,27 +200,27 @@ bool Driver::set_readout(ZylaConfigType::ShutteringMode shutter, ZylaConfigType:
   }
   // Set the camera electronic shuttering mode
   switch(shutter) {
-    set_enum_case(AT3_SHUTTERING_MODE, ZylaConfigType::Rolling, L"Rolling");
-    set_enum_case(AT3_SHUTTERING_MODE, ZylaConfigType::Global,  L"Global");
+    set_enum_case(AT3_SHUTTERING_MODE, Rolling, L"Rolling");
+    set_enum_case(AT3_SHUTTERING_MODE, Global,  L"Global");
     default:
       fprintf(stderr, "Unknown shutter mode value: %d\n", shutter);
       return false;
   }
   // Set the pixel readout rate
   switch(readout_rate) {
-    set_enum_case(AT3_PIXEL_READOUT_RATE, ZylaConfigType::Rate280MHz, L"280 MHz");
-    set_enum_case(AT3_PIXEL_READOUT_RATE, ZylaConfigType::Rate200MHz, L"200 MHz");
-    set_enum_case(AT3_PIXEL_READOUT_RATE, ZylaConfigType::Rate100MHz, L"100 MHz");
-    set_enum_case(AT3_PIXEL_READOUT_RATE, ZylaConfigType::Rate10MHz,  L"10 MHz");
+    set_enum_case(AT3_PIXEL_READOUT_RATE, Rate280MHz, L"280 MHz");
+    set_enum_case(AT3_PIXEL_READOUT_RATE, Rate200MHz, L"200 MHz");
+    set_enum_case(AT3_PIXEL_READOUT_RATE, Rate100MHz, L"100 MHz");
+    set_enum_case(AT3_PIXEL_READOUT_RATE, Rate10MHz,  L"10 MHz");
     default:
       fprintf(stderr, "Unknown readout rate value: %d\n", readout_rate);
       return false;
   }
   // Set the gain mode
   switch(gain) {
-    set_enum_case(AT3_PREAMP_GAIN_MODE, ZylaConfigType::HighWellCap12Bit,         L"12-bit (high well capacity)");
-    set_enum_case(AT3_PREAMP_GAIN_MODE, ZylaConfigType::LowNoise12Bit,            L"12-bit (low noise)");
-    set_enum_case(AT3_PREAMP_GAIN_MODE, ZylaConfigType::LowNoiseHighWellCap16Bit, L"16-bit (low noise & high well capacity)");
+    set_enum_case(AT3_PREAMP_GAIN_MODE, HighWellCap12Bit,         L"12-bit (high well capacity)");
+    set_enum_case(AT3_PREAMP_GAIN_MODE, LowNoise12Bit,            L"12-bit (low noise)");
+    set_enum_case(AT3_PREAMP_GAIN_MODE, LowNoiseHighWellCap16Bit, L"16-bit (low noise & high well capacity)");
     default:
       fprintf(stderr, "Unknown gain mode value: %d\n", gain);
       return false;
@@ -228,42 +229,55 @@ bool Driver::set_readout(ZylaConfigType::ShutteringMode shutter, ZylaConfigType:
   return true;
 }
 
-bool Driver::set_gate_mode(GateMode mode)
+bool Driver::set_intensifier(GateMode gate, InsertionDelay delay, AT_64 mcp_gain, bool mcp_intelligate)
 {
-  //  Discover the possible modes
-  // int nenum;
-  // AT_GetEnumCount(_cam, AT3_GATE_MODE, &nenum);
-  // AT_WC s[32];
-  // for(int i=0; i<nenum; i++) {
-  //   AT_GetEnumStringByIndex(_cam, AT3_GATE_MODE, i, s, 32);
-  //   printf("gatemode [%d] [%ls]\n", i, s);
-  // }
-
-  static const AT_WC* modeVal[] = { L"CW Off", L"CW On", L"Fire and Gate" };
-  bool rval = at_check_implemented(AT3_GATE_MODE);
-  printf("Feature %ls %s implemented\n", AT3_GATE_MODE, rval ? "is" : "is not");
-  if (!rval)
-    return false;
-
-  if (!at_set_enum(AT3_GATE_MODE, modeVal[mode])) {
-    fprintf(stderr, "Unable to set the gate mode of the camera to %ls!\n", modeVal[mode]);
+  if(at_check_implemented(AT3_GATE_MODE)) {
+    // Set the gate mode
+    switch(gate) {
+      set_enum_case(AT3_GATE_MODE, CWOn,        L"CWOn");
+      set_enum_case(AT3_GATE_MODE, CWOff,       L"CWOff");
+      set_enum_case(AT3_GATE_MODE, FireOnly,    L"FireOnly");
+      set_enum_case(AT3_GATE_MODE, GateOnly,    L"GateOnly");
+      set_enum_case(AT3_GATE_MODE, FireAndGate, L"FireAndGate");
+      set_enum_case(AT3_GATE_MODE, DDG,         L"DDG");
+      default:
+        fprintf(stderr, "Unknown gate mode value: %d\n", gate);
+        return false;
+    }
+  } else {
+    fprintf(stderr, "Feature %ls is not implemented for this camera!\n", AT3_GATE_MODE);
     return false;
   }
-  printf("Set gate mode %ls\n",modeVal[mode]);
-  return true;
-}
 
-bool Driver::set_mcp_gain(unsigned gain)
-{
-  if (gain&~0xfff) {
-    fprintf(stderr, "MCP gain [%u] out of range 0-4095\n", gain);
+  if(at_check_implemented(AT3_INSERTION_DELAY)) {
+    switch(delay){
+      set_enum_case(AT3_INSERTION_DELAY, Normal, L"Normal");
+      set_enum_case(AT3_INSERTION_DELAY, Fast,   L"Fast");
+      default:
+        fprintf(stderr, "Unknown delay value: %d\n", gate);
+        return false;
+    }
+  } else {
+    fprintf(stderr, "Feature %ls is not implemented for this camera!\n", AT3_INSERTION_DELAY);
     return false;
   }
-  if (!at_set_int(AT3_MCP_GAIN, gain)) {
-    fprintf(stderr, "Unable to set the MCP gain to value %u\n", gain);
+
+  if(at_check_implemented(AT3_MCP_INTELLIGATE)) {
+    if (delay == Normal) {
+      set_config_bool(AT3_MCP_INTELLIGATE, mcp_intelligate);
+    }
+  } else {
+    fprintf(stderr, "Feature %ls is not implemented for this camera!\n", AT3_MCP_INTELLIGATE);
     return false;
   }
-  printf("Set MCP gain %u\n",gain);
+
+  if(at_check_implemented(AT3_MCP_GAIN)) {
+    set_config_int(AT3_MCP_GAIN, mcp_gain);
+  } else {
+    fprintf(stderr, "Feature %ls is not implemented for this camera!\n", AT3_MCP_GAIN);
+    return false;
+  }
+
   return true;
 }
 
@@ -503,11 +517,42 @@ AT_64 Driver::image_orgY() const {
 }
 
 AT_64 Driver::image_binX() const {
-  return at_get_int(AT3_AOI_H_BIN);
+  if(at_check_implemented(AT3_AOI_H_BIN)) {
+    return at_get_int(AT3_AOI_H_BIN);
+  } else {
+    return image_binning();
+  }
 }
 
 AT_64 Driver::image_binY() const {
-  return at_get_int(AT3_AOI_V_BIN);
+  if(at_check_implemented(AT3_AOI_V_BIN)) {
+    return at_get_int(AT3_AOI_V_BIN);
+  } else {
+    return image_binning();
+  }
+}
+
+AT_64 Driver::image_binning() const {
+  AT_64 binning = -1;
+  AT_WC bin_buffer[128];
+  if (get_binning_mode(bin_buffer, 128)) {
+    if (wcscmp(AT3_BINNING_1X1, bin_buffer) == 0) {
+      binning = 1;
+    } else if(wcscmp(AT3_BINNING_2X2, bin_buffer) == 0) {
+      binning = 2;
+    } else if(wcscmp(AT3_BINNING_3X3, bin_buffer) == 0) {
+      binning = 3;
+    } else if(wcscmp(AT3_BINNING_4X4, bin_buffer) == 0) {
+      binning = 4;
+    } else if(wcscmp(AT3_BINNING_8X8, bin_buffer) == 0) {
+      binning = 8;
+    } else {
+      fprintf(stderr, "Camera returned an unknown binning mode %ls!\n",
+              bin_buffer);
+    }
+  }
+
+  return binning;
 }
 
 double Driver::readout_time() const
@@ -659,6 +704,11 @@ bool Driver::get_readout_rate(AT_WC* buffer, int buffer_size) const
   return at_get_enum(AT3_PIXEL_READOUT_RATE, buffer, buffer_size);
 }
 
+bool Driver::get_binning_mode(AT_WC* buffer, int buffer_size) const
+{
+  return at_get_enum(AT3_AOI_BINNING, buffer, buffer_size);
+}
+
 bool Driver::get_name(AT_WC* buffer, int buffer_size) const
 {
   return at_get_string(AT3_CAMERA_NAME, buffer, buffer_size);
@@ -777,7 +827,7 @@ bool Driver::at_get_enum(const AT_WC* feature, AT_WC* buffer, int buffer_size) c
     retcode = AT_GetEnumStringByIndex(_cam, feature, feature_idx, buffer, buffer_size);
   }
 
-  return retcode;
+  return (retcode == AT_SUCCESS);
 }
 
 bool Driver::at_set_int(const AT_WC* feature, const AT_64 value)

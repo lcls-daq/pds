@@ -57,6 +57,8 @@ namespace Pds {
     // Additional features for iStar
     static const AT_WC* AT3_MCP_GAIN  = L"MCPGain";
     static const AT_WC* AT3_GATE_MODE = L"GateMode";
+    static const AT_WC* AT3_INSERTION_DELAY = L"InsertionDelay";
+    static const AT_WC* AT3_MCP_INTELLIGATE = L"MCPIntelligate";
   }
 }
 

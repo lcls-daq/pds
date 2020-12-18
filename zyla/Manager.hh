@@ -8,9 +8,10 @@ namespace Pds {
   namespace Zyla {
     class Driver;
     class Server;
+    class ConfigCache;
     class Manager {
     public:
-      Manager (Driver&, Server&, CfgClientNfs&, bool);
+      Manager (Driver&, Server&, ConfigCache&, bool);
       ~Manager();
     public:
       Appliance& appliance();

@@ -34,6 +34,7 @@ namespace Pds_ConfigDb {
                       Rayonix, EpixSampler, Epix, Pimax, Epix10k, Epix100a, GenericPgp,
                       TimeTool, Andor3d, UsdUsbFex, Generic1D, Archon, Jungfrau, QuadAdc,
                       Zyla, EpicsCam, Epix10ka, Pixis, Uxi, Epix10ka2M, Epix10kaQuad,
+                      iStar,
 #ifdef BUILD_EXTRA
                       Phasics, Xamps, Fexamp,
 #endif

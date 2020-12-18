@@ -136,6 +136,7 @@ const Pds::TypeId* PdsDefs::typeId(ConfigType id)
   case Jungfrau     : type = &_jungfrauConfigType;  break;
   case QuadAdc      : type = &_QuadAdcConfigType;   break;
   case Zyla         : type = &_zylaConfigType;      break;
+  case iStar        : type = &_istarConfigType;     break;
   case EpicsCam     : type = &_epicsCamConfigType;  break;
   case Uxi          : type = &_uxiConfigType;       break;
     //  case Projection   : type = &_projectionConfigType; break;
@@ -202,6 +203,7 @@ const Pds::TypeId* PdsDefs::typeId(const UTypeName& name)
   test(_jungfrauConfigType);
   test(_QuadAdcConfigType);
   test(_zylaConfigType);
+  test(_istarConfigType);
   test(_epicsCamConfigType);
   test(_uxiConfigType);
   //  test(_projectionConfigType);    

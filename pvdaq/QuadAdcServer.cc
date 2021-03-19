@@ -227,7 +227,6 @@ Pds::InDatagram* QuadAdcServer::fire(Pds::InDatagram* dg)
 
     bool error = false;
     double period = 0.0;
-    int nelem = 0;
     unsigned nchan = 0;
     uint32_t lengths[NCHAN];
     uint32_t types[NCHAN];
@@ -251,9 +250,8 @@ Pds::InDatagram* QuadAdcServer::fire(Pds::InDatagram* dg)
     }
     _delayTime = _evtDelay / (156.17e6);
     period = 1.0/_sampleRate;
-    nelem = NCHAN * _nbrSamples;
     for(unsigned n=0;n<nchan;n++) {
-      lengths[n] = _interleave ? nelem : _nbrSamples;
+      lengths[n] = _nbrSamples;
       types[n] = Generic1DConfigType::FLOAT64;
       offsets[n] = unsigned(_delayTime / period + 0.5);
       periods[n] = period;
@@ -278,7 +276,7 @@ Pds::InDatagram* QuadAdcServer::fire(Pds::InDatagram* dg)
     if (!_waveformPv) {
       if (ca_current_context() == NULL) ca_attach_context(_context);
       printf("Creating EpicsCA(%s)\n", _data_pvname);
-      _waveformPv = new QuadAdcPvServer(_data_pvname, this, nelem);
+      _waveformPv = new QuadAdcPvServer(_data_pvname, this, nchan, _nbrSamples);
     }
 
     Pds::Xtc* xtc;
@@ -290,7 +288,7 @@ Pds::InDatagram* QuadAdcServer::fire(Pds::InDatagram* dg)
     xtc->alloc(cfg->_sizeof()-sizeof(Generic1DDataType));
     dg->xtc.alloc(xtc->extent);
 
-    _waveform_sz = nelem * sizeof(double);
+    _waveform_sz = nchan * _nbrSamples * sizeof(double);
 
     if (!error) {
       if (_waveform_sz > _max_evt_sz) {

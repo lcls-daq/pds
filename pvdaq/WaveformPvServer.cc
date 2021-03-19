@@ -8,11 +8,13 @@ static const size_t elem_sz = sizeof(uint16_t);
 static const size_t ca_elem_sz = sizeof(dbr_long_t);
 static const size_t hdr_sz = (sizeof(Pds::HSD::EventHeader) + ca_elem_sz -1) / ca_elem_sz * ca_elem_sz;
 static const size_t hdr_elem = hdr_sz / ca_elem_sz;
+static const size_t strm_sz = (sizeof(Pds::HSD::StreamHeader) + ca_elem_sz -1) / ca_elem_sz * ca_elem_sz;
+static const size_t strm_elem = strm_sz / ca_elem_sz;
 
 using namespace Pds::PvDaq;
 
-QuadAdcPvServer::QuadAdcPvServer(const char* name, Pds_Epics::PVMonitorCb* mon_cb, const int max_elem) :
-  Pds_Epics::EpicsCA (name, mon_cb, max_elem / (ca_elem_sz / elem_sz) + hdr_elem),
+QuadAdcPvServer::QuadAdcPvServer(const char* name, Pds_Epics::PVMonitorCb* mon_cb, const unsigned nchans, const unsigned elems) :
+  Pds_Epics::EpicsCA (name, mon_cb, hdr_elem + nchans * (strm_elem + elems / (ca_elem_sz / elem_sz))),
   _name(new char[strlen(name)+1])
 {
   strcpy(_name, name);
@@ -34,15 +36,20 @@ int QuadAdcPvServer::fetch(void* payload, size_t len)
   printf("ConfigServer[%s] fetch %p\n",_channel.epicsName(),payload);
 #endif
   int result = 0;
-  int nelem = (_channel.nelements() - hdr_elem) * (ca_elem_sz / elem_sz);
+  size_t data_size = 0;
   switch(_channel.type()) {
   case DBR_TIME_LONG:
-    if (nelem * sizeof (double) > len) {
-      result = -1;
-    } else {
-      uint16_t* inp  = (uint16_t*) ((dbr_long_t*)data() + hdr_elem);
+    {
       double* outp = (double*)payload;
-      for(int k=0; k<nelem; k++) *outp++ = (*inp++ - 512.)/2048.;
+      const Pds::HSD::EventHeader* eh = reinterpret_cast<const Pds::HSD::EventHeader*>(data());
+      Pds::HSD::StreamIterator it = eh->streams();
+      for(const Pds::HSD::StreamHeader* sh = it.first(); sh; sh=it.next()) {
+        data_size += sizeof(double) * sh->num_samples();
+        if (data_size > len)
+          return -1;
+        const uint16_t *inp = sh->data();
+        for(unsigned k=0; k<sh->num_samples(); k++) *outp++ = (*inp++ - 512.)/2048.;
+      }
       result = (char*)outp - (char*)payload;
     }
     break;

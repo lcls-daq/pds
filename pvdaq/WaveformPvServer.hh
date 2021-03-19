@@ -7,7 +7,7 @@ namespace Pds {
   namespace PvDaq {
     class QuadAdcPvServer : public Pds_Epics::EpicsCA {
       public:
-        QuadAdcPvServer(const char*, Pds_Epics::PVMonitorCb*, const int);
+        QuadAdcPvServer(const char*, Pds_Epics::PVMonitorCb*, const unsigned, const unsigned);
         ~QuadAdcPvServer();
       public:
         const char* name() const;

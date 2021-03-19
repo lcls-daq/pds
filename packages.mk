@@ -20,7 +20,6 @@ packages += lecroy
 packages += pvdaq
 packages += monreq
 packages += gsc16ai
-packages += quadadc
 packages += jungfrau
 
 ifneq ($(findstring x86_64,$(tgt_arch)),)
@@ -36,7 +35,7 @@ endif
 #  packages += fexamp
 
 ifneq ($(findstring x86_64-rhel7,$(tgt_arch)),)
-  packages += zyla picam archon
+  packages += zyla picam archon quadadc
 endif
 
 

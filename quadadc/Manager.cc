@@ -153,8 +153,6 @@ Transition* Manager::transitions(Transition* tr) {
         length = (ns+15)&~0xf;
       }
 
-      _dev.setAdcMux(_config.chanMask());
-
       unsigned ps = unsigned(1.25e9/sr + 0.5);
       printf("ps %u\n", ps);
       if (ps & ~0x3f) {
@@ -175,7 +173,7 @@ Transition* Manager::transitions(Transition* tr) {
       //_qab.prescale = (ps & 0x3f) | (delay<<6);
       //_qab.acqSelect = ec & 0xff;
     
-      _dev.sample_init(length, delay, ps);
+      _dev.sample_init(length, delay, ps, in ? 0 : -1, _config.chanMask());
 
       switch(_testpattern){
       case 0:

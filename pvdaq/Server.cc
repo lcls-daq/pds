@@ -59,6 +59,7 @@ void Server::post(const void* p)
 
 #include "pds/pvdaq/BeamMonitorServer.hh"
 #include "pds/pvdaq/ControlsCameraServer.hh"
+#include "pds/pvdaq/QuadAdcServer.hh"
 
 Server* Server::lookup(const char*    pvbase,
                        const char*    pvbase_alt,
@@ -82,6 +83,9 @@ Server* Server::lookup(const char*    pvbase,
   case Pds::DetInfo::ControlsCamera:
   case Pds::DetInfo::StreakC7700:
     s = new ControlsCameraServer(pvbase,pvbase_alt,info,max_event_size,flags);
+    break;
+  case Pds::DetInfo::QuadAdc:
+    s = new QuadAdcServer(pvbase,pvbase_alt,info,max_event_size,flags);
     break;
   default:
     break;

@@ -41,19 +41,35 @@ namespace Pds {
     public:
       enum {StaticALlocationNumberOfConfigurationsForScanning=100};
       Epix10kaConfigCache(const Src& src) :
-        PgpCfgCache(src, _epix10kaConfigType, StaticALlocationNumberOfConfigurationsForScanning * __size()) {}
+        PgpCfgCache(src, _epix10kaConfigType, StaticALlocationNumberOfConfigurationsForScanning * __size()),
+        _cache(0) {}
+      virtual ~Epix10kaConfigCache() {
+        if (_cache)
+          delete[] _cache;
+      }
     public:
       void printCurrent() {
         Epix10kaConfigType* cfg = (Epix10kaConfigType*)current();
         printf("Epix10kaConfigCache::printCurrent current 0x%x\n", (unsigned) (unsigned long)cfg);
       }
 
-      Epix10kaConfigType* config() {
-        Epix10kaConfigType* cfg = (Epix10kaConfigType*)current();
-        if (cfg) {
-          Epix10kaConfig::setDaqCode(*cfg, code());
+      void record(InDatagram* dg) {
+        if (_changed) {
+          if (_configtc.damage.value())
+            dg->datagram().xtc.damage.increase(_configtc.damage.value());
+          else {
+            //  Record configuration as it was readback
+            dg->insert(_configtc, _cache);
+          }
         }
-        return cfg;
+      }
+
+      unsigned configure(Pds::Epix10kaServer* srv) {
+        const Epix10kaConfigType* cfg = reinterpret_cast<const Epix10kaConfigType*>(current());
+        if (_cache) delete[] _cache;
+        _cache = new char[cfg->_sizeof()];
+        memcpy(_cache,cfg,cfg->_sizeof());
+        return srv->configure(reinterpret_cast<Epix10kaConfigType*>(_cache));
       }
     private:
       int _size(void* tc) const { return ((Epix10kaConfigType*)tc)->_sizeof(); }
@@ -63,6 +79,8 @@ namespace Pds {
         delete foo;
         return size;
       }
+    private:
+      char* _cache;
  };
 }
 
@@ -173,7 +191,7 @@ class Epix10kaConfigAction : public Action {
       printf("Epix10kaConfigAction::fire(Transition) fetched %d\n", i);
       _server->resetOffset();
       if (_cfg.scanning() == false) {
-        if ((_result = _server->configure(_cfg.config()))) {
+        if ((_result = _cfg.configure(_server))) {
           printf("\nEpix10kaConfigAction::fire(tr) failed configuration\n");
         };
         if (_server->debug() & 0x10) _cfg.printCurrent();
@@ -233,7 +251,7 @@ class Epix10kaBeginCalibCycleAction : public Action {
           printf("configured and ");
           _server->offset(_server->offset()+_server->myCount()+1);
           printf(" offset %u count %u\n", _server->offset(), _server->myCount());
-          if ((_result = _server->configure(_cfg.config()))) {
+          if ((_result = _cfg.configure(_server))) {
             printf("\nEpix10kaBeginCalibCycleAction::fire(tr) failed config\n");
           };
           if (_server->debug() & 0x10) _cfg.printCurrent();

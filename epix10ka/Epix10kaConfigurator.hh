@@ -11,7 +11,6 @@
 #include "pds/pgp/Configurator.hh"
 #include "pds/config/EpixConfigType.hh"
 #include "pds/pgp/Pgp.hh"
-#include "pds/epix10ka/Epix10kaStatusRegisters.hh"
 #include "pds/epix10ka/Epix10kaDestination.hh"
 #include <stdlib.h>
 #include <stdint.h>
@@ -113,21 +112,26 @@ namespace Pds {
 
 
     enum controlAddrs {
+      FpgaAddrBase                      = 0x400000,
+      FpgaExtAddrBase                   = 0x440000,
+      OscilloscopeAddrBase              = 0x480000,
       VersionAddr                       = 0x0,
-      ResetAddr                         = 0x0,
-      DaqTriggerEnable                  = 0x3,
-      RunTriggerEnable                  = 0x1,
-      ResetFrameCounter                 = 0xC,
-      ReadFrameCounter                  = 0xB,
-      ResetAcqCounter                   = 0x6,
-      ReadAcqCounter                    = 0x5,
-      PowerEnableAddr                   = 0x8,
-      PowerEnableValue                  = 0x7,
-      AdcControlAddr                    = 0x80,
+      GitHashAddr                       = 0x180,
+      BuildStampAddr                    = 0x200,
+      ResetAddr                         = FpgaAddrBase+0x0,
+      DaqTriggerEnable                  = FpgaAddrBase+0x3,
+      RunTriggerEnable                  = FpgaAddrBase+0x1,
+      ResetFrameCounter                 = FpgaAddrBase+0xC,
+      ReadFrameCounter                  = FpgaAddrBase+0xB,
+      ResetAcqCounter                   = FpgaAddrBase+0x6,
+      ReadAcqCounter                    = FpgaAddrBase+0x5,
+      PowerEnableAddr                   = FpgaAddrBase+0x8,
+      PowerEnableValue                  = FpgaAddrBase+0x7,
+      AdcControlAddr                    = FpgaAddrBase+0x80,
       AdcCtrlReqMask                    = 1,
       AdcCtrlAckMask                    = 2,
       AdcCtrlFailMask                   = 4,
-      EnviroDataBaseAddr				        = 0x140,
+      EnviroDataBaseAddr				        = 0x1000020,
       RowCounterAdder                   = 0x6011,
       ColCounterAddr                    = 0x6013,
       PixelDataAddr                     = 0x5000,
@@ -135,7 +139,7 @@ namespace Pds {
       PrepareMultiConfigAddr            = 0x8000,
       WriteWholeMatricAddr              = 0x84000,
       MultiplePixelWriteCommandAddr     = 0x080000,
-      TotalPixelsAddr                   = 0x27,
+      TotalPixelsAddr                   = FpgaAddrBase+0x27,
       PixelsPerBank                     = 48,
       BanksPerAsic                      = 4,
       Bank0                             = ((unsigned)(0xe<<7)),
@@ -155,8 +159,8 @@ namespace Pds {
       EnableAutomaticDaqTriggerAddr     = 0x13,  // do not add to config
       DaqTrigggerDelayAddr              = 0x4,
       RunToDaqTriggerDelay              = 15,
-      PgpTriggerEnable                  = 0x3d,
-      MonitorEnableAddr                 = 0x3e
+      PgpTriggerEnable                  = FpgaAddrBase+0x3d,
+      MonitorEnableAddr                 = 0x01000000
     };
 
     enum asicControlAddrs {

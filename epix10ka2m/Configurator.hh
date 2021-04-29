@@ -202,10 +202,10 @@ namespace Pds {
 
       unsigned             configure(const Epix::PgpEvrConfig&,
                                      const Epix10kaQuadConfig&,
-                                     Epix::Config10ka*,
+                                     Epix10kaElemConfig*,
                                      unsigned first=0);
       unsigned             unconfigure();
-      //      Epix::Config10ka*    configuration() const;
+      //      Epix10kaElemConfig*    configuration() const;
       void                 print();
       void                 dumpFrontEnd();
       void                 printMe();
@@ -227,21 +227,21 @@ namespace Pds {
       unsigned             _checkIsEnASIC();
       unsigned             _G3config(const Pds::Epix::PgpEvrConfig&);
       unsigned             _robustReadVersion(unsigned index=0);
-      unsigned             _writeElemAsicPCA(const Pds::Epix::Config10ka& e, 
-                                             Epix10kaAsic*                saci);
-      unsigned             _checkElemAsicPCA(const Pds::Epix::Config10ka& e, 
-                                             Epix10kaAsic*                saci,
-                                             const char*                  base);
-      unsigned             _writeElemCalibPCA(const Pds::Epix::Config10ka& e, 
-                                              Epix10kaAsic*                saci);
+      unsigned             _writeElemAsicPCA(const Epix10kaElemConfig& e,
+                                             Epix10kaAsic*             saci);
+      unsigned             _checkElemAsicPCA(const Epix10kaElemConfig& e,
+                                             Epix10kaAsic*             saci,
+                                             const char*               base);
+      unsigned             _writeElemCalibPCA(const Epix10kaElemConfig& e,
+                                              Epix10kaAsic*             saci);
 
     private:
       enum {MicroSecondsSleepTime=50};
       Pds::Pgp::SrpV3::Protocol*    _protocol;
       const Epix10kaQuadConfig*     _q;
-      Pds::Epix::Config10ka*        _e;
-      Pds::Epix::Config10ka*        _ewrote;
-      Pds::Epix::Config10ka*        _eread;
+      Epix10kaElemConfig*           _e;
+      Epix10kaElemConfig*           _ewrote;
+      Epix10kaElemConfig*           _eread;
       Destination                   _d;
       unsigned                      _quad;
       unsigned*                     _rhisto;

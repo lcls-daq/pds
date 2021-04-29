@@ -114,6 +114,11 @@ namespace Pds {
       Reg asicPreAcqTime;
       Reg asicForce;
       Reg asicValue;
+      uint32_t reserved_0x100[(0x100 - 0x34)>>2];
+      Reg dummyAcqEn;
+      uint32_t reserved_0x110[(0x110 - 0x104)>>2];
+      Reg asicSyncInjEn;
+      Reg asicSyncInjDly;
     };
     class RdoutCore {
     public:
@@ -123,6 +128,8 @@ namespace Pds {
       Reg adcPipelineDelay;
       Reg lineBuffErr[4];
       Reg testData;
+      Reg overSampleEn;
+      Reg overSampleSize;
     };
     class PseudoScopeCore {
     public:
@@ -405,16 +412,16 @@ Configurator::Configurator(int f, unsigned lane, unsigned quad, unsigned d) :
   Pds::Pgp::Configurator(true, f, d, lane),
   _protocol(new Pds::Pgp::SrpV3::Protocol(f,0)),
   _q(0), _e(0), 
-  _ewrote(new Pds::Epix::Config10ka[4]),
-  _eread (new Pds::Epix::Config10ka[4]),
+  _ewrote(new Epix10kaElemConfig[4]),
+  _eread (new Epix10kaElemConfig[4]),
   _d     (lane,Destination::Registers),
   _quad  (quad),
   _rhisto(0),
   _first (false)
 {
   //  Initialize cache to impossible values
-  memset(_ewrote,1,4*sizeof(Pds::Epix::Config10ka));
-  memset(_eread ,1,4*sizeof(Pds::Epix::Config10ka));
+  memset(_ewrote,1,4*sizeof(Epix10kaElemConfig));
+  memset(_eread ,1,4*sizeof(Epix10kaElemConfig));
 
   checkPciNegotiatedBandwidth();
 
@@ -596,9 +603,9 @@ unsigned Configurator::_robustReadVersion(unsigned index) {
   return Failure;
 }
 
-unsigned Configurator::configure( const Epix::PgpEvrConfig&     p,
-                                  const Epix10kaQuadConfig&     q,
-                                  Epix::Config10ka*       a,
+unsigned Configurator::configure( const Epix::PgpEvrConfig&   p,
+                                  const Epix10kaQuadConfig&   q,
+                                  Epix10kaElemConfig*         a,
                                   unsigned first) 
 {
   unsigned ret = 0;
@@ -765,9 +772,14 @@ unsigned Configurator::_writeConfig()
                                        (_q->asicPPmatValue()<<2) |
                                        (_q->asicSyncValue ()<<3) |
                                        (_q->asicRoClkValue()<<4));
+    q->_acqCore.dummyAcqEn         = _q->dummyAcqEn();
+    q->_acqCore.asicSyncInjEn      = _q->asicSyncInjEn();
+    q->_acqCore.asicSyncInjDly     = _q->asicSyncInjDly();
     q->_rdoutCore.rdoutEn          = 1;
     q->_rdoutCore.adcPipelineDelay = _q->adcPipelineDelay();
     q->_rdoutCore.testData         = _q->testData();
+    q->_rdoutCore.overSampleEn     = _q->overSampleEn();
+    q->_rdoutCore.overSampleSize   = _q->overSampleSize();
 
     q->_scopeCore.enable           = _q->scopeEnable();
     // q->_scopeCore.arm              = 1;
@@ -806,12 +818,20 @@ unsigned Configurator::_checkWrittenConfig(bool writeBack) {
     {
       Epix10kaQuadConfig& c = *const_cast<Epix10kaQuadConfig*>(_q);
       uint32_t* u = reinterpret_cast<uint32_t*>(&c);
-      u[3] = q->_axiVersion._deviceDna[0];
-      u[4] = q->_axiVersion._deviceDna[1];
+      u[3] = q->_axiVersion._fwVersion;
+      u[4] = q->_axiVersion._deviceDna[0];
+      u[5] = q->_axiVersion._deviceDna[1];
+      char* s = reinterpret_cast<char*>(&u[6]);
+      strncpy(s,
+              q->_axiVersion.gitHash().c_str(),
+              Epix10kaQuadConfig::FirmwareHashMax);
+      strncpy(s+Epix10kaQuadConfig::FirmwareHashMax,
+              q->_axiVersion.buildStamp().c_str(),
+              Epix10kaQuadConfig::FirmwareDescMax);
     }
     for(unsigned ia=0; ia<4; ia++)
       if (_e[ia].asicMask() & 0xf) {
-        Epix::Config10ka& e = _e[ia];
+        Epix10kaElemConfig& e = _e[ia];
         uint32_t* u = reinterpret_cast<uint32_t*>(&e);
         u[0] = q->_systemRegs.carrierId[ia].lo;
         u[1] = q->_systemRegs.carrierId[ia].hi;
@@ -923,7 +943,7 @@ unsigned Configurator::_writeASIC()
   unsigned ret = Success;
   Quad* q = 0;
   for(unsigned ie=0; ie<4; ie++) {
-    const Pds::Epix::Config10ka& e = _e[ie];
+    const Epix10kaElemConfig& e = _e[ie];
     unsigned m = e.asicMask();
     for (unsigned index=0; index<e.numberOfAsics(); index++) {
       if (m&(1<<index)) {
@@ -991,7 +1011,7 @@ unsigned Configurator::_writePixelBits()
   Quad* q = 0;
 
   for(unsigned ie=0; ie<4; ie++) {
-    const Pds::Epix::Config10ka& e = _e[ie];
+    const Epix10kaElemConfig& e = _e[ie];
 
     //  Skip configuration if all ASICs masked off
     unsigned m    = e.asicMask();
@@ -1049,7 +1069,7 @@ unsigned Configurator::_checkWrittenASIC(bool writeBack) {
   unsigned ret = Success;
   Quad* q = 0;
   for(unsigned ie=0; ie<4; ie++) {
-    const Pds::Epix::Config10ka& e = _e[ie];
+    const Epix10kaElemConfig& e = _e[ie];
     bool done = false;
     while (!done && _e) {
       //      PRINT_STR("_checkWrittenASIC");
@@ -1082,7 +1102,7 @@ unsigned Configurator::_checkIsEnASIC()
   Quad* q = 0;
   PRINT_STR("Configurator::checkIsEnASIC Unsetting is_en bits after writePixelBits:");
   for(unsigned ie=0; ie<4; ie++) {
-    const Pds::Epix::Config10ka& e = _e[ie];
+    const Epix10kaElemConfig& e = _e[ie];
     unsigned m = e.asicMask();
     for (unsigned index=0; index<e.numberOfAsics(); index++) {
       if (m&(1<<index)) {
@@ -1171,8 +1191,8 @@ unsigned Configurator::unconfigure()
   return 0;
 }
 
-unsigned Configurator::_writeElemAsicPCA(const Pds::Epix::Config10ka& e, 
-                                         Epix10kaAsic*                saci)
+unsigned Configurator::_writeElemAsicPCA(const Epix10kaElemConfig& e,
+                                         Epix10kaAsic*             saci)
 {
   unsigned ret = 0;
 
@@ -1308,9 +1328,9 @@ unsigned Configurator::_writeElemAsicPCA(const Pds::Epix::Config10ka& e,
   return ret;
 }
 
-unsigned Configurator::_checkElemAsicPCA(const Pds::Epix::Config10ka& e, 
-                                         Epix10kaAsic*                saci,
-                                         const char*                  base)
+unsigned Configurator::_checkElemAsicPCA(const Epix10kaElemConfig& e,
+                                         Epix10kaAsic*             saci,
+                                         const char*               base)
 {
   ndarray<const uint16_t,2> pca = e.asicPixelConfigArray();
   for (unsigned index=0; index<e.numberOfAsics(); index++)
@@ -1352,8 +1372,8 @@ unsigned Configurator::_checkElemAsicPCA(const Pds::Epix::Config10ka& e,
   return Configurator::Success;
 }
 
-unsigned Configurator::_writeElemCalibPCA(const Pds::Epix::Config10ka& e, 
-                                          Epix10kaAsic*                saci)
+unsigned Configurator::_writeElemCalibPCA(const Epix10kaElemConfig& e,
+                                          Epix10kaAsic*             saci)
 {
   unsigned ret = 0;
 

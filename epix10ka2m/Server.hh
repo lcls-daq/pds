@@ -56,7 +56,7 @@ namespace Pds {
       virtual void     allocated  (const Allocate& a) = 0;
       virtual unsigned configure  (const Pds::Epix::PgpEvrConfig&,
                                    const Epix10kaQuadConfig&, 
-                                   Pds::Epix::Config10ka*,
+                                   Epix10kaElemConfig*,
                                    bool forceConfig = false) = 0;
       virtual unsigned unconfigure(void) = 0;
       virtual void     enable     () = 0;
@@ -109,7 +109,7 @@ namespace Pds {
       
       unsigned configure(const Pds::Epix::PgpEvrConfig&,
                          const Epix10kaQuadConfig&, 
-                         Pds::Epix::Config10ka*,
+                         Epix10kaElemConfig*,
                          bool forceConfig = false);
       unsigned unconfigure(void);
       

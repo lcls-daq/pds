@@ -59,7 +59,7 @@ namespace Pds {
       void     allocated  (const Allocate& a);
       unsigned configure(const Pds::Epix::PgpEvrConfig&,
                          const Epix10kaQuadConfig&, 
-                         Pds::Epix::Config10ka*,
+                         Epix10kaElemConfig*,
                          bool forceConfig = false);
       unsigned unconfigure(void);
       

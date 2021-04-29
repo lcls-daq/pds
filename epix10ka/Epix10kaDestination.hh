@@ -19,7 +19,7 @@ namespace Pds {
 
     class Epix10kaDestination : public Pds::Pgp::Destination {
       public:
-        enum FEdest {Data=0, Registers=1, Oscilloscope=2, NumberOf=3};
+        enum FEdest {Registers=0, Data=1, Oscilloscope=2, NumberOf=3};
 
         Epix10kaDestination() {}
         ~Epix10kaDestination() {}

@@ -30,7 +30,7 @@ namespace Pds {
         unsigned vc()                             {return _vc;}
         void vc(unsigned v)                       {_vc = v & 3;}
         unsigned addr()                           {return _addr;}
-        void addr(unsigned a)                     {_addr = a & 0xffffff;}
+        void addr(unsigned a)                     {_addr = a & 0x3fffffff;}
 
 
       public:
@@ -40,8 +40,7 @@ namespace Pds {
         waitState _waiting: 1;    // 9
         unsigned  _tid:    22;    //31:10
 
-        unsigned  _addr:   24;    //23:0
-        unsigned   dnc:     6;    //29:24
+        unsigned  _addr:   30;    //29:0
         unsigned   oc:      2;    //31:30
     };
 

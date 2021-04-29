@@ -11,8 +11,8 @@
 #include "pds/config/Epix100aConfigV2.hh"
 #include "pds/config/Epix100aASICConfigV1.hh"
 #include "pds/config/Epix10kaConfigV1.hh"
+#include "pds/config/Epix10kaConfigV2.hh"
 #include "pds/config/Epix10kaASICConfigV1.hh"
-#include "pds/config/Epix10ka2MConfigV1.hh"
 
 #include <string>
 
@@ -38,21 +38,23 @@ typedef Pds::Epix100aConfig::ASIC_ConfigV1 Epix100aASIC_ConfigShadow;
 static Pds::TypeId _epix100aConfigType(Pds::TypeId::Id_Epix100aConfig,
                                     Epix100aConfigType::Version);
 
-typedef Pds::Epix::Config10kaV1 Epix10kaConfigType;
-typedef Pds::Epix10kaConfig::ConfigV1 Epix10kaConfigShadow;
+typedef Pds::Epix10kaConfig::ConfigV1 Epix10kaConfigShadowV1;
+typedef Pds::Epix::Config10kaV2 Epix10kaConfigType;
+typedef Pds::Epix10kaConfig::ConfigV2 Epix10kaConfigShadow;
 typedef Pds::Epix10kaConfig::ASIC_ConfigV1 Epix10kaASIC_ConfigShadow;
 
 static Pds::TypeId _epix10kaConfigType(Pds::TypeId::Id_Epix10kaConfig,
                                     Epix10kaConfigType::Version);
 
-typedef Pds::Epix::Config10ka2MV1   Epix10ka2MConfigType;
-typedef Pds::Epix::Config10kaQuad   Epix10kaQuadConfig;
-typedef Pds::Epix10ka2m::ConfigV1   Epix10ka2MConfigShadow;
+typedef Pds::Epix::Config10ka2MV2   Epix10ka2MConfigType;
+typedef Pds::Epix::Quad10kaConfigV1 Epix10kaQuadConfigV1;
+typedef Pds::Epix::Quad10kaConfigV2 Epix10kaQuadConfig;
+typedef Pds::Epix::Elem10kaConfigV1 Epix10kaElemConfig;
 
 static Pds::TypeId _epix10ka2MConfigType(Pds::TypeId::Id_Epix10ka2MConfig,
                                          Epix10ka2MConfigType::Version);
 
-typedef Pds::Epix::Config10kaQuadV1   Epix10kaQuadConfigType;
+typedef Pds::Epix::Config10kaQuadV2   Epix10kaQuadConfigType;
 
 static Pds::TypeId _epix10kaQuadConfigType(Pds::TypeId::Id_Epix10kaQuadConfig,
                                            Epix10kaQuadConfigType::Version);

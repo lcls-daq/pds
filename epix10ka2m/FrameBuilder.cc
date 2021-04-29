@@ -115,8 +115,8 @@ void FrameBuilder::_add_quad(unsigned quad)
 
   //  Each quad arrives on a separate lane
   //  A super row crosses 2 elements; each element contains 2x2 ASICs
-  const unsigned asicRows     = Pds::Epix::Config10ka::_numberOfRowsPerAsic;
-  const unsigned elemRowSize  = Pds::Epix::Config10ka::_numberOfAsicsPerRow*Pds::Epix::Config10ka::_numberOfPixelsPerAsicRow;
+  const unsigned asicRows     = Epix10kaElemConfig::_numberOfRowsPerAsic;
+  const unsigned elemRowSize  = Epix10kaElemConfig::_numberOfAsicsPerRow*Epix10kaElemConfig::_numberOfPixelsPerAsicRow;
 
   const uint16_t* u = reinterpret_cast<const uint16_t*>(e+1);
   

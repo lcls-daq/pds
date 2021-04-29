@@ -13,16 +13,16 @@ using namespace Pds::Epix10ka;
 const char* Epix10kaDestination::name()
 {
   static const char* _names[NumberOf + 1] = {
-      "Data VC, invalid destination",
       "Registers",
+      "Data VC, invalid destination",
       "Oscilloscope",
       "--INVALID--"
   };
   switch (_dest) {
-    case Data:
+    case Registers:
       return _names[0];
       break;
-    case Registers:
+    case Data:
       return _names[1];
       break;
     case Oscilloscope:

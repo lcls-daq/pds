@@ -19,7 +19,6 @@
 #include "pds/pgp/Configurator.hh"
 #include "pds/epix10ka/Epix10kaConfigurator.hh"
 #include "pds/epix10ka/Epix10kaDestination.hh"
-#include "pds/epix10ka/Epix10kaStatusRegisters.hh"
 #include "ndarray/ndarray.h"
 
 using namespace Pds::Epix10ka;
@@ -28,54 +27,62 @@ class Epix10kaDestination;
 
 //  configAddrs array elements are address:useModes
 
+static uint32_t configStrAddrs[Epix10kaConfigShadow::NumberOfStrValues][2] = {
+    {GitHashAddr,     1}, // FirmwareHash
+    {BuildStampAddr,  1}, // FirmwareDesc
+};
+
 static uint32_t configAddrs[Epix10kaConfigShadow::NumberOfValues][2] = {
-    {0x00,  1}, //  version
-    {0x3d,  0}, //  usePgpEvr
-    {0,		  2}, //  evrRunCode
-    {0,     2}, //  evrDaqCode
-    {0,     2}, //  evrRunTrigDelay
-    {0x02,  0}, //  epixRunTrigDelay
-    {0x07,  0}, //  DacSetting
-    {0x29,  0}, //  AsicPins, etc
-    {0x2a,  0}, //  AsicPinControl, etc
-    {0x20,  0}, //  AcqToAsicR0Delay
-    {0x21,  0}, //  AsicR0ToAsicAcq
-    {0x22,  0}, //  AsicAcqWidth
-    {0x23,  0}, //  AsicAcqLToPPmatL
-    {0x3a,  0}, //  AsicPPmatToReadout
-    {0x24,  0}, //  AsicRoClkHalfT
-    {0x25,  0}, //  AdcReadsPerPixel
-    {0x26,  0}, //  AdcClkHalfT
-    {0x2b,  0}, //  AsicR0Width
-    {0,     2}, //  AdcPipelineDelay
-    {0x90,  0}, //  AdcPipelineDelay0
-    {0x91,  0}, //  AdcPipelineDelay1
-    {0x92,  0}, //  AdcPipelineDelay2
-    {0x93,  0}, //  AdcPipelineDelay3
-    {0,     2}, //  SyncParams
-    {0x2e,  0}, //  PrepulseR0Width
-    {0x2f,  0}, //  PrepulseR0Delay
-    {0x30,  1}, //  DigitalCardId0
-    {0x31,  1}, //  DigitalCardId1
-    {0x32,  1}, //  AnalogCardId0
-    {0x33,  1}, //  AnalogCardId1
-    {0x3b,  1}, //  CarrierId0
-    {0x3c,  1}, //  CarrierId1
-    {0,     2}, //  NumberOfAsicsPerRow
-    {0,     2}, //  NumberOfAsicsPerColumn
-    {0,     2}, //  NumberOfRowsPerAsic
-    {0,     2}, //  NumberOfReadableRowsPerAsic
-    {0,     2}, //  NumberOfPixelsPerAsicRow
-    {0,     2}, //  CalibrationRowCountPerASIC,
-    {0,     2}, //  EnvironmentalRowCountPerASIC,
-    {0x10,  1}, //  BaseClockFrequency
-    {0xd,   0}, //  AsicMask
-    {0x11,  0}, //  EnableAutomaticRunTrigger
-    {0x12,  0}, //  NumberClockTicksPerRunTrigger
-    {0x52,  0}, //  ScopeSetup1
-    {0x53,  0}, //  ScopeSetup2
-    {0x54,  0}, //  ScopeLengthAndSkip
-    {0x55,  0}, //  ScopeInputSelects
+    {FpgaAddrBase+0x00,         1}, //  version
+    {FpgaAddrBase+0x3d,         0}, //  usePgpEvr
+    {0,		                      2}, //  evrRunCode
+    {0,                         2}, //  evrDaqCode
+    {0,                         2}, //  evrRunTrigDelay
+    {FpgaAddrBase+0x02,         0}, //  epixRunTrigDelay
+    {FpgaAddrBase+0x04,         0}, //  epixDaqTrigDelay
+    {FpgaAddrBase+0x07,         0}, //  DacSetting
+    {FpgaAddrBase+0x29,         0}, //  AsicPins, etc
+    {FpgaAddrBase+0x2a,         0}, //  AsicPinControl, etc
+    {FpgaAddrBase+0x20,         0}, //  AcqToAsicR0Delay
+    {FpgaAddrBase+0x21,         0}, //  AsicR0ToAsicAcq
+    {FpgaAddrBase+0x22,         0}, //  AsicAcqWidth
+    {FpgaAddrBase+0x23,         0}, //  AsicAcqLToPPmatL
+    {FpgaAddrBase+0x3a,         0}, //  AsicPPmatToReadout
+    {FpgaAddrBase+0x24,         0}, //  AsicRoClkHalfT
+    {FpgaAddrBase+0x26,         0}, //  AdcClkHalfT
+    {FpgaAddrBase+0x2b,         0}, //  AsicR0Width
+    {0,                         2}, //  AdcPipelineDelay
+    {FpgaAddrBase+0x90,         0}, //  AdcPipelineDelay0
+    {FpgaAddrBase+0x91,         0}, //  AdcPipelineDelay1
+    {FpgaAddrBase+0x92,         0}, //  AdcPipelineDelay2
+    {FpgaAddrBase+0x93,         0}, //  AdcPipelineDelay3
+    {0,                         2}, //  SyncParams
+    {FpgaAddrBase+0x2e,         0}, //  PrepulseR0Width
+    {FpgaAddrBase+0x2f,         0}, //  PrepulseR0Delay
+    {FpgaAddrBase+0x30,         1}, //  DigitalCardId0
+    {FpgaAddrBase+0x31,         1}, //  DigitalCardId1
+    {FpgaAddrBase+0x32,         1}, //  AnalogCardId0
+    {FpgaAddrBase+0x33,         1}, //  AnalogCardId1
+    {FpgaAddrBase+0x3b,         1}, //  CarrierId0
+    {FpgaAddrBase+0x3c,         1}, //  CarrierId1
+    {0,                         2}, //  NumberOfAsicsPerRow
+    {0,                         2}, //  NumberOfAsicsPerColumn
+    {0,                         2}, //  NumberOfRowsPerAsic
+    {0,                         2}, //  NumberOfReadableRowsPerAsic
+    {0,                         2}, //  NumberOfPixelsPerAsicRow
+    {0,                         2}, //  CalibrationRowCountPerASIC,
+    {0,                         2}, //  EnvironmentalRowCountPerASIC,
+    {FpgaAddrBase+0x10,         1}, //  BaseClockFrequency
+    {FpgaAddrBase+0xd,          0}, //  AsicMask
+    {FpgaAddrBase+0x11,         0}, //  EnableAutomaticRunTrigger
+    {FpgaAddrBase+0x12,         0}, //  NumberClockTicksPerRunTrigger
+    {FpgaExtAddrBase+0x0,       0}, //  GhostCorrEn
+    {FpgaExtAddrBase+0x2,       0}, //  OversampleEn
+    {FpgaExtAddrBase+0x3,       0}, //  OversampleSize
+    {OscilloscopeAddrBase+0x02, 0}, //  ScopeSetup1
+    {OscilloscopeAddrBase+0x03, 0}, //  ScopeSetup2
+    {OscilloscopeAddrBase+0x04, 0}, //  ScopeLengthAndSkip
+    {OscilloscopeAddrBase+0x05, 0}, //  ScopeInputSelects
 };
 
 static uint32_t AconfigAddrs[Epix10kaASIC_ConfigShadow::NumberOfValues][2] = {
@@ -115,7 +122,7 @@ Epix10kaConfigurator::Epix10kaConfigurator(int f, unsigned d) :
   allocateVC(7);
   checkPciNegotiatedBandwidth();
   _d.dest(Epix10kaDestination::Registers);  // Turn on monitoring immediately.
-  _pgp->writeRegister(&_d, 1, 1);
+  _pgp->writeRegister(&_d, RunTriggerEnable, 1);
   _pgp->writeRegister(&_d, MonitorEnableAddr, 1);
   printf("Epix10kaConfigurator constructor\n");
   //    printf("\tlocations _pool(%p), _config(%p)\n", _pool, &_config);
@@ -461,6 +468,31 @@ unsigned Epix10kaConfigurator::writeConfig() {
     if (_pgp->writeRegister(&_d, DaqTrigggerDelayAddr, RunToDaqTriggerDelay+_s->get(Epix10kaConfigShadow::EpixRunTrigDelay))) {
       printf("Epix10kaConfigurator::writeConfig failed writing DaqTrigggerDelay\n");
       ret = Failure;
+    }
+    microSpin(100);
+  }
+  for (unsigned i=0; !ret && i<(Epix10kaConfigShadow::NumberOfStrValues); i++) {
+    if (configStrAddrs[i][1] == ReadOnly) {
+      uint32_t size = _s->size((Epix10kaConfigShadow::StrRegisters)i);
+      uint32_t maxchars = _s->maxchars((Epix10kaConfigShadow::StrRegisters)i);
+      uint32_t* values = new uint32_t[size];
+      char* buffer = new char[maxchars];
+      if (_debug & 1) printf("Epix10kaConfigurator::writeConfig reading str at addr(0x%x)", configStrAddrs[i][0]);
+      if (_pgp->readRegister(&_d, configStrAddrs[i][0], 0x2000+i, values, size)) {
+        printf("Epix10kaConfigurator::writeConfig failed reading %s\n", _s->name((Epix10kaConfigShadow::StrRegisters)i));
+        ret |= Failure;
+      } else {
+        if (_s->ishash((Epix10kaConfigShadow::StrRegisters)i)) {
+          for (int j=0;j<size;j++) {
+            sprintf(buffer + j*8, "%.08x", values[size-j-1]);
+          }
+        } else {
+          strcpy(buffer, (char*) values);
+        }
+        _s->setStr((Epix10kaConfigShadow::StrRegisters)i, buffer);
+      }
+      delete[] values;
+      delete[] buffer;
     }
     microSpin(100);
   }

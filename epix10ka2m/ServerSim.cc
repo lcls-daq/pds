@@ -67,7 +67,7 @@ void     ServerSim::allocated  (const Allocate& a)
 
 unsigned ServerSim::configure(const Pds::Epix::PgpEvrConfig& evr,
                               const Epix10kaQuadConfig& cfg, 
-                              Pds::Epix::Config10ka* elem,
+                              Epix10kaElemConfig* elem,
                               bool forceConfig)
 {
   unsigned result =  _hdw ? _hdw->configure(evr,cfg,elem,forceConfig) : 0;

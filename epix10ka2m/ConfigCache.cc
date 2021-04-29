@@ -54,7 +54,7 @@ namespace Pds {
     public:
       void routine()
       {
-        _result = _srv.configure( _c.evr(), _c.quad(_q), const_cast<Epix::Config10ka*>(&_c.elemCfg(_q*4)) );
+        _result = _srv.configure( _c.evr(), _c.quad(_q), const_cast<Epix10kaElemConfig*>(&_c.elemCfg(_q*4)) );
         _sem.give();
       }
       unsigned result() { 
@@ -105,12 +105,14 @@ int Epix10ka2m::ConfigCache::configure(const std::vector<Pds::Epix10ka2m::Server
   switch(info.device()) {
   case DetInfo::Epix10ka2M  : 
     { const Epix10ka2MConfigType* c = reinterpret_cast<const Epix10ka2MConfigType*>(current());
+      updateDaqCode(const_cast<Epix::PgpEvrConfig&>(c->evr()), code());
       if (_cache) delete[] _cache;
       _cache = new char[c->_sizeof()];
       memcpy(_cache,c,c->_sizeof());
+      Epix10ka2MConfigType* cfg = reinterpret_cast<Epix10ka2MConfigType*>(_cache);
 #ifdef USE_THREADS
       for(unsigned q=0; q<srv.size(); q++) {
-        _routine[q] = new Epix10ka2m::ConfigRoutine(q, *srv[q], *(const Epix10ka2MConfigType*)_cache);
+        _routine[q] = new Epix10ka2m::ConfigRoutine(q, *srv[q], *cfg);
         _task[q]->call( _routine[q] );
       }
       for(unsigned q=0; q<srv.size(); q++) {
@@ -118,20 +120,18 @@ int Epix10ka2m::ConfigCache::configure(const std::vector<Pds::Epix10ka2m::Server
         delete _routine[q];
       }
 #else
-      Epix10ka2MConfigType* cfg = reinterpret_cast<Epix10ka2MConfigType*>(_cache);
-      updateDaqCode(const_cast<Epix::PgpEvrConfig&>(cfg->evr()), code());
       for(unsigned q=0; q<srv.size(); q++)
-        _result |= srv[q]->configure( cfg->evr(), cfg->quad(q), const_cast<Epix::Config10ka*>(&cfg->elemCfg(q*4)) );
+        _result |= srv[q]->configure( cfg->evr(), cfg->quad(q), const_cast<Epix10kaElemConfig*>(&cfg->elemCfg(q*4)) );
 #endif
     } break;
   case DetInfo::Epix10kaQuad:
     { const Epix10kaQuadConfigType* c = reinterpret_cast<const Epix10kaQuadConfigType*>(current());
+      updateDaqCode(const_cast<Epix::PgpEvrConfig&>(c->evr()), code());
       if (_cache) delete[] _cache;
       _cache = new char[c->_sizeof()];
       memcpy(_cache,c,c->_sizeof());
       Epix10kaQuadConfigType* cfg = reinterpret_cast<Epix10kaQuadConfigType*>(_cache);
-      updateDaqCode(const_cast<Epix::PgpEvrConfig&>(cfg->evr()), code());
-      if ((result = srv[0]->configure( cfg->evr(), cfg->quad(), const_cast<Epix::Config10ka*>(&cfg->elemCfg(0)) ))) {
+      if ((result = srv[0]->configure( cfg->evr(), cfg->quad(), const_cast<Epix10kaElemConfig*>(&cfg->elemCfg(0)) ))) {
         _result |= result;
       };
     } break;

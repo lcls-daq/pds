@@ -1114,6 +1114,7 @@ unsigned Configurator::_checkIsEnASIC()
           unsigned addr = AconfigAddrs[is_en_idx].addr;
           Reg&     reg  = q->_asicSaci[ia].reg[addr];
           unsigned orig = confAsic->get(Epix10kaASIC_ConfigShadow::is_en);
+          unsigned mask = confAsic->mask(Epix10kaASIC_ConfigShadow::is_en);
           if (_debug & 1) PRINT_LINE("Configurator::checkIsEnASIC Unsetting is_en bit of addr(%p)", &reg);
           confAsic->set(Epix10kaASIC_ConfigShadow::is_en, 0);
           try {
@@ -1121,9 +1122,9 @@ unsigned Configurator::_checkIsEnASIC()
             reg = u[is_en_idx];
             unsigned v = reg;
             if (_debug & 1) PRINT_LINE("%s read addr(%p) data(0x%x)", __PRETTY_FUNCTION__, &reg, v);
-            if (v != u[is_en_idx]) {
+            if ((v & mask) != (u[is_en_idx] & mask)) {
               PRINT_LINE("%s read addr(%p) return unexpected data: 0x%x vs expected 0x%x", __PRETTY_FUNCTION__,
-                         &reg, v, u[is_en_idx]);
+                         &reg, (v & mask), (u[is_en_idx] & mask));
               ret |= Failure;
             }
           }

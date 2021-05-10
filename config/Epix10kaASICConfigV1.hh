@@ -100,6 +100,7 @@ namespace Pds {
         };
 
         unsigned                    offset   (Registers) const;
+        unsigned                    mask     (Registers) const;
         unsigned                    get      (Registers) const;
         void                        set      (Registers, unsigned);
         void                        clear    ();

@@ -886,6 +886,9 @@ unsigned Epix10kaConfigurator::checkWrittenASIC(bool writeBack) {
 
 unsigned Epix10kaConfigurator::checkIsEnASIC() {
   unsigned ret = Success;
+  uint32_t myBuffer[Epix10kaASIC_ConfigShadow::NumberOfValues];
+  Epix10kaASIC_ConfigShadow* readAsic = (Epix10kaASIC_ConfigShadow*) myBuffer;
+  uint32_t r, c;
   if (_config && _pgp) {
     _d.dest(Epix10kaDestination::Registers);
     unsigned m = _config->asicMask();
@@ -897,7 +900,6 @@ unsigned Epix10kaConfigurator::checkIsEnASIC() {
           uint32_t* u = (uint32_t*) confAsic;
           uint32_t a = AsicAddrBase + (AsicAddrOffset * index);
           unsigned orig = confAsic->get(Epix10kaASIC_ConfigShadow::is_en);
-          unsigned rbv = 0;
           printf("Epix10kaConfigurator::checkIsEnASIC setting is_en to zero(%u)\n", index);
           confAsic->set(Epix10kaASIC_ConfigShadow::is_en, 0);
           // write to the is_en bit
@@ -907,16 +909,17 @@ unsigned Epix10kaConfigurator::checkIsEnASIC() {
             ret |= Failure;
           }
           // read back the register with the is_en bit
-          if (_pgp->readRegister(&_d, a+AconfigAddrs[is_en_idx][0], 0xb000+(is_en_idx<<2)+index, &rbv, 1)) {
+          if (_pgp->readRegister(&_d, a+AconfigAddrs[is_en_idx][0], 0xb000+(is_en_idx<<2)+index, myBuffer+is_en_idx, 1)) {
             printf("Epix10kaConfigurator::checkIsEnASIC read %s failed on ASIC %u\n",
                    Epix10kaASIC_ConfigShadow::name(Epix10kaASIC_ConfigShadow::is_en), index);
             ret |= Failure;
           }
           // check the value of the register with the is_en bit
-          if (rbv != u[is_en_idx]) {
+          if ((r = readAsic->get(Epix10kaASIC_ConfigShadow::is_en)) != 
+              (c = confAsic->get(Epix10kaASIC_ConfigShadow::is_en))) {
             printf("Epix10kaConfigurator::checkIsEnASIC read %s on ASIC %u return unexpected value of %u - expected %u\n",
                    Epix10kaASIC_ConfigShadow::name(Epix10kaASIC_ConfigShadow::is_en), index,
-                   rbv, u[is_en_idx]) ;
+                   r, c) ;
             ret |= Failure;
           }
           confAsic->set(Epix10kaASIC_ConfigShadow::is_en, orig);

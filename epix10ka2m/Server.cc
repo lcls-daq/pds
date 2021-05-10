@@ -22,7 +22,7 @@
 
 #include "pds/epix10ka2m/Server.hh"
 #include "pds/epix10ka2m/Configurator.hh"
-#include "pds/epix10ka/Epix10kaDestination.hh"
+#include "pds/epix10ka2m/Destination.hh"
 #include "pds/xtc/CDatagram.hh"
 #include "pdsdata/psddl/epix.ddl.h"
 #include "pds/config/EpixConfigType.hh"
@@ -352,7 +352,7 @@ int Epix10ka2m::ServerSequence::fetch( char* payload, int flags ) {
      if (pgpCardRx.error&DMA_ERR_BUS)   damageMask |= 8;
    }
 
-   if (pgpGetVc(pgpCardRx.dest) == Epix10ka::Epix10kaDestination::Oscilloscope) {
+   if (pgpGetVc(pgpCardRx.dest) == Epix10ka2m::Destination::Oscilloscope) {
      
      if (damageMask) {
        _xtcSamplr.damage.increase(Damage::UserDefined);
@@ -376,7 +376,7 @@ int Epix10ka2m::ServerSequence::fetch( char* payload, int flags ) {
    //   data->fixup(); //fix pgp header for v3 to v2
    data->first.lane = _quad;
 
-   if (pgpGetVc(pgpCardRx.dest) == Epix10ka::Epix10kaDestination::Data) {
+   if (pgpGetVc(pgpCardRx.dest) == Epix10ka2m::Destination::Data) {
 
      if ((ret > 0) && (ret < (int)_payloadSize)) {
        printf("Epix10ka2m::ServerSequence::fetch() returning Ignore, ret was %d(%u)\n", ret, _payloadSize);
@@ -519,7 +519,7 @@ unsigned Epix10ka2m::ServerSequence::flushInputQueue(int f, bool flag) {
     ret = select( f+1, &fds, NULL, NULL, &timeout);
     if (ret>0) {
       ::read(f, &pgpCardRx, sizeof(DmaReadData));
-      if (pgpGetVc(pgpCardRx.dest) == Epix10ka::Epix10kaDestination::Oscilloscope) {
+      if (pgpGetVc(pgpCardRx.dest) == Epix10ka2m::Destination::Oscilloscope) {
         scopeCount += 1;
       }
       count += 1;

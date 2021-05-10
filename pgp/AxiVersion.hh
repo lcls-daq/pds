@@ -30,6 +30,7 @@ namespace Pds {
       uint32_t reserved_0x800[(0x800-0x710)>>2];
       Reg _buildStamp[64];
     public:
+      std::string gitHash() const;
       std::string buildStamp() const;
     };
   };

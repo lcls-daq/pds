@@ -65,11 +65,13 @@ namespace Pds {
       }
 
       unsigned configure(Pds::Epix10kaServer* srv) {
-        const Epix10kaConfigType* cfg = reinterpret_cast<const Epix10kaConfigType*>(current());
+        const Epix10kaConfigType* c = reinterpret_cast<const Epix10kaConfigType*>(current());
         if (_cache) delete[] _cache;
-        _cache = new char[cfg->_sizeof()];
-        memcpy(_cache,cfg,cfg->_sizeof());
-        return srv->configure(reinterpret_cast<Epix10kaConfigType*>(_cache));
+        _cache = new char[c->_sizeof()];
+        memcpy(_cache,c,c->_sizeof());
+        Epix10kaConfigType* cfg = reinterpret_cast<Epix10kaConfigType*>(_cache);
+        Epix10kaConfig::setDaqCode(*cfg, code());
+        return srv->configure(cfg);
       }
     private:
       int _size(void* tc) const { return ((Epix10kaConfigType*)tc)->_sizeof(); }

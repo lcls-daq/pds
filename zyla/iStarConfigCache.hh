@@ -10,7 +10,8 @@ namespace Pds {
     public:
       iStarConfigCache(const Src& xtc, Driver& driver);
       virtual ~iStarConfigCache();
-      virtual bool configure(bool apply=true);
+    private:
+      virtual bool _configure(bool apply);
     private:
       const iStarConfigType* _cfg;
     };

@@ -94,7 +94,7 @@ ZylaConfigCache::ZylaConfigCache(const Src& xtc, Driver& driver) :
 ZylaConfigCache::~ZylaConfigCache()
 {}
 
-bool ZylaConfigCache::configure(bool apply)
+bool ZylaConfigCache::_configure(bool apply)
 {
   _cfg = reinterpret_cast<const ZylaConfigType*>(current());
   if (_cfg) {

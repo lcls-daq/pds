@@ -234,11 +234,11 @@ bool Driver::set_intensifier(GateMode gate, InsertionDelay delay, AT_64 mcp_gain
   if(at_check_implemented(AT3_GATE_MODE)) {
     // Set the gate mode
     switch(gate) {
-      set_enum_case(AT3_GATE_MODE, CWOn,        L"CWOn");
-      set_enum_case(AT3_GATE_MODE, CWOff,       L"CWOff");
-      set_enum_case(AT3_GATE_MODE, FireOnly,    L"FireOnly");
-      set_enum_case(AT3_GATE_MODE, GateOnly,    L"GateOnly");
-      set_enum_case(AT3_GATE_MODE, FireAndGate, L"FireAndGate");
+      set_enum_case(AT3_GATE_MODE, CWOn,        L"CW On");
+      set_enum_case(AT3_GATE_MODE, CWOff,       L"CW Off");
+      set_enum_case(AT3_GATE_MODE, FireOnly,    L"Fire Only");
+      set_enum_case(AT3_GATE_MODE, GateOnly,    L"Gate Only");
+      set_enum_case(AT3_GATE_MODE, FireAndGate, L"Fire And Gate");
       set_enum_case(AT3_GATE_MODE, DDG,         L"DDG");
       default:
         fprintf(stderr, "Unknown gate mode value: %d\n", gate);
@@ -250,12 +250,14 @@ bool Driver::set_intensifier(GateMode gate, InsertionDelay delay, AT_64 mcp_gain
   }
 
   if(at_check_implemented(AT3_INSERTION_DELAY)) {
-    switch(delay){
-      set_enum_case(AT3_INSERTION_DELAY, Normal, L"Normal");
-      set_enum_case(AT3_INSERTION_DELAY, Fast,   L"Fast");
-      default:
-        fprintf(stderr, "Unknown delay value: %d\n", gate);
-        return false;
+    if (at_check_write(AT3_INSERTION_DELAY)) {
+      switch(delay){
+        set_enum_case(AT3_INSERTION_DELAY, Normal, L"Normal");
+        set_enum_case(AT3_INSERTION_DELAY, Fast,   L"Fast");
+        default:
+          fprintf(stderr, "Unknown delay value: %d\n", gate);
+          return false;
+      }
     }
   } else {
     fprintf(stderr, "Feature %ls is not implemented for this camera!\n", AT3_INSERTION_DELAY);
@@ -263,9 +265,8 @@ bool Driver::set_intensifier(GateMode gate, InsertionDelay delay, AT_64 mcp_gain
   }
 
   if(at_check_implemented(AT3_MCP_INTELLIGATE)) {
-    if (delay == Normal) {
+    if (at_check_write(AT3_MCP_INTELLIGATE))
       set_config_bool(AT3_MCP_INTELLIGATE, mcp_intelligate);
-    }
   } else {
     fprintf(stderr, "Feature %ls is not implemented for this camera!\n", AT3_MCP_INTELLIGATE);
     return false;

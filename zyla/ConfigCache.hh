@@ -16,10 +16,11 @@ namespace Pds {
       ConfigCache(const Src& xtc, Driver& driver);
       virtual ~ConfigCache();
     public:
-      virtual bool configure(bool apply=true) = 0;
+      bool configure(bool apply=true);
       const char* get_error() const;
       void clear_error();
     private:
+      virtual bool _configure(bool apply) = 0;
       int _size (void*) const;
     protected:
       char*   _error;

@@ -67,4 +67,14 @@ void Zyla::ConfigCache::clear_error() {
   memset(_error, 0, MaxErrMsgLength);
 }
 
+bool Zyla::ConfigCache::configure(bool apply)
+{
+  if (!_configure(apply)) {
+    _configtc.damage.increase(Damage::UserDefined);
+    return false;
+  } else {
+    return true;
+  }
+}
+
 int Zyla::ConfigCache::_size(void*) const { return __size(_config.src()); }

@@ -88,7 +88,7 @@ iStarConfigCache::iStarConfigCache(const Src& xtc, Driver& driver) :
 iStarConfigCache::~iStarConfigCache()
 {}
 
-bool iStarConfigCache::configure(bool apply)
+bool iStarConfigCache::_configure(bool apply)
 {
   _cfg = reinterpret_cast<const iStarConfigType*>(current());
   if (_cfg) {

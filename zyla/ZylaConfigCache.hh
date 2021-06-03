@@ -10,7 +10,8 @@ namespace Pds {
     public:
       ZylaConfigCache(const Src& xtc, Driver& driver);
       virtual ~ZylaConfigCache();
-      virtual bool configure(bool apply=true);
+    private:
+      virtual bool _configure(bool apply);
     private:
       const ZylaConfigType* _cfg;
     };

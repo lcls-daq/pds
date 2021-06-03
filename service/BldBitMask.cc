@@ -54,11 +54,20 @@ namespace Pds {
   template <unsigned N>
   int BitMaskArray<N>::write(char* buf) const
   {
+    bool first = true;
+    char* wp = buf;
     for (unsigned j = N; j > 0; j--) {
-      if (j==N) sprintf(buf, "0x%x", value(j-1));
-      else sprintf(buf, "%08x", value(j-1));
+      if (first) {
+        if (value(j-1) || j==1) {
+          wp += sprintf(wp, "0x%x", value(j-1));
+          first = false;
+        }
+      } else {
+        wp += sprintf(wp, "%08x", value(j-1));
+      }
     }
-    return 0;
+    printf("nchars %ld\n", wp - buf);
+    return wp - buf;
   }
 
   // Explicitly declare the ones needed for the standard BLD size (256 bits)

@@ -238,7 +238,7 @@ bool Driver::set_intensifier(GateMode gate, InsertionDelay delay, AT_64 mcp_gain
       set_enum_case(AT3_GATE_MODE, CWOff,       L"CW Off");
       set_enum_case(AT3_GATE_MODE, FireOnly,    L"Fire Only");
       set_enum_case(AT3_GATE_MODE, GateOnly,    L"Gate Only");
-      set_enum_case(AT3_GATE_MODE, FireAndGate, L"Fire And Gate");
+      set_enum_case(AT3_GATE_MODE, FireAndGate, L"Fire and Gate");
       set_enum_case(AT3_GATE_MODE, DDG,         L"DDG");
       default:
         fprintf(stderr, "Unknown gate mode value: %d\n", gate);

@@ -234,18 +234,21 @@ void VmonEb::server(const Server& srv)
   const EbServer& e = static_cast<const EbServer&>(srv);
   std::vector<std::string> names=_fixup->desc().get_names();
 
-  switch(e.client().level()) {
-  case Level::Source:
-    names[e.id()]=std::string(DetInfo::name(static_cast<const DetInfo&>(e.client()))); 
-    break;
-  case Level::Reporter:
-    names[e.id()]=std::string(BldInfo::name(static_cast<const BldInfo&>(e.client()))); 
-  default:
-    { char* buff = new char[256];
-      Node::ip_name(static_cast<const ProcInfo&>(e.client()).ipAddr(),buff,256);
-      names[e.id()]=std::string(buff);
-      delete[] buff;
-    } break;
+  if (e.id() < names.size()) {
+    switch(e.client().level()) {
+    case Level::Source:
+      names[e.id()]=std::string(DetInfo::name(static_cast<const DetInfo&>(e.client())));
+      break;
+    case Level::Reporter:
+      names[e.id()]=std::string(BldInfo::name(static_cast<const BldInfo&>(e.client())));
+      break;
+    default:
+      { char* buff = new char[256];
+        Node::ip_name(static_cast<const ProcInfo&>(e.client()).ipAddr(),buff,256);
+        names[e.id()]=std::string(buff);
+        delete[] buff;
+      } break;
+    }
   }
 
   _fixup->desc().set_names(names);

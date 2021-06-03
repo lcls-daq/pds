@@ -6,6 +6,7 @@
 #include "pdsdata/xtc/BldInfo.hh"
 #include "pdsdata/xtc/L1AcceptEnv.hh"
 
+#include <stdio.h>
 //#define DBUG
 
 static Pds::BldInfo EBeamBPM(uint32_t(-1UL),Pds::BldInfo::EBeam);
@@ -35,8 +36,9 @@ namespace Pds {
     private:
       static Dgram _dgram(const Pds::Datagram& dg);
     private:
+      static const unsigned MaxInfo = 64;
       uint32_t _payload;
-      Src      _info[32];
+      Src      _info[MaxInfo];
     };
   };
 };
@@ -86,8 +88,14 @@ inline void Pds::SummaryDg::Dg::append(const Pds::Src& info,
   printf("SummaryDg::append %08x.%08x %08x\n",
          info.log(),info.phy(),dmg.value());
 #endif
-  datagram().xtc.damage.increase(dmg.value());
-  *static_cast<Pds::Src*>(datagram().xtc.alloc(sizeof(info))) = info;
+  const SummaryDg::Xtc& sumdg = static_cast<const SummaryDg::Xtc&>(datagram().xtc);
+  if (sumdg.nSources() < MaxInfo) {
+    datagram().xtc.damage.increase(dmg.value());
+    *static_cast<Pds::Src*>(datagram().xtc.alloc(sizeof(info))) = info;
+  } else {
+    printf("SummaryDg::append number of sources at maximum (%u) - unable to append!\n",
+           MaxInfo);
+  }
 }
 
 inline void Pds::SummaryDg::Dg::append(Pds::L1AcceptEnv::L3TResult v)

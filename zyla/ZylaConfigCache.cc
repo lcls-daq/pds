@@ -209,13 +209,17 @@ bool ZylaConfigCache::_configure(bool apply)
     printf("          (binX,binY) : %lld, %lld\n",
            _driver.image_binX(), _driver.image_binY());
     printf("Image exposure time (sec) : %g\n", _driver.exposure());
-           _driver.get_shutter_mode(_wc_buffer, MaxAtMsgLength);
+
+    _driver.get_shutter_mode(_wc_buffer, MaxAtMsgLength);
     printf("Shutter mode: %ls\n", _wc_buffer);
-           _driver.get_trigger_mode(_wc_buffer, MaxAtMsgLength);
+
+    _driver.get_trigger_mode(_wc_buffer, MaxAtMsgLength);
     printf("Trigger mode: %ls\n", _wc_buffer);
-          _driver.get_gain_mode(_wc_buffer, MaxAtMsgLength);
+
+    _driver.get_gain_mode(_wc_buffer, MaxAtMsgLength);
     printf("Gain mode: %ls\n", _wc_buffer);
-          _driver.get_readout_rate(_wc_buffer, MaxAtMsgLength);
+
+    _driver.get_readout_rate(_wc_buffer, MaxAtMsgLength);
     printf("Pixel readout rate: %ls\n", _wc_buffer);
     if (_driver.overlap_mode()) {
       printf("Camera readout set to overlap mode!\n");

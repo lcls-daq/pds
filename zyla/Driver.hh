@@ -102,6 +102,7 @@ namespace Pds {
         AT_64 image_binX() const;
         AT_64 image_binY() const;
         AT_64 image_binning() const;
+        AT_64 mcp_gain() const;
         double readout_time() const;
         double frame_rate() const;
         double pixel_height() const;
@@ -112,6 +113,7 @@ namespace Pds {
         double exposure_max() const;
         bool overlap_mode() const;
         bool cooling_on() const;
+        bool mcp_intelligate_on() const;
         bool check_cooling(bool is_stable=true) const;
         bool wait_cooling(unsigned timeout, bool is_stable=true) const;
 
@@ -121,6 +123,8 @@ namespace Pds {
         bool get_gain_mode(AT_WC* buffer, int buffer_size) const;
         bool get_readout_rate(AT_WC* buffer, int buffer_size) const;
         bool get_binning_mode(AT_WC* buffer, int buffer_size) const;
+        bool get_gate_mode(AT_WC* buffer, int buffer_size) const;
+        bool get_insertion_delay(AT_WC* buffer, int buffer_size) const;
         bool get_name(AT_WC* buffer, int buffer_size) const;
         bool get_model(AT_WC* buffer, int buffer_size) const;
         bool get_family(AT_WC* buffer, int buffer_size) const;

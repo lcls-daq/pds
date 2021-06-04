@@ -214,13 +214,29 @@ bool iStarConfigCache::_configure(bool apply)
     printf("          (binX,binY) : %lld, %lld\n",
            _driver.image_binX(), _driver.image_binY());
     printf("Image exposure time (sec) : %g\n", _driver.exposure());
-           _driver.get_shutter_mode(_wc_buffer, MaxAtMsgLength);
+
+    _driver.get_shutter_mode(_wc_buffer, MaxAtMsgLength);
     printf("Shutter mode: %ls\n", _wc_buffer);
-           _driver.get_trigger_mode(_wc_buffer, MaxAtMsgLength);
+
+    _driver.get_trigger_mode(_wc_buffer, MaxAtMsgLength);
     printf("Trigger mode: %ls\n", _wc_buffer);
-          _driver.get_gain_mode(_wc_buffer, MaxAtMsgLength);
+
+    _driver.get_gain_mode(_wc_buffer, MaxAtMsgLength);
     printf("Gain mode: %ls\n", _wc_buffer);
-          _driver.get_readout_rate(_wc_buffer, MaxAtMsgLength);
+
+    _driver.get_gate_mode(_wc_buffer, MaxAtMsgLength);
+    printf("Gate mode: %ls\n", _wc_buffer);
+
+    _driver.get_insertion_delay(_wc_buffer, MaxAtMsgLength);
+    printf("Insertion delay: %ls\n", _wc_buffer);
+
+    if (_driver.mcp_intelligate_on()) {
+      printf("MCP Intelligate is enabled!\n");
+    }
+
+    printf("MCP gain: %lld\n", _driver.mcp_gain());
+
+    _driver.get_readout_rate(_wc_buffer, MaxAtMsgLength);
     printf("Pixel readout rate: %ls\n", _wc_buffer);
     if (_driver.overlap_mode()) {
       printf("Camera readout set to overlap mode!\n");

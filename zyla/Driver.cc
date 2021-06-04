@@ -556,6 +556,11 @@ AT_64 Driver::image_binning() const {
   return binning;
 }
 
+AT_64 Driver::mcp_gain() const
+{
+  return at_get_int(AT3_MCP_GAIN);
+}
+
 double Driver::readout_time() const
 {
   return at_get_float(AT3_READOUT_TIME);
@@ -608,6 +613,13 @@ bool Driver::cooling_on() const
   AT_BOOL cooling_on;
   AT_GetBool(_cam, AT3_SENSOR_COOLING, &cooling_on);
   return (cooling_on == AT_TRUE);
+}
+
+bool Driver::mcp_intelligate_on() const
+{
+  AT_BOOL intelligate_on;
+  AT_GetBool(_cam, AT3_MCP_INTELLIGATE, &intelligate_on);
+  return (intelligate_on == AT_TRUE);
 }
 
 bool Driver::check_cooling(bool is_stable) const
@@ -708,6 +720,16 @@ bool Driver::get_readout_rate(AT_WC* buffer, int buffer_size) const
 bool Driver::get_binning_mode(AT_WC* buffer, int buffer_size) const
 {
   return at_get_enum(AT3_AOI_BINNING, buffer, buffer_size);
+}
+
+bool Driver::get_gate_mode(AT_WC* buffer, int buffer_size) const
+{
+  return at_get_enum(AT3_GATE_MODE, buffer, buffer_size);
+}
+
+bool Driver::get_insertion_delay(AT_WC* buffer, int buffer_size) const
+{
+  return at_get_enum(AT3_INSERTION_DELAY, buffer, buffer_size);
 }
 
 bool Driver::get_name(AT_WC* buffer, int buffer_size) const

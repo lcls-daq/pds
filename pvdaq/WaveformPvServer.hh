@@ -5,6 +5,18 @@
 
 namespace Pds {
   namespace PvDaq {
+    class AcqirisPvServer : public Pds_Epics::EpicsCA {
+      public:
+        AcqirisPvServer(const char*, Pds_Epics::PVMonitorCb*, const unsigned);
+        ~AcqirisPvServer();
+      public:
+        const char* name() const;
+        int  fetch      (void* copyTo, size_t len);
+        void update     ();
+      private:
+        char* _name;
+    };
+
     class QuadAdcPvServer : public Pds_Epics::EpicsCA {
       public:
         QuadAdcPvServer(const char*, Pds_Epics::PVMonitorCb*, const unsigned, const unsigned);

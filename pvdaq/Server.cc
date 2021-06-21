@@ -60,6 +60,7 @@ void Server::post(const void* p)
 #include "pds/pvdaq/BeamMonitorServer.hh"
 #include "pds/pvdaq/ControlsCameraServer.hh"
 #include "pds/pvdaq/QuadAdcServer.hh"
+#include "pds/pvdaq/AcqirisServer.hh"
 
 Server* Server::lookup(const char*    pvbase,
                        const char*    pvbase_alt,
@@ -69,6 +70,9 @@ Server* Server::lookup(const char*    pvbase,
 {
   Server* s=0;
   switch(info.device()) {
+  case Pds::DetInfo::Acqiris:
+    s = new AcqirisServer(pvbase,pvbase_alt,info,max_event_size,flags);
+    break;
   case Pds::DetInfo::Wave8:
     s = new BeamMonitorServer(pvbase,pvbase_alt,info);
     break;

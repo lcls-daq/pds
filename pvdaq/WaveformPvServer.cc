@@ -13,6 +13,51 @@ static const size_t strm_elem = strm_sz / ca_elem_sz;
 
 using namespace Pds::PvDaq;
 
+AcqirisPvServer::AcqirisPvServer(const char* name, Pds_Epics::PVMonitorCb* mon_cb, const unsigned nelems) :
+  Pds_Epics::EpicsCA (name, mon_cb, nelems),
+  _name(new char[strlen(name)+1])
+{
+  strcpy(_name, name);
+}
+
+AcqirisPvServer::~AcqirisPvServer()
+{
+    delete[] _name;
+}
+
+const char* AcqirisPvServer::name() const
+{
+  return _name;
+}
+
+int AcqirisPvServer::fetch(void* payload, size_t len)
+{
+#ifdef DBUG
+  printf("ConfigServer[%s] fetch %p\n",_channel.epicsName(),payload);
+#endif
+  int result = 0;
+  int nelem = _channel.nelements();
+  switch(_channel.type()) {
+  case DBR_TIME_SHORT:
+    {
+      if (nelem * sizeof (dbr_short_t) > len) {
+        result = -1;
+      } else {
+        dbr_short_t* inp = (dbr_short_t*)data();
+        dbr_short_t* outp = (dbr_short_t*)payload;
+        for(int k=0; k<nelem; k++) *outp++ = *inp++;
+        result = (char*)outp - (char*)payload;
+      }
+    }
+    break;
+  default: printf("Unsupported type %d\n", int(_channel.type())); result=-1; break;
+  }
+  return result;
+}
+
+
+void AcqirisPvServer::update() { _channel.get(); }
+
 QuadAdcPvServer::QuadAdcPvServer(const char* name, Pds_Epics::PVMonitorCb* mon_cb, const unsigned nchans, const unsigned elems) :
   Pds_Epics::EpicsCA (name, mon_cb, hdr_elem + nchans * (strm_elem + elems / (ca_elem_sz / elem_sz))),
   _name(new char[strlen(name)+1])

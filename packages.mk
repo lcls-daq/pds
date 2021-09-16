@@ -35,7 +35,7 @@ endif
 #  packages += fexamp
 
 ifneq ($(findstring x86_64-rhel7,$(tgt_arch)),)
-  packages += zyla picam archon quadadc
+  packages += zyla picam archon quadadc vimba
 endif
 
 

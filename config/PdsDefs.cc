@@ -45,6 +45,7 @@
 #include "pds/config/QuadAdcConfigType.hh"
 #include "pds/config/ZylaConfigType.hh"
 #include "pds/config/EpicsCamConfigType.hh"
+#include "pds/config/VimbaConfigType.hh"
 #include <cassert>
 
 #ifdef BUILD_EXTRA
@@ -139,6 +140,7 @@ const Pds::TypeId* PdsDefs::typeId(ConfigType id)
   case iStar        : type = &_istarConfigType;     break;
   case EpicsCam     : type = &_epicsCamConfigType;  break;
   case Uxi          : type = &_uxiConfigType;       break;
+  case Alvium       : type = &_alviumConfigType;    break;
     //  case Projection   : type = &_projectionConfigType; break;
   default: 
     printf("PdsDefs::typeId id %d not found\n",unsigned(id));
@@ -206,6 +208,7 @@ const Pds::TypeId* PdsDefs::typeId(const UTypeName& name)
   test(_istarConfigType);
   test(_epicsCamConfigType);
   test(_uxiConfigType);
+  test(_alviumConfigType);
   //  test(_projectionConfigType);    
 #undef test
   //  database-only types
@@ -270,8 +273,10 @@ const Pds::TypeId* PdsDefs::typeId(const QTypeName& name)
   test(_jungfrauConfigType);
   test(_QuadAdcConfigType);
   test(_zylaConfigType);
+  test(_istarConfigType);
   test(_epicsCamConfigType);
   test(_uxiConfigType);
+  test(_alviumConfigType);
   //  test(_projectionConfigType);    
 #undef test
   //  database-only types

@@ -285,7 +285,7 @@ Pds::InDatagram* QuadAdcServer::fire(Pds::InDatagram* dg)
       Pds::Xtc(_generic1DConfigType, _xtc.src);
     Generic1DConfigType* cfg = new (xtc->alloc(sizeof(Generic1DConfigType)))
       Generic1DConfigType(nchan, lengths, types, offsets, periods);
-    xtc->alloc(cfg->_sizeof()-sizeof(Generic1DDataType));
+    xtc->alloc(cfg->_sizeof()-sizeof(Generic1DConfigType));
     dg->xtc.alloc(xtc->extent);
 
     _waveform_sz = nchan * _nbrSamples * sizeof(double);

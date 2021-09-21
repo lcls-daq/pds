@@ -14,8 +14,8 @@ const char *Pds::Vimba::Bool::name(VmbBool_t value) {
 
 const char *Pds::Vimba::Bool::desc(VmbBool_t value) {
   switch (value) {
-    case VmbBoolFalse:  return "True";
-    case VmbBoolTrue:   return "False";
+    case VmbBoolFalse:  return "False";
+    case VmbBoolTrue:   return "True";
     default:            return "Unknown";
   }
 }

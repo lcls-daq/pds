@@ -85,7 +85,7 @@ namespace Pds {
             _cam_ts = frame->timestamp();
           } else {
             const double clkratio  = 360./1e9;
-            const double tolerance = 0.003; // AC line rate jitter and Jungfrau clock drift
+            const double tolerance = 0.005; // AC line rate jitter and clock drift
             const unsigned maxdfid = 21600; // if there is more than 1 minute between triggers
             const unsigned maxunsync = 240;
 
@@ -94,6 +94,8 @@ namespace Pds {
               unsigned nfid = unsigned(double(frame->timestamp() - _cam_ts)*clkratio + 0.5);
               printf("  timestep error: fdelta %f  dfid %d  tds %lu,%lu [%d]\n", fdelta, _nfid, frame->timestamp(), _cam_ts, nfid);
               _synced = false;
+            } else {
+              _synced = true;
             }
 
             if (!_synced) {

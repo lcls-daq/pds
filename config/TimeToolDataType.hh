@@ -4,7 +4,7 @@
 #include "pdsdata/xtc/TypeId.hh"
 #include "pdsdata/psddl/timetool.ddl.h"
 
-typedef Pds::TimeTool::DataV2  TimeToolDataType;
+typedef Pds::TimeTool::DataV3  TimeToolDataType;
 
 static Pds::TypeId _timetoolDataType(Pds::TypeId::Id_TimeToolData,
                                      TimeToolDataType::Version);

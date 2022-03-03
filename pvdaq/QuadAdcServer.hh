@@ -14,6 +14,7 @@ namespace Pds {
     class QuadAdcServer : public Pds::PvDaq::Server,
                           public Pds_Epics::PVMonitorCb {
     public:
+      enum Flags { SPARSEMODE = 0, PRESCALE = 1 };
       QuadAdcServer(const char*, const char*, const DetInfo&, const unsigned, const unsigned);
       ~QuadAdcServer();
     public:
@@ -34,6 +35,10 @@ namespace Pds {
       ConfigServer*               _trigDelayPv;
       ConfigServer*               _lengthPv;
       ConfigServer*               _interleavePv;
+      ConfigServer*               _sparsePv;
+      ConfigServer*               _lowThreshPv;
+      ConfigServer*               _highThreshPv;
+      ConfigServer*               _prescalePv;
       std::vector<ConfigServer*>  _config_pvs;
       char*                       _data_pvname;
       int32_t                     _inputChan;
@@ -43,9 +48,18 @@ namespace Pds {
       double                      _delayTime;
       uint32_t                    _nbrSamples;
       uint32_t                    _interleave;
-      double                      _sampleRate;   
+      uint32_t                    _sparse;
+      uint32_t                    _lowThresh;
+      uint32_t                    _highThresh;
+      uint32_t                    _prescale;
+      double                      _sampleRate;
+      double                      _offset;
+      double                      _range;
+      double                      _scale;
       bool                        _enabled;
       bool                        _configured;
+      bool                        _sparse_mode;
+      bool                        _prescale_en;
       const unsigned              _max_evt_sz;
       size_t                      _waveform_sz;
       ConfigMonitor*              _configMonitor;

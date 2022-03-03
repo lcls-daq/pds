@@ -10,9 +10,9 @@
 #include <stdio.h>
 
 static const unsigned EB_EVT_EXTRA = 0x10000;
-static const unsigned NPRINT = 20;
-static const unsigned PV_LEN = 64;
-static const unsigned NCHAN  = 4;
+static const unsigned NPRINT   = 20;
+static const unsigned PV_LEN  = 64;
+static const unsigned MAXCHAN = 4;
 
 #define CREATE_PV_NAME(pvname, fmt, ...)                \
   snprintf(pvname, PV_LEN, fmt, pvbase, ##__VA_ARGS__);
@@ -53,8 +53,18 @@ QuadAdcServer::QuadAdcServer(const char*          pvbase,
   _delayTime  (0.0),
   _nbrSamples (0),
   _interleave (0),
+  _sparse     (0),
+  _lowThresh  (0),
+  _highThresh (0),
+  _prescale   (0),
+  _sampleRate (0.0),
+  _offset     (0.0),
+  _range      (0.0),
+  _scale      (0.0),
   _enabled    (false),
   _configured (false),
+  _sparse_mode(flags & (1<<SPARSEMODE)),
+  _prescale_en(flags & (1<<PRESCALE)),
   _max_evt_sz (max_event_size),
   _waveform_sz(0),
   _configMonitor(new ConfigMonitor(*this)),
@@ -80,6 +90,27 @@ QuadAdcServer::QuadAdcServer(const char*          pvbase,
   // interleave mode config pv
   CREATE_PV(_interleavePv, "%s:INTERLEAVE");
 
+  // Additional PVs for sparse mode
+  if (_sparse_mode) {
+    // sparse mode config pv
+    CREATE_PV(_sparsePv, "%s:SPARSE_EN");
+    // sparse mode low threshold
+    CREATE_PV(_lowThreshPv, "%s:LO_THRESH_RAW");
+    // sparse mode high threshold
+    CREATE_PV(_highThreshPv, "%s:HI_THRESH_RAW");
+  }
+
+  // Additional PVs for prescaling of sampling
+  if (_prescale_en) {
+    // prescale config pv
+    CREATE_PV(_prescalePv, "%s:PRESCALE");
+  }
+
+  // set offset, range, and scale for converting adc counts in voltages
+  _offset = _sparse_mode ? 2048. : 512.;
+  _range = _sparse_mode ? 2048. : 4096.;
+  _scale = _sparse_mode ? 1.3 : 1.0;
+
   for(unsigned i=0; i<_pool.size(); i++) {
     _pool[i] = new char[_max_evt_sz];
     reinterpret_cast<Dgram*>(_pool[i])->seq = Sequence(ClockTime(0,0),
@@ -101,6 +132,14 @@ QuadAdcServer::~QuadAdcServer()
     delete _lengthPv;
   if (_interleavePv)
     delete _interleavePv;
+  if (_sparsePv)
+    delete _sparsePv;
+  if (_lowThreshPv)
+    delete _lowThreshPv;
+  if (_highThreshPv)
+    delete _highThreshPv;
+  if (_prescalePv)
+    delete _prescalePv;
   if (_waveformPv)
     delete _waveformPv;
   for(unsigned i=0; i<_pool.size(); i++) {
@@ -228,10 +267,10 @@ Pds::InDatagram* QuadAdcServer::fire(Pds::InDatagram* dg)
     bool error = false;
     double period = 0.0;
     unsigned nchan = 0;
-    uint32_t lengths[NCHAN];
-    uint32_t types[NCHAN];
-    int32_t offsets[NCHAN];
-    double periods[NCHAN];
+    uint32_t lengths[MAXCHAN];
+    uint32_t types[MAXCHAN];
+    int32_t offsets[MAXCHAN];
+    double periods[MAXCHAN];
     printf("Retrieving quadadc configuration information from epics...\n");
     CHECK_PV(_ichanPv,      _inputChan);
     CHECK_PV(_trigEventPv,  _evtCode);
@@ -239,14 +278,31 @@ Pds::InDatagram* QuadAdcServer::fire(Pds::InDatagram* dg)
     CHECK_PV(_lengthPv,     _nbrSamples);
     CHECK_PV(_interleavePv, _interleave);
 
+    // check optional PVs
+    if (_sparsePv) {
+      CHECK_PV(_sparsePv,     _sparse);
+    }
+    if (_lowThreshPv) {
+      CHECK_PV(_lowThreshPv,  _lowThresh);
+    }
+    if (_highThreshPv) {
+      CHECK_PV(_highThreshPv, _highThreshPv);
+    }
+    if (_prescalePv) {
+      CHECK_PV(_prescalePv,   _prescale);
+    } else {
+      // if there is no prescale PV use 1 for prescale
+      _prescale = 1;
+    }
+
     if(_interleave) {
       nchan = 1;
       _chanMask = 1<<_inputChan;
-      _sampleRate = 5.0e-9;
+      _sampleRate = (_sparse_mode ? 6.4e-9 : 5.0e-9) * _prescale;
     } else {
-      nchan = NCHAN;
-      _chanMask = (1<<NCHAN) - 1;
-      _sampleRate = 1.25e-9;
+      nchan = _sparse_mode ? 2 : 4;
+      _chanMask = (1<<nchan) - 1;
+      _sampleRate = (_sparse_mode ? 3.2e-9 : 1.25e-9) * _prescale;
     }
     _delayTime = _evtDelay / (156.17e6);
     period = 1.0/_sampleRate;
@@ -272,11 +328,32 @@ Pds::InDatagram* QuadAdcServer::fire(Pds::InDatagram* dg)
            _nbrSamples,
            period,
            _interleave);
+    if (_sparse_mode) {
+      printf("  sparse            %u\n"
+             "  low threshold     %u\n"
+             "  high threshold    %u\n",
+             _sparse,
+             _lowThresh,
+             _highThresh);
+    }
+    if (_prescale_en) {
+      printf("  prescale          %u\n",
+             _prescale);
+    }
 
     if (!_waveformPv) {
       if (ca_current_context() == NULL) ca_attach_context(_context);
       printf("Creating EpicsCA(%s)\n", _data_pvname);
-      _waveformPv = new QuadAdcPvServer(_data_pvname, this, nchan, _nbrSamples);
+      _waveformPv = new QuadAdcPvServer(_data_pvname,
+                                        this,
+                                        nchan,
+                                        _nbrSamples,
+                                        _offset,
+                                        _range,
+                                        _scale,
+                                        _sparse,
+                                        _lowThresh,
+                                        _highThresh);
     }
 
     Pds::Xtc* xtc;

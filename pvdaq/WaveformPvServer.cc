@@ -58,9 +58,23 @@ int AcqirisPvServer::fetch(void* payload, size_t len)
 
 void AcqirisPvServer::update() { _channel.get(); }
 
-QuadAdcPvServer::QuadAdcPvServer(const char* name, Pds_Epics::PVMonitorCb* mon_cb, const unsigned nchans, const unsigned elems) :
+QuadAdcPvServer::QuadAdcPvServer(const char* name,
+                                 Pds_Epics::PVMonitorCb* mon_cb,
+                                 const unsigned nchans,
+                                 const unsigned elems,
+                                 const double offset,
+                                 const double range,
+                                 const double scale,
+                                 const bool sparse,
+                                 const unsigned sparse_lo,
+                                 const unsigned sparse_hi) :
   Pds_Epics::EpicsCA (name, mon_cb, hdr_elem + nchans * (strm_elem + elems / (ca_elem_sz / elem_sz))),
-  _name(new char[strlen(name)+1])
+  _name(new char[strlen(name)+1]),
+  _offset(offset),
+  _range(range),
+  _scale(scale),
+  _sparse(sparse),
+  _fill((sparse_lo + sparse_hi)/2)
 {
   strcpy(_name, name);
 }
@@ -93,7 +107,15 @@ int QuadAdcPvServer::fetch(void* payload, size_t len)
         if (data_size > len)
           return -1;
         const uint16_t *inp = sh->data();
-        for(unsigned k=0; k<sh->num_samples(); k++) *outp++ = (*inp++ - 512.)/2048.;
+        for(unsigned k=0; k<sh->num_samples(); k++)
+          if (_sparse && (*inp & 0x8000)) {
+            for (unsigned l=0; l<(*inp & 0x7fff); l++) {
+              *outp++ = (_fill - _offset) / _range * _scale;
+            }
+            inp++;
+          } else {
+            *outp++ = (*inp++ - _offset) / _range * _scale;
+          }
       }
       result = (char*)outp - (char*)payload;
     }

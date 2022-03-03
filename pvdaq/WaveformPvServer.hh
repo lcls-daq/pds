@@ -19,14 +19,28 @@ namespace Pds {
 
     class QuadAdcPvServer : public Pds_Epics::EpicsCA {
       public:
-        QuadAdcPvServer(const char*, Pds_Epics::PVMonitorCb*, const unsigned, const unsigned);
+        QuadAdcPvServer(const char*,
+                        Pds_Epics::PVMonitorCb*,
+                        const unsigned nchans,
+                        const unsigned elems,
+                        const double offset,
+                        const double range,
+                        const double scale,
+                        const bool sparse,
+                        const unsigned sparse_lo,
+                        const unsigned sparse_hi);
         ~QuadAdcPvServer();
       public:
         const char* name() const;
         int  fetch      (void* copyTo, size_t len);
         void update     ();
       private:
-        char* _name;
+        char*    _name;
+        double   _offset;
+        double   _range;
+        double   _scale;
+        bool     _sparse;
+        unsigned _fill;
     };
   }
 }

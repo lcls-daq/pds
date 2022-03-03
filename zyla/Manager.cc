@@ -82,7 +82,7 @@ namespace Pds {
           _framenum_ptr = (uint64_t*) _buffer;
           if (_driver.get_frame(_current_frame, _frame_ptr)) {
             *_framenum_ptr = (uint64_t) _current_frame;
-            _server.post((char*) _buffer, sizeof(ZylaDataType) + _frame_sz);
+            _server.post(_buffer);
             if (_last_frame != 0) {
               if (_diff_frame != 0) {
                 if ((_current_frame - _last_frame)  > ((3 * _diff_frame) / 2)) {

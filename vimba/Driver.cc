@@ -938,7 +938,12 @@ bool Camera::getCameraInfo(VmbCameraInfo_t* info, VmbUint32_t index, const char*
       if (ninfo < ncount)
         ncount = ninfo;
       if (serial_id) {
-
+        for (VmbUint32_t n=0; n<ncount; n++) {
+          if (strcmp(serial_id, cameras[n].serialString) == 0) {
+            memcpy(info, &cameras[n], sizeof *cameras);
+            return true;
+          }
+        }
       } else if(index < ncount) {
         memcpy(info, &cameras[index], sizeof *cameras);
         return true;

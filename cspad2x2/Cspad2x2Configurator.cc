@@ -84,7 +84,11 @@ namespace Pds {
       Cspad2x2QuadRegisters::configurator(this);
       _initRanges();
       strcpy(_runTimeConfigFileName, "");
-      allocateVC(0xf);
+      int ret;
+      if ((ret=allocateVC(0xf)) != SUCCESS) {
+        printf("Cspad2x2Configurator constructor unable to allocate requested virtual channels so pulling the plug !!!!!! ret(%d) SUCCESS(%d)\n", ret, SUCCESS);
+        ::exit(-1);
+      }
       cleanupEvr(0xf);
       printf("Cspad2x2Configurator constructor _config(%p)\n", _config);
       //    printf("\tlocations _pool(%p), _config(%p)\n", _pool, &_config);
@@ -453,7 +457,7 @@ namespace Pds {
         printf("Write Dig Pots synchronization failed!\n");
         ret = Failure;
       }
-      return checkDigPots();
+      return ret == Success ? checkDigPots() : ret;
     }
 
     unsigned Cspad2x2Configurator::checkDigPots() {

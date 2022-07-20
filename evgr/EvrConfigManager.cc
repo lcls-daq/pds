@@ -293,6 +293,11 @@ void EvrConfigManager::disable()
 
 void EvrConfigManager::handleCommandRequest(const std::vector<unsigned>& codes)
 {
+  bool lUserMessage = false;
+  UserMessage* msg = new(_occPool) UserMessage;
+  msg->append(DetInfo::name(static_cast<const DetInfo&>(_cfgtc.src)));
+  msg->append(":");
+
   printf("Received command request for codes: [");
   for(unsigned i=0; i<codes.size(); i++)
     printf(" %d",codes[i]);
@@ -317,7 +322,12 @@ void EvrConfigManager::handleCommandRequest(const std::vector<unsigned>& codes)
 	EventCodeType& c = eventcodes[j];
 	if (c.code()==codes[i]) {
 	  lFound=true;
-	  if (!(c.isReadout() || c.isCommand())) {
+          if (c.isReadout()) {
+              // Cannot set a readout eventcode to a command eventcode
+              lUserMessage = true;
+              msg->append("attempt to set readout code as a command.  Check timetool config, for example.\n");
+          }
+	  else if (!c.isCommand()) {
 	    /*
               printf("Changing %03d %c %c %c %d %d %04x %04x %04x %s %d\n",
 	      c.code(), c.isReadout(), c.isCommand(), c.isLatch(),
@@ -372,6 +382,11 @@ void EvrConfigManager::handleCommandRequest(const std::vector<unsigned>& codes)
   _end_config   = p;
   _cur_config   = new_current;
   _cfgtc.extent = sizeof(Xtc) + Pds::EvrConfig::size(*_cur_config);
+
+  if (lUserMessage)
+      _app.post(msg);
+
+  delete msg;
 }
 
 int EvrConfigManager::_validate_groups(UserMessage* msg)

@@ -85,12 +85,12 @@ namespace Pds {
         uint32_t type() const;
         uint32_t rev() const;
         std::string version() const;
-        uint16_t id() const;
+        std::string id() const;
         uint16_t present() const;
         uint32_t module_type(unsigned mod) const;
         uint32_t module_rev(unsigned mod) const;
         std::string module_version(unsigned mod) const;
-        uint16_t module_id(unsigned mod) const;
+        std::string module_id(unsigned mod) const;
         bool module_present(unsigned mod) const;
         bool update(char* buffer);
       protected:

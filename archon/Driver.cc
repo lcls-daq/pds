@@ -331,9 +331,9 @@ std::string System::version() const
   return get_value("BACKPLANE_VERSION");
 }
 
-uint16_t System::id() const
+std::string System::id() const
 {
-  return get_value_as_uint16("BACKPLANE_ID");
+  return get_value("BACKPLANE_ID");
 }
 
 uint16_t System::present() const
@@ -371,11 +371,11 @@ std::string System::module_version(unsigned mod) const
   return get_value(cmd);
 }
 
-uint16_t System::module_id(unsigned mod) const
+std::string System::module_id(unsigned mod) const
 {
   snprintf(_cmd_buff, MAX_CMD_LEN, "MOD%u_ID", mod);
   std::string cmd(_cmd_buff);
-  return get_value_as_uint16(cmd);
+  return get_value(cmd);
 }
 
 bool System::update(char* buffer)

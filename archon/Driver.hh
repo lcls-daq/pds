@@ -86,6 +86,7 @@ namespace Pds {
         uint32_t rev() const;
         std::string version() const;
         std::string id() const;
+        std::string power_id() const;
         uint16_t present() const;
         uint32_t module_type(unsigned mod) const;
         uint32_t module_rev(unsigned mod) const;

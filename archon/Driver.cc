@@ -336,6 +336,11 @@ std::string System::id() const
   return get_value("BACKPLANE_ID");
 }
 
+std::string System::power_id() const
+{
+  return get_value("POWER_ID");
+}
+
 uint16_t System::present() const
 {
   return get_value_as_uint16("MOD_PRESENT");

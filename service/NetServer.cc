@@ -56,7 +56,7 @@ void NetServer::_construct(int sizeofDatagram, int maxPayload)
   if((_sizeofDatagram = sizeofDatagram))
     {
     _iov[0].iov_len  = sizeofDatagram;
-    char* datagram   = new char[sizeofDatagram];
+    char* datagram   = new char[sizeofDatagram]();
     _datagram        = datagram;
     _iov[0].iov_base = datagram;
     // JT 11/9/09: This is a hack to quiet gcc's overly-anal

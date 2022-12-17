@@ -220,7 +220,6 @@ bool AlviumConfigCache::_configure(bool apply)
     // show contrast information
     printf("Contrast information:\n");
     printf("  Contrast Enable:        %s\n", Bool::desc(_cam.contrastEnable()));
-    printf("  Contrast Cfg Mode:      %s\n", _cam.contrastConfigurationMode());
     printf("  Contrast Shape:         %lld\n", _cam.contrastShape());
     printf("  Contrast Dark Limit:    %lld\n", _cam.contrastDarkLimit());
     printf("  Contrast Bright Limit:  %lld\n", _cam.contrastBrightLimit());

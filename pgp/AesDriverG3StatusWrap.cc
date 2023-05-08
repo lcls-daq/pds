@@ -5,11 +5,13 @@
  *      Author: jackp
  */
 
+#define __STDC_FORMAT_MACROS
 #include "pds/pgp/PgpStatus.hh"
 #include "pds/pgp/AesDriverG3StatusWrap.hh"
 #include <PgpDriver.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <inttypes.h>
 #include <stddef.h>
 #include <fcntl.h>
 #include <sstream>
@@ -61,23 +63,23 @@ namespace Pds {
       unsigned lane = portOffset + _lane;
       unsigned tmp;
       ssize_t res = 0;
-      res |= dmaReadRegister(fd, (unsigned)offsetof(PgpCardG3Regs, pgpCardStat[0]), (unsigned*)&(tmp));
+      res |= dmaReadRegister(fd, offsetof(PgpCardG3Regs, pgpCardStat[0]), (unsigned*)&(tmp));
       tmp |= (0x1 << ((lane&0x7) + 16));
-      res |= dmaWriteRegister(fd, (unsigned)offsetof(PgpCardG3Regs, pgpCardStat[0]), tmp);
+      res |= dmaWriteRegister(fd, offsetof(PgpCardG3Regs, pgpCardStat[0]), tmp);
       unsigned mask = 0xFFFFFFFF ^(0x1 << ((lane&0x7) + 16));
       tmp &= mask;
-      res |= dmaWriteRegister(fd, (unsigned)offsetof(PgpCardG3Regs, pgpCardStat[0]), tmp);
+      res |= dmaWriteRegister(fd, offsetof(PgpCardG3Regs, pgpCardStat[0]), tmp);
       tmp  |= (0x1 << ((lane&0x7) + 8));
-      res |=  dmaWriteRegister(fd, (unsigned)offsetof(PgpCardG3Regs, pgpCardStat[0]), tmp);
+      res |=  dmaWriteRegister(fd, offsetof(PgpCardG3Regs, pgpCardStat[0]), tmp);
       mask = 0xFFFFFFFF ^ (0x1 << ((lane&0x7) + 8));
       tmp &= mask;
-      res |= dmaWriteRegister(fd, (unsigned)offsetof(PgpCardG3Regs, pgpCardStat[0]), tmp);
+      res |= dmaWriteRegister(fd, offsetof(PgpCardG3Regs, pgpCardStat[0]), tmp);
       return res;
     }
 
     int AesDriverG3StatusWrap::writeScratch(unsigned s) {
       ssize_t res = 0;
-      res |= dmaWriteRegister(fd, (unsigned)offsetof(PgpCardG3Regs, ScratchPad), s);
+      res |= dmaWriteRegister(fd, offsetof(PgpCardG3Regs, ScratchPad), s);
       return res;
     }
 
@@ -94,7 +96,7 @@ namespace Pds {
       struct DmaRegisterData reg;
       reg.data = r;
       reg.address = (unsigned)offsetof(PgpCardG3Regs, fiducials[0]) + (lane*sizeof(unsigned));
-      printf("AesDriverG3StatusWrap::setFiducialTarget 0x%x at 0x%x\n", reg.data, reg.address);
+      printf("AesDriverG3StatusWrap::setFiducialTarget 0x%x at 0x%"PRIx64"\n", reg.data, reg.address);
       ioctl(fd,DMA_Write_Register,&reg);
       return (0);
     }
@@ -214,19 +216,19 @@ namespace Pds {
             pgpSetEvrControl(fd, lane, &cntl);
           } else {
             while ((evrEnabled(false)==false) && (count++<3)){
-              dmaReadRegister(fd, (unsigned)offsetof(PgpCardG3Regs, evrCardStat[1]), &tmp);
+              dmaReadRegister(fd, offsetof(PgpCardG3Regs, evrCardStat[1]), &tmp);
               tmp |= 4;
-              dmaWriteRegister(fd, (unsigned)offsetof(PgpCardG3Regs, evrCardStat[1]), tmp);
+              dmaWriteRegister(fd, offsetof(PgpCardG3Regs, evrCardStat[1]), tmp);
               tmp &= 0xFFFFFFFB;
-              dmaWriteRegister(fd, (unsigned)offsetof(PgpCardG3Regs, evrCardStat[1]), tmp);
+              dmaWriteRegister(fd, offsetof(PgpCardG3Regs, evrCardStat[1]), tmp);
               usleep(40);
               tmp |= 2;
-              dmaWriteRegister(fd, (unsigned)offsetof(PgpCardG3Regs, evrCardStat[1]), tmp);
+              dmaWriteRegister(fd, offsetof(PgpCardG3Regs, evrCardStat[1]), tmp);
               tmp &= 0xFFFFFFFD;
-              dmaWriteRegister(fd, (unsigned)offsetof(PgpCardG3Regs, evrCardStat[1]), tmp);
+              dmaWriteRegister(fd, offsetof(PgpCardG3Regs, evrCardStat[1]), tmp);
               usleep(400);
               tmp |= 1;
-              dmaWriteRegister(fd, (unsigned)offsetof(PgpCardG3Regs, evrCardStat[1]), tmp);
+              dmaWriteRegister(fd, offsetof(PgpCardG3Regs, evrCardStat[1]), tmp);
               usleep(4000);
             }
           }

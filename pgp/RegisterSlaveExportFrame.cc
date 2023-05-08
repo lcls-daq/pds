@@ -5,6 +5,7 @@
  *      Author: jackp
  */
 
+#define __STDC_FORMAT_MACROS
 #include "pds/pgp/RegisterSlaveExportFrame.hh"
 #include "pds/pgp/PgpRSBits.hh"
 #include "pds/pgp/RegisterSlaveImportFrame.hh"
@@ -16,8 +17,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include "stdio.h"
+#include <stdio.h>
 #include <time.h>
+#include <inttypes.h>
 #include <linux/types.h>
 
 namespace Pds {
@@ -77,7 +79,7 @@ namespace Pds {
         pgpCardTx.data   = (__u64)this;
 
         if (pf) {
-          printf("RSEF::post: dest 0x%x, size 0x%x, data 0x%lx\n",
+          printf("RSEF::post: dest 0x%x, size 0x%x, data 0x%"PRIx64"\n",
             pgpCardTx.dest,
             pgpCardTx.size,
             pgpCardTx.data);

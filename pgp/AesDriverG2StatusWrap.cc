@@ -38,23 +38,23 @@ namespace Pds {
       unsigned lane = _pgp->portOffset();
       unsigned tmp;
       ssize_t res = 0;
-      res |= dmaReadRegister(_pgp->fd(), (unsigned)offsetof(PgpCardG2Regs, control), (unsigned*)&(tmp));
+      res |= dmaReadRegister(_pgp->fd(), offsetof(PgpCardG2Regs, control), (unsigned*)&(tmp));
       tmp |= ((0x1000 << lane) & 0xF000);
-      res |= dmaWriteRegister(_pgp->fd(), (unsigned)offsetof(PgpCardG2Regs, control), tmp);
+      res |= dmaWriteRegister(_pgp->fd(), offsetof(PgpCardG2Regs, control), tmp);
       unsigned mask = 0xFFFFFFFF ^ ((0x1000 << lane) & 0xF000);
       tmp &= mask;
-      res |= dmaWriteRegister(_pgp->fd(), (unsigned)offsetof(PgpCardG2Regs, control), tmp);
+      res |= dmaWriteRegister(_pgp->fd(), offsetof(PgpCardG2Regs, control), tmp);
       tmp |= ((0x100 << lane) & 0xF00);
-      res |=  dmaWriteRegister(_pgp->fd(), (unsigned)offsetof(PgpCardG2Regs, control), tmp);
+      res |=  dmaWriteRegister(_pgp->fd(), offsetof(PgpCardG2Regs, control), tmp);
       mask = 0xFFFFFFFF ^ ((0x100 << lane) & 0xF00);
       tmp &= mask;
-      res |= dmaWriteRegister(_pgp->fd(), (unsigned)offsetof(PgpCardG2Regs, control), tmp);
+      res |= dmaWriteRegister(_pgp->fd(), offsetof(PgpCardG2Regs, control), tmp);
       return res;
     }
 
     int AesDriverG2StatusWrap::writeScratch(unsigned s) {
       ssize_t res = 0;
-      res |= dmaWriteRegister(_pgp->fd(), (unsigned)offsetof(PgpCardG2Regs, scratch), s);
+      res |= dmaWriteRegister(_pgp->fd(), offsetof(PgpCardG2Regs, scratch), s);
       return res;
     }
 

@@ -3,6 +3,7 @@
 
 enum { 
   EVENT_CODE_TERM  =   1,
+  EVENT_CODE_ALL   =  40,
   EVENT_CODE_HXR   = 137,
   EVENT_CODE_BEAM  = 140,
   EVENT_CODE_BYKIK = 162,

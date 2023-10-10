@@ -31,6 +31,11 @@ struct uxi_pots {
   double voltage;
   uint32_t tune;
 };
+
+struct uxi_roi {
+  uint32_t first;
+  uint32_t last;
+};
 #pragma pack(pop)
 
 using namespace Pds::Uxi;
@@ -287,6 +292,47 @@ bool Detector::set_timing(char side, unsigned ton, unsigned toff, unsigned delay
   char cmd[CMD_SIZE];
   snprintf(cmd, sizeof(cmd), "TIMING%c", side);
   return put_command(cmd, &value, sizeof(value));
+}
+
+bool Detector::set_row_roi(unsigned first, unsigned last)
+{
+  struct uxi_roi roi_value = { first, last };
+  return put_command("ROIROW", &roi_value, sizeof(roi_value));
+}
+
+bool Detector::get_row_roi(unsigned* first, unsigned* last)
+{
+  struct uxi_roi roi_value;
+  if (get_command("ROIROW?", &roi_value, sizeof(roi_value))) {
+    *first = roi_value.first;
+    *last = roi_value.last;
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool Detector::set_frame_roi(unsigned first, unsigned last)
+{
+  struct uxi_roi roi_value = { first, last };
+  return put_command("ROIFRAME", &roi_value ,sizeof(roi_value));
+}
+
+bool Detector::get_frame_roi(unsigned* first, unsigned* last)
+{
+  struct uxi_roi roi_value;
+  if (get_command("ROIFRAME?", &roi_value, sizeof(roi_value))) {
+    *first = roi_value.first;
+    *last = roi_value.last;
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool Detector::reset_roi()
+{
+  return put_command("ROIRESET");
 }
 
 bool Detector::get_uint32(const char* cmd, uint32_t* value)

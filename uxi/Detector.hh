@@ -33,6 +33,11 @@ namespace Pds {
       bool set_timing_all(unsigned ton, unsigned toff, unsigned delay=0);
       bool set_timing(char side, unsigned ton, unsigned toff, unsigned delay=0);
       bool get_timing(char side, unsigned* ton, unsigned* toff, unsigned* delay=NULL);
+      bool set_row_roi(unsigned first, unsigned last);
+      bool get_row_roi(unsigned* first, unsigned* last);
+      bool set_frame_roi(unsigned first, unsigned last);
+      bool get_frame_roi(unsigned* first, unsigned* last);
+      bool reset_roi();
       bool get_frames(uint32_t& acq_num, uint16_t* data, double* temp=NULL, uint32_t* timestamp=NULL);
 
       static const int BasePort = 14100;

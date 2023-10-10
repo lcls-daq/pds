@@ -227,8 +227,16 @@ namespace Pds {
           double pots_rbv[UxiConfigNumberOfPots];
           uint32_t width_rbv, height_rbv, num_frames_rbv, num_bytes_rbv, type_rbv, acq_count;
           uint32_t ton_rbv, toff_rbv, tdel_rbv;
+          uint32_t first_row, last_row, first_frame, last_frame;
+          const RoiCoord& roi_rows = _config.roiRows();
+          const RoiCoord& roi_frames = _config.roiFrames();
 
-          if (!_detector.width(&width_rbv)) {
+          if (_config.roiEnable() ?
+              !_detector.set_row_roi(roi_rows.first(), roi_rows.last()) || !_detector.set_frame_roi(roi_frames.first(), roi_frames.last()) :
+              !_detector.reset_roi()) {
+            printf("ConfigAction: failed to write ROI parameters to detector!\n");
+            _error = true;
+          } else if (!_detector.width(&width_rbv)) {
             printf("ConfigAction: failed to readback width parametar from detector!\n");
             _error = true;
           } else if (!_detector.height(&height_rbv)) {
@@ -245,6 +253,12 @@ namespace Pds {
             _error = true;
           } else if (!_detector.acq_count(&acq_count)) {
             printf("ConfigAction: failed to readback acq_count parameter from detector!\n");
+            _error = true;
+          } else if (!_detector.get_row_roi(&first_row, &last_row)) {
+            printf("ConfigAction: failed to readback row_roi parameters from detector!\n");
+            _error = true;
+          } else if (!_detector.get_frame_roi(&first_frame, &last_frame)) {
+            printf("ConfigAction: failed to readback frame_roi parameters from detector!\n");
             _error = true;
           }
 
@@ -264,12 +278,18 @@ namespace Pds {
             printf(" Num bytes is:  %u\n", num_bytes_rbv);
             printf(" Type is:       %u\n", type_rbv);
             printf(" Acq Count is:  %u\n", acq_count);
+            printf("ROI info:\n");
+            printf(" first row:     %u\n", first_row);
+            printf(" last row:      %u\n", last_row);
+            printf(" first frame:   %u\n", first_frame);
+            printf(" last frame:    %u\n", last_frame);
 
             // acq_count returned by the server is the number it will send with the next frame
             // so the last frame is one less than that!
             _server.setFrame(acq_count-1);
 
             UxiConfig::setSize(_config, width_rbv, height_rbv, num_frames_rbv, num_bytes_rbv, type_rbv);
+            UxiConfig::setRoi(_config, first_row, last_row, first_frame, last_frame);
 
             ndarray<const uint32_t, 1> time_on  = _config.timeOn();
             ndarray<const uint32_t, 1> time_off = _config.timeOff();

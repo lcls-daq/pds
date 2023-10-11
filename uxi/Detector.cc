@@ -378,17 +378,26 @@ bool Detector::commit()
   return put_command("CONFIG");
 }
 
+bool Detector::flush()
+{
+  if (_data_up) {
+    return flush_socket(_data);
+  } else {
+    return true;
+  }
+}
+
 bool Detector::reset()
 {
   uint32_t acq_state;
 
-  if (_comm_up && !flush(_comm)) {
+  if (_comm_up && !flush_socket(_comm)) {
     return false;
   } else if (!status(&acq_state)) {
     return false;
   } else if (acq_state && !stop()) {
     return false;
-  } else if (_data_up && !flush(_data)) {
+  } else if (_data_up && !flush_socket(_data)) {
     return false;
   } else {
     return true;
@@ -465,7 +474,7 @@ bool Detector::get_command(const char* cmd, void* payload, size_t size)
   }
 }
 
-bool Detector::flush(void* sock)
+bool Detector::flush_socket(void* sock)
 {
   static const int max_tries = 100;
   char reply[REPLY_SIZE];

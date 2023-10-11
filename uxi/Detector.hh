@@ -17,6 +17,7 @@ namespace Pds {
       bool start();
       bool stop();
       bool commit();
+      bool flush();
       bool reset();
       bool temperature(double* temp);
       bool status(uint32_t* status);
@@ -50,7 +51,7 @@ namespace Pds {
       bool get_double(const char* cmd, double* value);
       bool put_command(const char* cmd, void* payload=NULL, size_t size=0);
       bool get_command(const char* cmd, void* payload, size_t size);
-      bool flush(void* sock);
+      bool flush_socket(void* sock);
     private:
       const char* _host;
       unsigned    _data_port;

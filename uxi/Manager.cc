@@ -362,6 +362,11 @@ namespace Pds {
                       // Add the read back pots values to the config
                       UxiConfig::setPots(_config, pots_rbv);
 
+                      // Flush any old frames that might be waiting to read from the socket
+                      if (!_first) { // on the first config the flush is already done earlier so skip
+                        _detector.flush();
+                      }
+
                       // Finally enable the frame reader
                       _reader.enable();
 

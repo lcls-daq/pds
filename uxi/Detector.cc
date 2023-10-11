@@ -72,7 +72,7 @@ void Detector::connect()
     _data = zmq_socket(_context, ZMQ_SUB);
     int rc = zmq_setsockopt(_data, ZMQ_SUBSCRIBE, "", 0 );
     if (rc < 0) {
-      fprintf(stderr, "Error: failed to set ZMQ_SUBSCRIBE sockopt: %s\n", strerror(errno));
+      fprintf(stderr, "Error: failed to set ZMQ_SUBSCRIBE sockopt: %s\n", zmq_strerror(errno));
     } else {
       _data_up = connect_socket(_data, _data_port);
     }
@@ -111,7 +111,7 @@ bool Detector::connect_socket(void* sock, unsigned port)
   snprintf(endpoint, sizeof(endpoint), "tcp://%s:%u", _host, port);
   rc = zmq_connect(sock, endpoint);
   if (rc<0) {
-    fprintf(stderr, "Error: failed to connect to Uxi at %s on port %d: %s\n", _host, port, strerror(errno));
+    fprintf(stderr, "Error: failed to connect to Uxi at %s on port %d: %s\n", _host, port, zmq_strerror(errno));
     return false;
   } else {
     return true;
@@ -127,7 +127,7 @@ bool Detector::get_frames(uint32_t& acq_num, uint16_t* data, double* temp, uint3
 
   int rc = zmq_recv(_data, _header_buf, sizeof(uxi_header), 0);
   if (rc<0) {
-    fprintf(stderr, "Error: failure on recv of data header: %s\n", strerror(errno));
+    fprintf(stderr, "Error: failure on recv of data header: %s\n", zmq_strerror(errno));
     return false;
   } else if (rc!=sizeof(uxi_header)) {
     fprintf(stderr, "Error: data header size %d differs from expected %lu\n", rc, sizeof(uxi_header));
@@ -170,7 +170,7 @@ int Detector::get_frame_part(uint16_t* data, size_t len)
   rc = zmq_getsockopt(_data, ZMQ_RCVMORE, &more, &more_size);
 
   if (rc < 0) {
-    fprintf(stderr, "Error: failed to get ZMQ_RCVMORE sockopt: %s\n", strerror(errno));
+    fprintf(stderr, "Error: failed to get ZMQ_RCVMORE sockopt: %s\n", zmq_strerror(errno));
     return rc;
   } else if(more) {
     rc = zmq_recv(_data, data, len, 0);
@@ -183,6 +183,11 @@ int Detector::get_frame_part(uint16_t* data, size_t len)
 bool Detector::temperature(double* temp)
 {
   return get_double("TEMP?", temp);
+}
+
+bool Detector::status(uint32_t* status)
+{
+  return get_uint32("STATUS?", status);
 }
 
 bool Detector::width(uint32_t* width)
@@ -353,7 +358,6 @@ bool Detector::get_double(const char* cmd, double* value)
   }
 }
 
-
 bool Detector::acquire(unsigned nframes)
 {
   return put_command("START", &nframes, sizeof(nframes));
@@ -374,6 +378,23 @@ bool Detector::commit()
   return put_command("CONFIG");
 }
 
+bool Detector::reset()
+{
+  uint32_t acq_state;
+
+  if (_comm_up && !flush(_comm)) {
+    return false;
+  } else if (!status(&acq_state)) {
+    return false;
+  } else if (acq_state && !stop()) {
+    return false;
+  } else if (_data_up && !flush(_data)) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
 bool Detector::put_command(const char* cmd, void* payload, size_t size)
 {
   char reply[REPLY_SIZE];
@@ -385,20 +406,20 @@ bool Detector::put_command(const char* cmd, void* payload, size_t size)
 
   int rc = zmq_send(_comm, cmd, strlen(cmd), payload ? ZMQ_SNDMORE : 0);
   if (rc < 0) {
-    fprintf(stderr, "Error: sending command %s to uxi: %s\n", cmd, strerror(errno));
+    fprintf(stderr, "Error: sending command %s to uxi: %s\n", cmd, zmq_strerror(errno));
     return false;
   }
   if (payload) {
     rc = zmq_send(_comm, payload, size, 0);
     if (rc < 0) {
-      fprintf(stderr, "Error: sending payload of command %s to uxi: %s\n", cmd, strerror(errno));
+      fprintf(stderr, "Error: sending payload of command %s to uxi: %s\n", cmd, zmq_strerror(errno));
       return false;
     }
   }
 
   rc = zmq_recv(_comm, reply, sizeof(reply), 0);
   if (rc < 0) {
-    fprintf(stderr, "Error: receiving reply to command %s: %s\n", cmd, strerror(errno));
+    fprintf(stderr, "Error: receiving reply to command %s: %s\n", cmd, zmq_strerror(errno));
     return false;
   } else if (strcmp(reply, "OK") != 0) {
     fprintf(stderr, "Error: uxi returned an error in reply to command %s: %s\n", cmd, reply);
@@ -419,12 +440,12 @@ bool Detector::get_command(const char* cmd, void* payload, size_t size)
 
   int rc = zmq_send(_comm, cmd, strlen(cmd), 0);
   if (rc < 0) {
-    fprintf(stderr, "Error: sending command %s to uxi: %s\n", cmd, strerror(errno));
+    fprintf(stderr, "Error: sending command %s to uxi: %s\n", cmd, zmq_strerror(errno));
     return false;
   } else {
     rc = zmq_recv(_comm, reply, sizeof(reply), 0);
     if (rc < 0) {
-      fprintf(stderr, "Error: receiving reply to command %s: %s\n", cmd, strerror(errno));
+      fprintf(stderr, "Error: receiving reply to command %s: %s\n", cmd, zmq_strerror(errno));
       return false;
     } else if (strcmp(reply, "OK") != 0) {
       fprintf(stderr, "Error: uxi returned an error in reply to command %s: %s\n", cmd, reply);
@@ -432,7 +453,7 @@ bool Detector::get_command(const char* cmd, void* payload, size_t size)
     } else {
       rc = zmq_recv(_comm, payload, size, 0);
       if (rc < 0) {
-        fprintf(stderr, "Error: receiving reply to command %s: %s\n", cmd, strerror(errno));
+        fprintf(stderr, "Error: receiving reply to command %s: %s\n", cmd, zmq_strerror(errno));
         return false;
       } else if (((unsigned) rc) != size) {
         fprintf(stderr, "Error: command %s - reply size %d differs from expected %lu\n", cmd, rc, size);
@@ -442,6 +463,31 @@ bool Detector::get_command(const char* cmd, void* payload, size_t size)
       }
     }
   }
+}
+
+bool Detector::flush(void* sock)
+{
+  static const int max_tries = 100;
+  char reply[REPLY_SIZE];
+  memset(reply, 0, sizeof reply);
+  int rc = 0;
+  int tries = max_tries;
+  while (tries > 0) {
+    rc = zmq_recv(sock, reply, sizeof(reply), ZMQ_DONTWAIT);
+    if (rc < 0) {
+      if (errno == EAGAIN || errno == EFSM) {
+        return true;
+      } else {
+        fprintf(stderr, "Error: flushing socket: %s\n", zmq_strerror(errno));
+        return false;
+      }
+    } else {
+      tries--;
+    }
+  }
+
+  fprintf(stderr, "Error: flushing socket hit max recv calls of %u\n", max_tries);
+  return false;
 }
 
 #undef REPLY_SIZE

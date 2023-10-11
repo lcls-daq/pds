@@ -17,7 +17,9 @@ namespace Pds {
       bool start();
       bool stop();
       bool commit();
+      bool reset();
       bool temperature(double* temp);
+      bool status(uint32_t* status);
       bool width(uint32_t* width);
       bool height(uint32_t* height);
       bool nframes(uint32_t* nframes);
@@ -48,6 +50,7 @@ namespace Pds {
       bool get_double(const char* cmd, double* value);
       bool put_command(const char* cmd, void* payload=NULL, size_t size=0);
       bool get_command(const char* cmd, void* payload, size_t size);
+      bool flush(void* sock);
     private:
       const char* _host;
       unsigned    _data_port;

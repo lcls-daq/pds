@@ -27,21 +27,28 @@ namespace Pds {
         _acq_count(0),
         _timestamp(0),
         _temp(0.0),
+        _buffer_sz(0),
         _frame_sz(0),
         _entry_sz(0),
         _buffer(0),
         _frame_ptr(0)
-      {
-        _detector.frame_size(&_frame_sz);
-        _entry_sz = sizeof(UxiDataType) + _frame_sz;
-        _buffer = new char[_entry_sz];
-        _server.set_frame_sz(_frame_sz);
-      }
+      {}
       virtual ~FrameReader() {
         if (_buffer) delete[] _buffer;
       }
       Task& task() { return *_task; }
       void enable () {
+        _detector.frame_size(&_frame_sz);
+        _entry_sz = sizeof(UxiDataType) + _frame_sz;
+        if (_buffer && (_buffer_sz < _entry_sz)) {
+          delete[] _buffer;
+          _buffer = NULL;
+        }
+        if (!_buffer) {
+          _buffer_sz = _entry_sz;
+          _buffer = new char[_buffer_sz];
+        }
+        _server.set_frame_sz(_frame_sz);
         if (_disable) {
           _disable=false;
           _task->call(this);
@@ -72,6 +79,7 @@ namespace Pds {
       uint32_t  _acq_count;
       uint32_t  _timestamp;
       double    _temp;
+      unsigned  _buffer_sz;
       unsigned  _frame_sz;
       unsigned  _entry_sz;
       char*     _buffer;
@@ -197,6 +205,7 @@ namespace Pds {
         _cfgtc(_uxiConfigType,cfg.src()),
         _occPool(sizeof(UserMessage),1),
         _error(false),
+        _first(true),
         _max_num_frames(max_num_frames) {}
       ~ConfigAction() {}
       InDatagram* fire(InDatagram* dg) {
@@ -231,66 +240,20 @@ namespace Pds {
           const RoiCoord& roi_rows = _config.roiRows();
           const RoiCoord& roi_frames = _config.roiFrames();
 
-          if (_config.roiEnable() ?
+          if (_first && !_detector.reset()) {
+            printf("ConfigAction: failed to reset the detector on first config!\n");
+            _error = true;
+          } else if (_config.roiEnable() ?
               !_detector.set_row_roi(roi_rows.first(), roi_rows.last()) || !_detector.set_frame_roi(roi_frames.first(), roi_frames.last()) :
               !_detector.reset_roi()) {
-            printf("ConfigAction: failed to write ROI parameters to detector!\n");
-            _error = true;
-          } else if (!_detector.width(&width_rbv)) {
-            printf("ConfigAction: failed to readback width parametar from detector!\n");
-            _error = true;
-          } else if (!_detector.height(&height_rbv)) {
-            printf("ConfigAction: failed to readback height parameter from detector!\n");
-            _error = true;
-          } else if (!_detector.nframes(&num_frames_rbv)) {
-            printf("ConfigAction: failed to readback num_frames parameter from detector!\n");
-            _error = true;
-          } else if (!_detector.nbytes(&num_bytes_rbv)) {
-            printf("ConfigAction: failed to readback nbytes parameter from detector!\n");
-            _error = true;
-          } else if (!_detector.type(&type_rbv)) {
-            printf("ConfigAction: failed to readback type parameter from detector!\n");
-            _error = true;
-          } else if (!_detector.acq_count(&acq_count)) {
-            printf("ConfigAction: failed to readback acq_count parameter from detector!\n");
-            _error = true;
-          } else if (!_detector.get_row_roi(&first_row, &last_row)) {
-            printf("ConfigAction: failed to readback row_roi parameters from detector!\n");
-            _error = true;
-          } else if (!_detector.get_frame_roi(&first_frame, &last_frame)) {
-            printf("ConfigAction: failed to readback frame_roi parameters from detector!\n");
+            printf("ConfigAction: failed to configure the ROI of the detector!\n");
             _error = true;
           }
 
           if (_error) {
-            UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: unable to readback frame configuration!\n");
-            _mgr.appliance().post(msg);
-          } else if (num_frames_rbv > _max_num_frames) { // check that the number of frames does not exceed max_num_frames
-            printf("ConfigAction: the detector has %u frames, but the event builder is only configured for %u!\n", num_frames_rbv, _max_num_frames);
-            _error = true;
-            UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: the detector has more frames than the maximum set in the event builder!\n");
+            UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: failed to reset/configure the ROI of the detector!\n");
             _mgr.appliance().post(msg);
           } else {
-            printf("Detector info:\n");
-            printf(" Width is:      %u\n", width_rbv);
-            printf(" Height is:     %u\n", height_rbv);
-            printf(" Num frames is: %u\n", num_frames_rbv);
-            printf(" Num bytes is:  %u\n", num_bytes_rbv);
-            printf(" Type is:       %u\n", type_rbv);
-            printf(" Acq Count is:  %u\n", acq_count);
-            printf("ROI info:\n");
-            printf(" first row:     %u\n", first_row);
-            printf(" last row:      %u\n", last_row);
-            printf(" first frame:   %u\n", first_frame);
-            printf(" last frame:    %u\n", last_frame);
-
-            // acq_count returned by the server is the number it will send with the next frame
-            // so the last frame is one less than that!
-            _server.setFrame(acq_count-1);
-
-            UxiConfig::setSize(_config, width_rbv, height_rbv, num_frames_rbv, num_bytes_rbv, type_rbv);
-            UxiConfig::setRoi(_config, first_row, last_row, first_frame, last_frame);
-
             ndarray<const uint32_t, 1> time_on  = _config.timeOn();
             ndarray<const uint32_t, 1> time_off = _config.timeOff();
             ndarray<const uint32_t, 1> delay    = _config.delay();
@@ -340,10 +303,71 @@ namespace Pds {
                     UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: failed to readback the pots of the detector!\n");
                     _mgr.appliance().post(msg);
                   } else {
-                    // Add the read back pots values to the config
-                    UxiConfig::setPots(_config, pots_rbv);
-                    // Finally enable the frame reader
-                    _reader.enable();
+                    if (!_detector.width(&width_rbv)) {
+                      printf("ConfigAction: failed to readback width parametar from detector!\n");
+                      _error = true;
+                    } else if (!_detector.height(&height_rbv)) {
+                      printf("ConfigAction: failed to readback height parameter from detector!\n");
+                      _error = true;
+                    } else if (!_detector.nframes(&num_frames_rbv)) {
+                      printf("ConfigAction: failed to readback num_frames parameter from detector!\n");
+                      _error = true;
+                    }  else if (!_detector.nbytes(&num_bytes_rbv)) {
+                      printf("ConfigAction: failed to readback nbytes parameter from detector!\n");
+                      _error = true;
+                    } else if (!_detector.type(&type_rbv)) {
+                      printf("ConfigAction: failed to readback type parameter from detector!\n");
+                      _error = true;
+                    } else if (!_detector.acq_count(&acq_count)) {
+                      printf("ConfigAction: failed to readback acq_count parameter from detector!\n");
+                      _error = true;
+                    } else if (!_detector.get_row_roi(&first_row, &last_row)) {
+                      printf("ConfigAction: failed to readback row_roi parameters from detector!\n");
+                      _error = true;
+                    } else if (!_detector.get_frame_roi(&first_frame, &last_frame)) {
+                      printf("ConfigAction: failed to readback frame_roi parameters from detector!\n");
+                      _error = true;
+                    }
+
+                    if (_error) {
+                      UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: unable to readback frame configuration!\n");
+                      _mgr.appliance().post(msg);
+                    } else if (num_frames_rbv > _max_num_frames) { // check that the number of frames does not exceed max_num_frames
+                      printf("ConfigAction: the detector has %u frames, but the event builder is only configured for %u!\n", num_frames_rbv, _max_num_frames);
+                      _error = true;
+                      UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: the detector has more frames than the maximum set in the event builder!\n");
+                      _mgr.appliance().post(msg);
+                    } else {
+                      printf("Detector info:\n");
+                      printf(" Width is:      %u\n", width_rbv);
+                      printf(" Height is:     %u\n", height_rbv);
+                      printf(" Num frames is: %u\n", num_frames_rbv);
+                      printf(" Num bytes is:  %u\n", num_bytes_rbv);
+                      printf(" Type is:       %u\n", type_rbv);
+                      printf(" Acq Count is:  %u\n", acq_count);
+                      printf("ROI info:\n");
+                      printf(" first row:     %u\n", first_row);
+                      printf(" last row:      %u\n", last_row);
+                      printf(" first frame:   %u\n", first_frame);
+                      printf(" last frame:    %u\n", last_frame);
+
+                      // acq_count returned by the server is the number it will send with the next frame
+                      // so the last frame is one less than that!
+                      _server.setFrame(acq_count-1);
+
+                      // Add the actual frame size and roi to the config
+                      UxiConfig::setSize(_config, width_rbv, height_rbv, num_frames_rbv, num_bytes_rbv, type_rbv);
+                      UxiConfig::setRoi(_config, first_row, last_row, first_frame, last_frame);
+
+                      // Add the read back pots values to the config
+                      UxiConfig::setPots(_config, pots_rbv);
+
+                      // Finally enable the frame reader
+                      _reader.enable();
+
+                      // Set the first config flag to false
+                      _first = false;
+                    }
                   }
                 } else {
                   printf("ConfigAction: failed to commit the configuration to the detector!\n");
@@ -371,6 +395,7 @@ namespace Pds {
       Xtc                   _cfgtc;
       GenericPool           _occPool;
       bool                  _error;
+      bool                  _first;
       unsigned              _max_num_frames;
     };
 

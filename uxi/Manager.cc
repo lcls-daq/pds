@@ -24,6 +24,7 @@ namespace Pds {
         _detector(detector),
         _server(server),
         _disable(true),
+        _acq_stopped(false),
         _acq_count(0),
         _timestamp(0),
         _temp(0.0),
@@ -37,7 +38,7 @@ namespace Pds {
         if (_buffer) delete[] _buffer;
       }
       Task& task() { return *_task; }
-      void enable () {
+      void configure() {
         _detector.frame_size(&_frame_sz);
         _entry_sz = sizeof(UxiDataType) + _frame_sz;
         if (_buffer && (_buffer_sz < _entry_sz)) {
@@ -49,23 +50,29 @@ namespace Pds {
           _buffer = new char[_buffer_sz];
         }
         _server.set_frame_sz(_frame_sz);
+      }
+      void unconfigure() {
+        ;
+      }
+      void enable() {
         if (_disable) {
           _disable=false;
           _task->call(this);
         }
       }
       void disable() {
-        _disable=true ;
+        _disable=true;
       }
       void routine() {
         if (_disable) {
+          printf("reader stopping now!\n");
           ;
         } else {
           _frame_ptr = (uint16_t*) (_buffer + sizeof(UxiDataType));
-          if (_detector.get_frames(_acq_count, _frame_ptr, &_temp, &_timestamp)) {
+          if (_detector.get_frames(_acq_count, _frame_ptr, &_temp, &_timestamp, &_acq_stopped)) {
             new (_buffer) UxiDataType(_acq_count, _timestamp, _temp);
             _server.post(_buffer);
-          } else {
+          } else if (!_acq_stopped) {
             fprintf(stderr, "Error: FrameReader failed to retrieve frames from Uxi receiver\n");
           }
           _task->call(this);
@@ -76,6 +83,7 @@ namespace Pds {
       Detector& _detector;
       Server&   _server;
       bool      _disable;
+      bool      _acq_stopped;
       uint32_t  _acq_count;
       uint32_t  _timestamp;
       double    _temp;
@@ -367,8 +375,8 @@ namespace Pds {
                         _detector.flush();
                       }
 
-                      // Finally enable the frame reader
-                      _reader.enable();
+                      // Finally configure the frame reader
+                      _reader.configure();
 
                       // Set the first config flag to false
                       _first = false;
@@ -416,7 +424,7 @@ namespace Pds {
         return dg;
       }
       Transition* fire(Transition* tr) {
-        _reader.disable();
+        _reader.unconfigure();
         return tr;
       }
     private:
@@ -426,8 +434,9 @@ namespace Pds {
 
     class EnableAction : public Action {
     public:
-      EnableAction(Detector& detector, L1Action& l1):
+      EnableAction(Detector& detector, FrameReader& reader, L1Action& l1):
         _detector(detector),
+        _reader(reader),
         _l1(l1),
         _error(false) { }
       ~EnableAction() { }
@@ -440,18 +449,23 @@ namespace Pds {
       }
       Transition* fire(Transition* tr) {
         _l1.sync();
+        _reader.enable();
         _error = !_detector.start();
         return tr;
       }
     private:
       Detector&     _detector;
+      FrameReader&  _reader;
       L1Action&     _l1;
       bool          _error;
     };
 
     class DisableAction : public Action {
     public:
-      DisableAction(Detector& detector): _detector(detector), _error(false) { }
+      DisableAction(Detector& detector, FrameReader& reader):
+        _detector(detector),
+        _reader(reader),
+        _error(false) { }
       ~DisableAction() { }
       InDatagram* fire(InDatagram* dg) {
         if (_error) {
@@ -461,11 +475,13 @@ namespace Pds {
         return dg;
       }
       Transition* fire(Transition* tr) {
+        _reader.disable();
         _error = !_detector.stop();
         return tr;
       }
     private:
       Detector&     _detector;
+      FrameReader&  _reader;
       bool          _error;
     };
   }
@@ -481,8 +497,8 @@ Manager::Manager(Detector& detector, Server& server, CfgClientNfs& cfg, unsigned
 
   _fsm.callback(Pds::TransitionId::Map, new AllocAction(cfg));
   _fsm.callback(Pds::TransitionId::Configure  , new ConfigAction(*this, detector, server, reader, cfg, *l1, max_num_frames));
-  _fsm.callback(Pds::TransitionId::Enable     , new EnableAction(detector, *l1));
-  _fsm.callback(Pds::TransitionId::Disable    , new DisableAction(detector));
+  _fsm.callback(Pds::TransitionId::Enable     , new EnableAction(detector, reader, *l1));
+  _fsm.callback(Pds::TransitionId::Disable    , new DisableAction(detector, reader));
   _fsm.callback(Pds::TransitionId::Unconfigure, new UnconfigureAction(reader));
   _fsm.callback(Pds::TransitionId::L1Accept , l1);
 }

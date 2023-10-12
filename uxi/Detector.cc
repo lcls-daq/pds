@@ -8,6 +8,7 @@
 
 #define REPLY_SIZE 64
 #define CMD_SIZE 32
+#define ACQ_STOP 1
 
 #pragma pack(push)
 #pragma pack(4)
@@ -16,6 +17,8 @@ struct uxi_header {
   uint32_t height;
   uint32_t width;
   uint32_t number;
+  uint32_t raw;
+  uint32_t error;
   uint32_t timestamp;
   double temperature;
 };
@@ -47,6 +50,8 @@ Detector::Detector(const char* host, unsigned comm_port, unsigned data_port) :
   _data_up(false),
   _comm_up(false),
   _header_buf(new char[sizeof(uxi_header)]),
+  _parse_buf(NULL),
+  _parse_sz(0),
   _context(0),
   _data(0)
 {
@@ -63,6 +68,9 @@ Detector::~Detector()
   }
   if (_header_buf) {
     delete[] _header_buf;
+  }
+  if (_parse_buf) {
+    delete[] _parse_buf;
   }
 }
 
@@ -118,11 +126,16 @@ bool Detector::connect_socket(void* sock, unsigned port)
   }
 }
 
-bool Detector::get_frames(uint32_t& acq_num, uint16_t* data, double* temp, uint32_t* timestamp)
+bool Detector::get_frames(uint32_t& acq_num, uint16_t* data, double* temp, uint32_t* timestamp, bool* acq_stopped)
 {
   if (!_data_up) {
     fprintf(stderr, "Error: cannot get frames when the data link to uxi is down!\n");
     return false;
+  }
+
+  // initialize to false because the acq_stopped pointer is used even on failure
+  if (acq_stopped) {
+    *acq_stopped = false;
   }
 
   int rc = zmq_recv(_data, _header_buf, sizeof(uxi_header), 0);
@@ -134,6 +147,17 @@ bool Detector::get_frames(uint32_t& acq_num, uint16_t* data, double* temp, uint3
     return false;
   } else {
     struct uxi_header* hdr = (struct uxi_header*) _header_buf;
+    if (hdr->error) {
+      if (hdr->error == ACQ_STOP) {
+        if (acq_stopped) {
+          *acq_stopped = true;
+        }
+        return false;
+      } else {
+        fprintf(stderr, "Error: data header error field set to %u\n", hdr->error);
+        return false;
+      }
+    }
     acq_num = hdr->frame;
     if (temp) {
       *temp = hdr->temperature;
@@ -143,25 +167,60 @@ bool Detector::get_frames(uint32_t& acq_num, uint16_t* data, double* temp, uint3
     }
 
     bool status = true;
-    for (unsigned i=0; i<hdr->number; i++) {
-      rc = get_frame_part(data, hdr->height*hdr->width*sizeof(uint16_t));
-      
+    if (hdr->raw) {
+      char tmp[5];
+      memset(tmp, 0, 5);
+      size_t raw_sz = hdr->number*hdr->height*hdr->width*sizeof(uint32_t);
+
+      // check if the raw frame parse buffer is large enough
+      if (_parse_buf && (_parse_sz < raw_sz)) {
+        delete[] _parse_buf;
+        _parse_buf = NULL;
+      }
+
+      // allocate a parse buffer if one doesn't exist
+      _parse_sz = raw_sz;
+      _parse_buf = new char[_parse_sz];
+
+      // fetch the raw frame
+      rc = get_frame_part(_parse_buf, _parse_sz);
+
       if (rc <= 0) {
-        fprintf(stderr, "Error: failed to read frame %d payload", i);
+        fprintf(stderr, "Error: failed to read raw frame payload\n");
         status = false;
-        break;
-      } else if(((unsigned) rc) != hdr->height*hdr->width*sizeof(uint16_t)) {
-        fprintf(stderr, "Error: frame %d payload size %d differs from expected %lu\n", i, rc, hdr->height*hdr->width*sizeof(uint16_t));
+      } else if(((unsigned) rc) != raw_sz) {
+        fprintf(stderr, "Error: raw frame payload size %d differs from expected %lu\n", rc, raw_sz);
         status = false;
       }
-      data += hdr->height*hdr->width;
+
+      // if the raw frame fetch worked try to parse the raw data
+      if (status) {
+        for(unsigned i=0; i<hdr->number*hdr->height*hdr->width; i++) {
+          memcpy(tmp, &_parse_buf[sizeof(uint32_t)*i], sizeof(uint32_t));
+          data[i] = (uint16_t) strtol(tmp, NULL, 16);
+        }
+      }
+    } else {
+      for (unsigned i=0; i<hdr->number; i++) {
+        rc = get_frame_part(data, hdr->height*hdr->width*sizeof(uint16_t));
+
+        if (rc <= 0) {
+          fprintf(stderr, "Error: failed to read frame %d payload\n", i);
+          status = false;
+          break;
+        } else if(((unsigned) rc) != hdr->height*hdr->width*sizeof(uint16_t)) {
+          fprintf(stderr, "Error: frame %d payload size %d differs from expected %lu\n", i, rc, hdr->height*hdr->width*sizeof(uint16_t));
+          status = false;
+        }
+        data += hdr->height*hdr->width;
+      }
     }
 
     return status;
   }
 }
 
-int Detector::get_frame_part(uint16_t* data, size_t len)
+int Detector::get_frame_part(void* data, size_t len)
 {
   int rc;
   int64_t more;
@@ -476,7 +535,7 @@ bool Detector::get_command(const char* cmd, void* payload, size_t size)
 
 bool Detector::flush_socket(void* sock)
 {
-  static const int max_tries = 100;
+  static const int max_tries = 1000;
   char reply[REPLY_SIZE];
   memset(reply, 0, sizeof reply);
   int rc = 0;

@@ -41,11 +41,11 @@ namespace Pds {
       bool set_frame_roi(unsigned first, unsigned last);
       bool get_frame_roi(unsigned* first, unsigned* last);
       bool reset_roi();
-      bool get_frames(uint32_t& acq_num, uint16_t* data, double* temp=NULL, uint32_t* timestamp=NULL);
+      bool get_frames(uint32_t& acq_num, uint16_t* data, double* temp=NULL, uint32_t* timestamp=NULL, bool* acq_stopped=NULL);
 
       static const int BasePort = 14100;
     private:
-      int get_frame_part(uint16_t* data, size_t len);
+      int get_frame_part(void* data, size_t len);
       bool connect_socket(void* sock, unsigned port);
       bool get_uint32(const char* cmd, uint32_t* value);
       bool get_double(const char* cmd, double* value);
@@ -59,6 +59,8 @@ namespace Pds {
       bool        _data_up;
       bool        _comm_up;
       char*       _header_buf;
+      char*       _parse_buf;
+      unsigned    _parse_sz;
       void*       _context;
       void*       _data;
       void*       _comm;

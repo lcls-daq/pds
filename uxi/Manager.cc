@@ -65,7 +65,6 @@ namespace Pds {
       }
       void routine() {
         if (_disable) {
-          printf("reader stopping now!\n");
           ;
         } else {
           _frame_ptr = (uint16_t*) (_buffer + sizeof(UxiDataType));

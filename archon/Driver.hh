@@ -217,7 +217,7 @@ namespace Pds {
         const char* rd_config_line(unsigned num);
         const char* command_output(const char* cmd, char delim='\n');
         const char* message() const;
-        AcqMode acquisition_mode() const;
+        AcqMode acquisition_mode();
         const System& system() const;
         const Status& status() const;
         const BufferInfo& buffer_info() const;
@@ -242,6 +242,7 @@ namespace Pds {
         char*         _readbuf;
         char*         _writebuf;
         char*         _message;
+        uint32_t      _end_frame;
         uint32_t      _last_frame;
         timespec      _sleep_time;
         System        _system;

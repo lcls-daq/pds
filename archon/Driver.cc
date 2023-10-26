@@ -672,6 +672,7 @@ Driver::Driver(const char* host, unsigned port) :
   _msgref(0),
   _readbuf_sz(BUFFER_SIZE),
   _writebuf_sz(BUFFER_SIZE),
+  _end_frame(0),
   _last_frame(0),
   _system(MODULE_MAX),
   _buffer_info(NUM_BUFFERS)
@@ -696,8 +697,12 @@ Driver::~Driver()
   }
 }
 
-AcqMode Driver::acquisition_mode() const
+AcqMode Driver::acquisition_mode()
 {
+  if (_end_frame && _last_frame >= _end_frame) {
+    _acq_mode = Stopped;
+  }
+
   return _acq_mode;
 }
 
@@ -904,7 +909,7 @@ bool Driver::wait_frame(void* data, FrameMetaData* frame_meta, int timeout)
   timespec start_time;
   timespec current_time;
   clock_gettime(CLOCK_REALTIME, &start_time);
-  while((_acq_mode != Stopped) && !_timeout_req && waiting && fetch_buffer_info()) {
+  while((acquisition_mode() != Stopped) && !_timeout_req && waiting && fetch_buffer_info()) {
     newest_frame = _buffer_info.frame_num();
     if (newest_frame > _last_frame) {
       // We have seen at least one new frame
@@ -939,9 +944,11 @@ bool Driver::start_acquisition(uint32_t num_frames)
 
   if (num_frames) {
     status = load_parameter("Exposures", num_frames);
+    _end_frame = _last_frame + num_frames;
     _acq_mode = Fixed;
   } else {
     status = load_parameter("ContinuousExposures", 1U);
+    _end_frame = 0;
     _acq_mode = Continuous;
   }
 

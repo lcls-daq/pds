@@ -348,7 +348,7 @@ uint16_t System::present() const
 
 bool System::module_present(unsigned mod) const
 {
-  if (mod < (unsigned) _num_modules) {
+  if ((mod > 0) && (mod <= (unsigned) _num_modules)) {
     return ((1U<<(mod-1)) & present());
   } else {
     return false;
@@ -1155,7 +1155,7 @@ bool Driver::set_bias(int channel, bool enabled, float voltage, bool fetch)
   char* modify = buffer;
 
   if (!fetch || fetch_system()) {
-    for (int i=0; i<_system.num_modules(); i++) {
+    for (int i=1; i<=_system.num_modules(); i++) {
       if (_system.module_type(i) == XV_MOD_TYPE) {
         module = i;
         break;
@@ -1190,7 +1190,7 @@ bool Driver::get_bias(int channel, float* voltage, float* current, bool fetch)
   char buffer[32];
   int module = -1;
   if (!fetch || (fetch_system() && fetch_status())) {
-    for (int i=0; i<_system.num_modules(); i++) {
+    for (int i=1; i<=_system.num_modules(); i++) {
       if (_system.module_type(i) == XV_MOD_TYPE) {
         module = i;
         break;

@@ -452,6 +452,13 @@ double Status::backplane_temp() const
   return get_value_as_double("BACKPLANE_TEMP");
 }
 
+double Status::module_temp(unsigned module_num) const
+{
+  char buffer[32];
+  snprintf(buffer, sizeof(buffer), "MOD%d/TEMP", module_num);
+  return get_value_as_double(buffer);
+}
+
 double Status::get_module_voltage(unsigned module_num, const char* module_name, int channel) const
 {
   return get_module_readback(module_num, module_name, channel, "V");

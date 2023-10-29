@@ -113,6 +113,7 @@ namespace Pds {
         PowerMode power() const;
         const char* power_str() const;
         double backplane_temp() const;
+        double module_temp(unsigned module_num) const;
         double get_module_voltage(unsigned module_num, const char* module_name, int channel) const;
         double get_module_current(unsigned module_num, const char* module_name, int channel) const;
         bool is_power_good() const;

@@ -203,7 +203,7 @@ namespace Pds {
               printf(" ID:   %s\n", system.id().c_str());
               printf(" Module present mask: %#06x\n", system.present());
               printf("Module Info:\n");
-              for (unsigned i=1; i<=system.num_modules(); i++) {
+              for (unsigned i=1; i<=(unsigned) system.num_modules(); i++) {
                 if (system.module_present(i)) {
                   printf(" Module %u:\n", i);
                   printf("  Type: %u\n", system.module_type(i));

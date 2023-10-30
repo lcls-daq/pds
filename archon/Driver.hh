@@ -141,6 +141,9 @@ namespace Pds {
         uint32_t pixels_per_line() const;
         uint32_t total_pixels() const;
         uint32_t frame_size() const;
+        uint32_t trigout_force() const;
+        uint32_t trigout_level() const;
+        uint32_t trigout_invert() const;
         std::string line(unsigned num) const;
         std::string parameter(const char* name) const;
         std::string constant(const char* name) const;
@@ -205,6 +208,7 @@ namespace Pds {
         bool set_non_integration_time(unsigned milliseconds);
         bool set_linescan_mode(bool enable, bool reload=true);
         bool set_external_trigger(bool enable, bool reload=true);
+        bool set_trigger_out(bool force, bool level, bool invert, bool reload=true);
         bool set_clock_at(unsigned ticks);
         bool set_clock_st(unsigned ticks);
         bool set_clock_stm1(unsigned ticks);

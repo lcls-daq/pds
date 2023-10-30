@@ -5,7 +5,7 @@ namespace Pds {
   namespace Archon {
     static const int ARCHON_VERSION       = 1;
     static const int ARCHON_REVISION      = 0;
-    static const int ARCHON_MODIFICATION  = 0;
+    static const int ARCHON_MODIFICATION  = 2;
   }
 }
 

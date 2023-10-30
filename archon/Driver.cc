@@ -560,6 +560,21 @@ uint32_t Config::frame_size() const
   return total_pixels() * bytes_per_pixel();
 }
 
+uint32_t Config::trigout_force() const
+{
+  return get_value_as_uint32("TRIGOUTFORCE");
+}
+
+uint32_t Config::trigout_level() const
+{
+  return get_value_as_uint32("TRIGOUTLEVEL");
+}
+
+uint32_t Config::trigout_invert() const
+{
+  return get_value_as_uint32("TRIGOUTINVERT");
+}
+
 std::string Config::line(unsigned num) const
 {
   char line_name[32];
@@ -1134,6 +1149,22 @@ bool Driver::set_external_trigger(bool enable, bool reload)
     }
 
     return load_parameter("ExternalTrigger", enable ? 1 : 0);
+  } else {
+    return false;
+  }
+}
+
+bool Driver::set_trigger_out(bool force, bool level, bool invert, bool reload)
+{
+  if (edit_config_line("TRIGOUTFORCE", force ? 1 : 0) &&
+      edit_config_line("TRIGOUTLEVEL", level ? 1 : 0) &&
+      edit_config_line("TRIGOUTINVERT", invert ? 1 : 0)) {
+    if (reload) {
+      if (!command("APPLYSYSTEM"))
+        return false;
+    }
+
+    return true;
   } else {
     return false;
   }

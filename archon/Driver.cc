@@ -671,12 +671,24 @@ std::string Config::extract_sub_key(const char* num_entries, const char* entry_f
 FrameMetaData::FrameMetaData() :
   number(0),
   timestamp(0),
+  fetch(0),
+  batch(0),
+  width(0),
+  height(0),
+  is32bit(0),
   size(0)
 {}
 
-FrameMetaData::FrameMetaData(uint32_t number, uint64_t timestamp, ssize_t size) :
+FrameMetaData::FrameMetaData(uint32_t number, uint64_t timestamp, uint64_t fetch,
+                             uint32_t batch, uint32_t width, uint32_t height,
+                             uint32_t is32bit, ssize_t size) :
   number(number),
   timestamp(timestamp),
+  fetch(fetch),
+  batch(batch),
+  width(width),
+  height(height),
+  is32bit(is32bit),
   size(size)
 {}
 
@@ -696,6 +708,7 @@ Driver::Driver(const char* host, unsigned port) :
   _writebuf_sz(BUFFER_SIZE),
   _end_frame(0),
   _last_frame(0),
+  _sleep_enabled(true),
   _system(MODULE_MAX),
   _buffer_info(NUM_BUFFERS)
 {
@@ -866,9 +879,18 @@ bool Driver::fetch_frame(uint32_t frame_number, void* data, FrameMetaData* frame
 
   ssize_t size = 0;
   uint64_t timestamp = 0;
+  uint64_t fetch = 0;
+  uint32_t batch = _config.linescan();
+  uint32_t width = 0;
+  uint32_t height = 0;
+  bool is32bit = false;
   unsigned buffer_idx = _buffer_info.frame_ready(frame_number);
   if (buffer_idx) {
+    fetch = _buffer_info.fetch_time();
     timestamp = _buffer_info.timestamp(buffer_idx);
+    width = _buffer_info.width(buffer_idx);
+    height = _buffer_info.height(buffer_idx);
+    is32bit = _buffer_info.is32bit(buffer_idx);
     size = fetch_buffer(buffer_idx, data);
     if (size != _buffer_info.size(buffer_idx)) {
       fprintf(stderr, "Error fetching frame %u: unexpected size %lu vs expected of %u\n", frame_number, size, _buffer_info.size(buffer_idx));
@@ -882,6 +904,11 @@ bool Driver::fetch_frame(uint32_t frame_number, void* data, FrameMetaData* frame
   if (frame_meta) {
     frame_meta->number = frame_number;
     frame_meta->timestamp = timestamp;
+    frame_meta->fetch = fetch;
+    frame_meta->batch = batch;
+    frame_meta->width = width;
+    frame_meta->height = height;
+    frame_meta->is32bit = is32bit;
     frame_meta->size = size;
   }
 
@@ -899,11 +926,20 @@ bool Driver::flush_frame(void* data, FrameMetaData* frame_meta)
 
   ssize_t size = 0;
   uint64_t timestamp = 0;
+  uint64_t fetch = 0;
+  uint32_t batch = _config.linescan();
+  uint32_t width = 0;
+  uint32_t height = 0;
+  bool is32bit = false;
   uint32_t frame_number = 0;
   unsigned buffer_idx = _buffer_info.write_buffer();
   if (!_buffer_info.complete(buffer_idx)) {
+    fetch = _buffer_info.fetch_time();
     frame_number = _buffer_info.frame_num(buffer_idx);
     timestamp = _buffer_info.timestamp(buffer_idx);
+    width = _buffer_info.width(buffer_idx);
+    height = _buffer_info.height(buffer_idx);
+    is32bit = _buffer_info.is32bit(buffer_idx);
     size = fetch_buffer(buffer_idx, data);
     if (size != _buffer_info.size(buffer_idx)) {
       fprintf(stderr, "Error fetching frame %u: unexpected size %lu vs expected of %u\n", frame_number, size, _buffer_info.size(buffer_idx));
@@ -913,6 +949,11 @@ bool Driver::flush_frame(void* data, FrameMetaData* frame_meta)
     if (frame_meta) {
       frame_meta->number = frame_number;
       frame_meta->timestamp = timestamp;
+      frame_meta->fetch = fetch;
+      frame_meta->batch = batch;
+      frame_meta->width = width;
+      frame_meta->height = height;
+      frame_meta->is32bit = is32bit;
       frame_meta->size = size;
     }
 
@@ -949,7 +990,7 @@ bool Driver::wait_frame(void* data, FrameMetaData* frame_meta, int timeout)
       printf("wait_frame timed out after %d ms!\n", timeout);
       return false;
     }
-    nanosleep(&_sleep_time, NULL);
+    if (_sleep_enabled) nanosleep(&_sleep_time, NULL);
   }
 
   return false;
@@ -1031,7 +1072,7 @@ bool Driver::wait_power_mode(PowerMode mode, int timeout)
         printf("wait_power mode timed out after %d ms!\n", timeout);
         break;
       }
-      nanosleep(&_sleep_time, NULL);
+      if (_sleep_enabled) nanosleep(&_sleep_time, NULL);
     }
   }
 
@@ -1255,6 +1296,7 @@ void Driver::timeout_waits(bool request_timeout)
 
 void Driver::set_frame_poll_interval(unsigned microseconds)
 {
+  _sleep_enabled = (microseconds != 0);
   _sleep_time.tv_sec = microseconds / 1000000U;
   _sleep_time.tv_nsec = (microseconds % 1000000U) * 1000U;
 }

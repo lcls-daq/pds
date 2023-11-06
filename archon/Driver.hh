@@ -160,11 +160,18 @@ namespace Pds {
     class FrameMetaData {
       public:
         FrameMetaData();
-        FrameMetaData(uint32_t number, uint64_t timestamp, ssize_t size);
+        FrameMetaData(uint32_t number, uint64_t timestamp, uint64_t fetch,
+                      uint32_t batch, uint32_t width, uint32_t height,
+                      uint32_t is32bit, ssize_t size);
         ~FrameMetaData();
       public:
         uint32_t  number;
         uint64_t  timestamp;
+        uint64_t  fetch;
+        uint32_t  batch;
+        uint32_t  width;
+        uint32_t  height;
+        uint32_t  is32bit;
         ssize_t   size;
     };
 
@@ -249,6 +256,7 @@ namespace Pds {
         char*         _message;
         uint32_t      _end_frame;
         uint32_t      _last_frame;
+        bool          _sleep_enabled;
         timespec      _sleep_time;
         System        _system;
         Status        _status;

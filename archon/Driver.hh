@@ -213,6 +213,7 @@ namespace Pds {
         bool set_preframe_skip(unsigned num_lines);
         bool set_integration_time(unsigned milliseconds);
         bool set_non_integration_time(unsigned milliseconds);
+        bool set_waiting_time(unsigned milliseconds);
         bool set_linescan_mode(bool enable, bool reload=true);
         bool set_external_trigger(bool enable, bool reload=true);
         bool set_trigger_out(bool force, bool level, bool invert, bool reload=true);

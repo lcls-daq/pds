@@ -1167,6 +1167,11 @@ bool Driver::set_non_integration_time(unsigned milliseconds)
   return load_parameter("NoIntMS", milliseconds);
 }
 
+bool Driver::set_waiting_time(unsigned milliseconds)
+{
+  return load_parameter("WaitMS", milliseconds);
+}
+
 bool Driver::set_linescan_mode(bool enable, bool reload)
 {
   if (edit_config_line("LINESCAN", enable ? 1 : 0)) {

@@ -287,6 +287,9 @@ namespace Pds {
                 } else if (!_driver.set_non_integration_time(config->nonIntegrationTime())) {
                   printf("ConfigAction: failed to set non_integration_time parameter!\n");
                   _error = true;
+                } else if (!_driver.set_waiting_time(0)) {
+                  printf("ConfigAction: failed to set waiting_time parameter!\n");
+                  _error = true;
                 } else if (!_driver.set_idle_clear(config->idleSweepCount())) {
                   printf("ConfigAction: failed to set idle_clear parameter!\n");
                   _error = true;

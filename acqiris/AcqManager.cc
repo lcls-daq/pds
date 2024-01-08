@@ -1141,7 +1141,7 @@ unsigned AcqManager::temperature(MultiModuleNumber module) {
 }
 
 const char* AcqManager::calibPath() {
-  static const char* _calibPath = "/reg/g/pcds/pds/acqcalib/";
+  static const char* _calibPath = "/cds/group/pcds/pds/acqcalib/";
   return _calibPath;
 }
 

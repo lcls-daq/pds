@@ -671,6 +671,8 @@ std::string Config::extract_sub_key(const char* num_entries, const char* entry_f
 FrameMetaData::FrameMetaData() :
   number(0),
   timestamp(0),
+  re_timestamp(0),
+  fe_timestamp(0),
   fetch(0),
   batch(0),
   width(0),
@@ -679,11 +681,20 @@ FrameMetaData::FrameMetaData() :
   size(0)
 {}
 
-FrameMetaData::FrameMetaData(uint32_t number, uint64_t timestamp, uint64_t fetch,
-                             uint32_t batch, uint32_t width, uint32_t height,
-                             uint32_t is32bit, ssize_t size) :
+FrameMetaData::FrameMetaData(uint32_t number,
+                             uint64_t timestamp,
+                             uint64_t re_timestamp,
+                             uint64_t fe_timestamp,
+                             uint64_t fetch,
+                             uint32_t batch,
+                             uint32_t width,
+                             uint32_t height,
+                             uint32_t is32bit,
+                             ssize_t size) :
   number(number),
   timestamp(timestamp),
+  re_timestamp(re_timestamp),
+  fe_timestamp(fe_timestamp),
   fetch(fetch),
   batch(batch),
   width(width),
@@ -879,6 +890,8 @@ bool Driver::fetch_frame(uint32_t frame_number, void* data, FrameMetaData* frame
 
   ssize_t size = 0;
   uint64_t timestamp = 0;
+  uint64_t re_timestamp = 0;
+  uint64_t fe_timestamp = 0;
   uint64_t fetch = 0;
   uint32_t batch = _config.linescan();
   uint32_t width = 0;
@@ -888,6 +901,8 @@ bool Driver::fetch_frame(uint32_t frame_number, void* data, FrameMetaData* frame
   if (buffer_idx) {
     fetch = _buffer_info.fetch_time();
     timestamp = _buffer_info.timestamp(buffer_idx);
+    re_timestamp = _buffer_info.re_timestamp(buffer_idx);
+    fe_timestamp = _buffer_info.fe_timestamp(buffer_idx);
     width = _buffer_info.width(buffer_idx);
     height = _buffer_info.height(buffer_idx);
     is32bit = _buffer_info.is32bit(buffer_idx);
@@ -904,6 +919,8 @@ bool Driver::fetch_frame(uint32_t frame_number, void* data, FrameMetaData* frame
   if (frame_meta) {
     frame_meta->number = frame_number;
     frame_meta->timestamp = timestamp;
+    frame_meta->re_timestamp = re_timestamp;
+    frame_meta->fe_timestamp = fe_timestamp;
     frame_meta->fetch = fetch;
     frame_meta->batch = batch;
     frame_meta->width = width;
@@ -926,6 +943,8 @@ bool Driver::flush_frame(void* data, FrameMetaData* frame_meta)
 
   ssize_t size = 0;
   uint64_t timestamp = 0;
+  uint64_t re_timestamp = 0;
+  uint64_t fe_timestamp = 0;
   uint64_t fetch = 0;
   uint32_t batch = _config.linescan();
   uint32_t width = 0;
@@ -937,6 +956,8 @@ bool Driver::flush_frame(void* data, FrameMetaData* frame_meta)
     fetch = _buffer_info.fetch_time();
     frame_number = _buffer_info.frame_num(buffer_idx);
     timestamp = _buffer_info.timestamp(buffer_idx);
+    re_timestamp = _buffer_info.re_timestamp(buffer_idx);
+    fe_timestamp = _buffer_info.fe_timestamp(buffer_idx);
     width = _buffer_info.width(buffer_idx);
     height = _buffer_info.height(buffer_idx);
     is32bit = _buffer_info.is32bit(buffer_idx);
@@ -949,6 +970,8 @@ bool Driver::flush_frame(void* data, FrameMetaData* frame_meta)
     if (frame_meta) {
       frame_meta->number = frame_number;
       frame_meta->timestamp = timestamp;
+      frame_meta->re_timestamp = re_timestamp;
+      frame_meta->fe_timestamp = fe_timestamp;
       frame_meta->fetch = fetch;
       frame_meta->batch = batch;
       frame_meta->width = width;

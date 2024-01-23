@@ -4,7 +4,7 @@
 #include "pdsdata/xtc/TypeId.hh"
 #include "pdsdata/psddl/jungfrau.ddl.h"
 
-typedef Pds::Jungfrau::ConfigV3 JungfrauConfigType;
+typedef Pds::Jungfrau::ConfigV4 JungfrauConfigType;
 typedef Pds::Jungfrau::ModuleInfoV1 JungfrauModInfoType;
 typedef Pds::Jungfrau::ModuleConfigV1 JungfrauModConfigType;
 

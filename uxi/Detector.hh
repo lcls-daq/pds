@@ -41,6 +41,8 @@ namespace Pds {
       bool set_frame_roi(unsigned first, unsigned last);
       bool get_frame_roi(unsigned* first, unsigned* last);
       bool reset_roi();
+      bool get_oscillator(unsigned* value);
+      bool set_oscillator(unsigned value);
       bool get_frames(uint32_t& acq_num, uint16_t* data, double* temp=NULL, uint32_t* timestamp=NULL, bool* acq_stopped=NULL);
 
       static const int BasePort = 14100;
@@ -49,6 +51,8 @@ namespace Pds {
       bool connect_socket(void* sock, unsigned port);
       bool get_uint32(const char* cmd, uint32_t* value);
       bool get_double(const char* cmd, double* value);
+      bool get_register(const char* name, uint32_t* value, bool is_subreg=false);
+      bool set_register(const char* name, uint32_t valie, bool is_subreg=false);
       bool put_command(const char* cmd, void* payload=NULL, size_t size=0);
       bool get_command(const char* cmd, void* payload, size_t size);
       bool flush_socket(void* sock);

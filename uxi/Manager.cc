@@ -244,6 +244,7 @@ namespace Pds {
           uint32_t width_rbv, height_rbv, num_frames_rbv, num_bytes_rbv, type_rbv, acq_count;
           uint32_t ton_rbv, toff_rbv, tdel_rbv;
           uint32_t first_row, last_row, first_frame, last_frame;
+          uint32_t osc_mode;
           const RoiCoord& roi_rows = _config.roiRows();
           const RoiCoord& roi_frames = _config.roiFrames();
 
@@ -298,94 +299,114 @@ namespace Pds {
                 UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: failed to configure the pots of the detector!\n");
                 _mgr.appliance().post(msg);
               } else {
-                if (_detector.commit()) {
-                  for (unsigned ipot=0; ipot<UxiConfigNumberOfPots; ipot++) {
-                    if (!_detector.get_pot(ipot+1, &pots_rbv[ipot])) {
-                      printf("ConfigAction: failed to readback the value of pot %u of the detector!\n", ipot+1);
-                      _error = true;
-                    }
-                  }
+                // Send the oscillator configuration
+                if (!_detector.set_oscillator(_config.oscillator())) {
+                  printf("ConfigAction: failed to set oscillator mode of the detector to %u!\n", _config.oscillator());
+                  _error = true;
+                }
 
-                  if (_error) {
-                    UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: failed to readback the pots of the detector!\n");
-                    _mgr.appliance().post(msg);
-                  } else {
-                    if (!_detector.width(&width_rbv)) {
-                      printf("ConfigAction: failed to readback width parametar from detector!\n");
-                      _error = true;
-                    } else if (!_detector.height(&height_rbv)) {
-                      printf("ConfigAction: failed to readback height parameter from detector!\n");
-                      _error = true;
-                    } else if (!_detector.nframes(&num_frames_rbv)) {
-                      printf("ConfigAction: failed to readback num_frames parameter from detector!\n");
-                      _error = true;
-                    }  else if (!_detector.nbytes(&num_bytes_rbv)) {
-                      printf("ConfigAction: failed to readback nbytes parameter from detector!\n");
-                      _error = true;
-                    } else if (!_detector.type(&type_rbv)) {
-                      printf("ConfigAction: failed to readback type parameter from detector!\n");
-                      _error = true;
-                    } else if (!_detector.acq_count(&acq_count)) {
-                      printf("ConfigAction: failed to readback acq_count parameter from detector!\n");
-                      _error = true;
-                    } else if (!_detector.get_row_roi(&first_row, &last_row)) {
-                      printf("ConfigAction: failed to readback row_roi parameters from detector!\n");
-                      _error = true;
-                    } else if (!_detector.get_frame_roi(&first_frame, &last_frame)) {
-                      printf("ConfigAction: failed to readback frame_roi parameters from detector!\n");
-                      _error = true;
+                if (_error) {
+                  UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: failed to configure the oscillator mode the detector!\n");
+                  _mgr.appliance().post(msg);
+                } else {
+                  if (_detector.commit()) {
+                    for (unsigned ipot=0; ipot<UxiConfigNumberOfPots; ipot++) {
+                      if (!_detector.get_pot(ipot+1, &pots_rbv[ipot])) {
+                        printf("ConfigAction: failed to readback the value of pot %u of the detector!\n", ipot+1);
+                        _error = true;
+                      }
                     }
 
                     if (_error) {
-                      UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: unable to readback frame configuration!\n");
-                      _mgr.appliance().post(msg);
-                    } else if (num_frames_rbv > _max_num_frames) { // check that the number of frames does not exceed max_num_frames
-                      printf("ConfigAction: the detector has %u frames, but the event builder is only configured for %u!\n", num_frames_rbv, _max_num_frames);
-                      _error = true;
-                      UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: the detector has more frames than the maximum set in the event builder!\n");
+                      UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: failed to readback the pots of the detector!\n");
                       _mgr.appliance().post(msg);
                     } else {
-                      printf("Detector info:\n");
-                      printf(" Width is:      %u\n", width_rbv);
-                      printf(" Height is:     %u\n", height_rbv);
-                      printf(" Num frames is: %u\n", num_frames_rbv);
-                      printf(" Num bytes is:  %u\n", num_bytes_rbv);
-                      printf(" Type is:       %u\n", type_rbv);
-                      printf(" Acq Count is:  %u\n", acq_count);
-                      printf("ROI info:\n");
-                      printf(" first row:     %u\n", first_row);
-                      printf(" last row:      %u\n", last_row);
-                      printf(" first frame:   %u\n", first_frame);
-                      printf(" last frame:    %u\n", last_frame);
-
-                      // acq_count returned by the server is the number it will send with the next frame
-                      // so the last frame is one less than that!
-                      _server.setFrame(acq_count-1);
-
-                      // Add the actual frame size and roi to the config
-                      UxiConfig::setSize(_config, width_rbv, height_rbv, num_frames_rbv, num_bytes_rbv, type_rbv);
-                      UxiConfig::setRoi(_config, first_row, last_row, first_frame, last_frame);
-
-                      // Add the read back pots values to the config
-                      UxiConfig::setPots(_config, pots_rbv);
-
-                      // Flush any old frames that might be waiting to read from the socket
-                      if (!_first) { // on the first config the flush is already done earlier so skip
-                        _detector.flush();
+                      if (!_detector.width(&width_rbv)) {
+                        printf("ConfigAction: failed to readback width parametar from detector!\n");
+                        _error = true;
+                      } else if (!_detector.height(&height_rbv)) {
+                        printf("ConfigAction: failed to readback height parameter from detector!\n");
+                        _error = true;
+                      } else if (!_detector.nframes(&num_frames_rbv)) {
+                        printf("ConfigAction: failed to readback num_frames parameter from detector!\n");
+                        _error = true;
+                      } else if (!_detector.nbytes(&num_bytes_rbv)) {
+                        printf("ConfigAction: failed to readback nbytes parameter from detector!\n");
+                        _error = true;
+                      } else if (!_detector.type(&type_rbv)) {
+                        printf("ConfigAction: failed to readback type parameter from detector!\n");
+                        _error = true;
+                      } else if (!_detector.acq_count(&acq_count)) {
+                        printf("ConfigAction: failed to readback acq_count parameter from detector!\n");
+                        _error = true;
+                      } else if (!_detector.get_row_roi(&first_row, &last_row)) {
+                        printf("ConfigAction: failed to readback row_roi parameters from detector!\n");
+                        _error = true;
+                      } else if (!_detector.get_frame_roi(&first_frame, &last_frame)) {
+                        printf("ConfigAction: failed to readback frame_roi parameters from detector!\n");
+                        _error = true;
+                      } else if (!_detector.get_oscillator(&osc_mode)) {
+                        printf("ConfigAction: failed to readback oscillator mode from detector!\n");
+                        _error = true;
                       }
 
-                      // Finally configure the frame reader
-                      _reader.configure();
+                      if (_error) {
+                        UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: unable to readback frame configuration!\n");
+                        _mgr.appliance().post(msg);
+                      } else if (num_frames_rbv > _max_num_frames) { // check that the number of frames does not exceed max_num_frames
+                        printf("ConfigAction: the detector has %u frames, but the event builder is only configured for %u!\n", num_frames_rbv, _max_num_frames);
+                        _error = true;
+                        UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: the detector has more frames than the maximum set in the event builder!\n");
+                        _mgr.appliance().post(msg);
+                      } else {
+                        printf("Detector info:\n");
+                        printf(" Width is:      %u\n", width_rbv);
+                        printf(" Height is:     %u\n", height_rbv);
+                        printf(" Num frames is: %u\n", num_frames_rbv);
+                        printf(" Num bytes is:  %u\n", num_bytes_rbv);
+                        printf(" Type is:       %u\n", type_rbv);
+                        printf(" Acq Count is:  %u\n", acq_count);
+                        printf("ROI info:\n");
+                        printf(" first row:     %u\n", first_row);
+                        printf(" last row:      %u\n", last_row);
+                        printf(" first frame:   %u\n", first_frame);
+                        printf(" last frame:    %u\n", last_frame);
+                        printf("Oscillator info:\n");
+                        printf(" mode:          %u\n", osc_mode);
+                        printf("Pots info:\n");
+                        for (unsigned i=0; i<UxiConfigNumberOfPots; i++) {
+                          printf(" pot%02u:     %.2f\n", i, pots_rbv[i]);  
+                        }
 
-                      // Set the first config flag to false
-                      _first = false;
+                        // acq_count returned by the server is the number it will send with the next frame
+                        // so the last frame is one less than that!
+                        _server.setFrame(acq_count-1);
+
+                        // Add the actual frame size and roi to the config
+                        UxiConfig::setSize(_config, width_rbv, height_rbv, num_frames_rbv, num_bytes_rbv, type_rbv);
+                        UxiConfig::setRoi(_config, first_row, last_row, first_frame, last_frame);
+
+                        // Add the read back pots values to the config
+                        UxiConfig::setPots(_config, pots_rbv);
+
+                        // Flush any old frames that might be waiting to read from the socket
+                        if (!_first) { // on the first config the flush is already done earlier so skip
+                          _detector.flush();
+                        }
+
+                        // Finally configure the frame reader
+                        _reader.configure();
+
+                        // Set the first config flag to false
+                        _first = false;
+                      }
                     }
+                  } else {
+                    printf("ConfigAction: failed to commit the configuration to the detector!\n");
+                    _error = true;
+                    UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: failed to commit the configuration to the detector!\n");
+                    _mgr.appliance().post(msg);
                   }
-                } else {
-                  printf("ConfigAction: failed to commit the configuration to the detector!\n");
-                  _error = true;
-                  UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: failed to commit the configuration to the detector!\n");
-                  _mgr.appliance().post(msg);
                 }
               }
             }

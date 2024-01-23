@@ -399,6 +399,16 @@ bool Detector::reset_roi()
   return put_command("ROIRESET");
 }
 
+bool Detector::get_oscillator(unsigned* value)
+{
+  return get_register("OSC_SELECT", value, true);
+}
+
+bool Detector::set_oscillator(unsigned value)
+{
+  return set_register("OSC_SELECT", value, true);
+}
+
 bool Detector::get_uint32(const char* cmd, uint32_t* value)
 {
   if (value) {
@@ -415,6 +425,20 @@ bool Detector::get_double(const char* cmd, double* value)
   } else {
     return false;
   }
+}
+
+bool Detector::get_register(const char* name, uint32_t* value, bool is_subreg)
+{
+  char cmd[CMD_SIZE];
+  snprintf(cmd, sizeof(cmd), "%s%s?", is_subreg ? "SUBREG" : "REG", name);
+  return get_uint32(cmd, value);
+}
+
+bool Detector::set_register(const char* name, uint32_t value, bool is_subreg)
+{
+  char cmd[CMD_SIZE];
+  snprintf(cmd, sizeof(cmd), "%s%s", is_subreg ? "SUBREG" : "REG", name);
+  return put_command(cmd, &value, sizeof(value));
 }
 
 bool Detector::acquire(unsigned nframes)

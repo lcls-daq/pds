@@ -4,13 +4,13 @@
 #include "pdsdata/xtc/TypeId.hh"
 #include "pdsdata/psddl/uxi.ddl.h"
 
-typedef Pds::Uxi::ConfigV2 UxiConfigType;
+typedef Pds::Uxi::ConfigV3 UxiConfigType;
 
 static Pds::TypeId _uxiConfigType(Pds::TypeId::Id_UxiConfig,
           UxiConfigType::Version);
 
-static const unsigned UxiConfigNumberOfPots = Pds::Uxi::ConfigV2::NumberOfPots;
-static const unsigned UxiConfigNumberOfSides = Pds::Uxi::ConfigV2::NumberOfSides;
+static const unsigned UxiConfigNumberOfPots = Pds::Uxi::ConfigV3::NumberOfPots;
+static const unsigned UxiConfigNumberOfSides = Pds::Uxi::ConfigV3::NumberOfSides;
 
 namespace Pds {
   namespace UxiConfig {

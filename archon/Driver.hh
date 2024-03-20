@@ -116,6 +116,9 @@ namespace Pds {
         double module_temp(unsigned module_num) const;
         double get_module_voltage(unsigned module_num, const char* module_name, int channel) const;
         double get_module_current(unsigned module_num, const char* module_name, int channel) const;
+        double get_heater_output(unsigned module_num, char heater) const;
+        uint32_t get_heater_pid(unsigned module_num, char heater, char term) const;
+        double get_sensor_temp(unsigned module_num, char sensor) const;
         bool is_power_good() const;
         bool is_overheated() const;
         bool update(char* buffer);
@@ -184,6 +187,64 @@ namespace Pds {
         ssize_t   size;
     };
 
+    class HeaterConfig {
+      public:
+        HeaterConfig();
+        HeaterConfig(const std::string& label,
+                     uint32_t enable,
+                     uint32_t force,
+                     double forcelevel,
+                     double limit,
+                     double target,
+                     uint32_t sensor,
+                     double pterm,
+                     double iterm,
+                     double dterm,
+                     uint32_t itermlimit,
+                     uint32_t ramp,
+                     uint32_t ramprate,
+                     uint32_t updatetime);
+        ~HeaterConfig();
+        bool operator==(const HeaterConfig& rhs) const;
+        bool operator!=(const HeaterConfig& rhs) const;
+      public:
+        std::string label;
+        uint32_t    enable;
+        uint32_t    force;
+        double      forcelevel;
+        double      limit;
+        double      target;
+        uint32_t    sensor;
+        double      pterm;
+        double      iterm;
+        double      dterm;
+        uint32_t    itermlimit;
+        uint32_t    ramp;
+        uint32_t    ramprate;
+        uint32_t    updatetime;
+    };
+
+    class SensorConfig {
+      public:
+        SensorConfig();
+        SensorConfig(const std::string& label,
+                     uint32_t type,
+                     uint32_t current,
+                     double lowerlimit,
+                     double upperlimit,
+                     uint32_t filter);
+        ~SensorConfig();
+        bool operator==(const SensorConfig& rhs) const;
+        bool operator!=(const SensorConfig& rhs) const;
+      public:
+        std::string label;
+        uint32_t    type;
+        uint32_t    current;
+        double      lowerlimit;
+        double      upperlimit;
+        uint32_t    filter;
+    };
+
     class Driver {
       public:
         Driver(const char* host, unsigned port);
@@ -231,6 +292,13 @@ namespace Pds {
         bool set_clock_stm1(unsigned ticks);
         bool set_bias(int channel, bool enabled, float voltage, bool fetch=false);
         bool get_bias(int channel, float* voltage, float* current, bool fetch=false);
+        bool get_heater_output(char name, double* output, bool fetch=false);
+        bool get_heater_pid(char name, char term, uint32_t* value, bool fetch=false);
+        bool get_sensor_temp(char name, double* temp, bool fetch=false);
+        bool set_heater_config(char name, HeaterConfig* heater, bool reload=true, bool fetch=false);
+        bool get_heater_config(char name, HeaterConfig* heater, bool fetch=false);
+        bool set_sensor_config(char name, SensorConfig* sensor, bool reload=true, bool fetch=false);
+        bool get_sensor_config(char name, SensorConfig* sensor, bool fetch=false);
         int find_config_line(const char* line, bool use_cache=true);
         void timeout_waits(bool request_timeout=true);
         void set_frame_poll_interval(unsigned microseconds);
@@ -266,6 +334,7 @@ namespace Pds {
         char*         _message;
         uint32_t      _end_frame;
         uint32_t      _last_frame;
+        bool          _pending_cfg;
         bool          _sleep_enabled;
         timespec      _sleep_time;
         System        _system;

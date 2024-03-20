@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <math.h>
 
 #define NUM_BUFFERS 3
 #define MODULE_MAX 12
@@ -18,6 +19,8 @@
 #define BURST_LEN 1024
 #define LOAD_PARAM_MAX 1000000
 #define XV_MOD_TYPE 12
+#define HEATERX_MOD_TYPE 11
+#define CONF_FLT_DELTA 0.001
 
 static const char* PowerModeStrings[] = {"Unknown", "Not Configured", "Off", "Intermediate", "On", "Standby"};
 
@@ -469,6 +472,27 @@ double Status::get_module_current(unsigned module_num, const char* module_name, 
   return get_module_readback(module_num, module_name, channel, "I");
 }
 
+double Status::get_heater_output(unsigned module_num, char heater) const
+{
+  char buffer[32];
+  snprintf(buffer, sizeof(buffer), "MOD%d/HEATER%cOUTPUT", module_num, heater);
+  return get_value_as_double(buffer);
+}
+
+uint32_t Status::get_heater_pid(unsigned module_num, char heater, char term) const
+{
+  char buffer[32];
+  snprintf(buffer, sizeof(buffer), "MOD%d/HEATER%c%c", module_num, heater, term);
+  return get_value_as_uint32(buffer);
+}
+
+double Status::get_sensor_temp(unsigned module_num, char sensor) const
+{
+  char buffer[32];
+  snprintf(buffer, sizeof(buffer), "MOD%d/TEMP%c", module_num, sensor);
+  return get_value_as_double(buffer);
+}
+
 double Status::get_module_readback(unsigned module_num, const char* module_name, int channel, const char* type) const
 {
   char buffer[32];
@@ -706,6 +730,119 @@ FrameMetaData::FrameMetaData(uint32_t number,
 FrameMetaData::~FrameMetaData()
 {}
 
+HeaterConfig::HeaterConfig() :
+  label(""),
+  enable(0),
+  force(0),
+  forcelevel(0.0),
+  limit(0.0),
+  target(0.0),
+  sensor(0),
+  pterm(0.0),
+  iterm(0.0),
+  dterm(0.0),
+  itermlimit(0),
+  ramp(0),
+  ramprate(0),
+  updatetime(0)
+{}
+
+HeaterConfig::HeaterConfig(const std::string& label,
+                           uint32_t enable,
+                           uint32_t force,
+                           double forcelevel,
+                           double limit,
+                           double target,
+                           uint32_t sensor,
+                           double pterm,
+                           double iterm,
+                           double dterm,
+                           uint32_t itermlimit,
+                           uint32_t ramp,
+                           uint32_t ramprate,
+                           uint32_t updatetime) :
+  label(label),
+  enable(enable),
+  force(force),
+  forcelevel(forcelevel),
+  limit(limit),
+  target(target),
+  sensor(sensor),
+  pterm(pterm),
+  iterm(iterm),
+  dterm(dterm),
+  itermlimit(itermlimit),
+  ramp(ramp),
+  ramprate(ramprate),
+  updatetime(updatetime)
+{}
+
+HeaterConfig::~HeaterConfig()
+{}
+
+bool HeaterConfig::operator==(const HeaterConfig& rhs) const
+{
+  return (label == rhs.label &&
+          enable == rhs.enable &&
+          force == rhs.force &&
+          forcelevel == rhs.forcelevel &&
+          limit == rhs.limit &&
+          target == rhs.target &&
+          sensor == rhs.sensor &&
+          (fabs(pterm - rhs.pterm) < CONF_FLT_DELTA) &&
+          (fabs(iterm - rhs.iterm) < CONF_FLT_DELTA) &&
+          (fabs(dterm - rhs.dterm) < CONF_FLT_DELTA) &&
+          itermlimit == rhs.itermlimit &&
+          ramp == rhs.ramp &&
+          ramprate == rhs.ramprate &&
+          updatetime == rhs.updatetime);
+}
+
+bool HeaterConfig::operator!=(const HeaterConfig& rhs) const
+{
+  return !(*this == rhs);
+}
+
+SensorConfig::SensorConfig() :
+  label(""),
+  type(0),
+  current(0),
+  lowerlimit(0.0),
+  upperlimit(0.0),
+  filter(0)
+{}
+
+SensorConfig::SensorConfig(const std::string& label,
+                           uint32_t type,
+                           uint32_t current,
+                           double lowerlimit,
+                           double upperlimit,
+                           uint32_t filter) :
+  label(label),
+  type(type),
+  current(current),
+  lowerlimit(lowerlimit),
+  upperlimit(upperlimit),
+  filter(filter)
+{}
+
+SensorConfig::~SensorConfig()
+{}
+
+bool SensorConfig::operator==(const SensorConfig& rhs) const
+{
+  return (label == rhs.label &&
+          type == rhs.type &&
+          current == rhs.current &&
+          (fabs(lowerlimit - rhs.lowerlimit) < CONF_FLT_DELTA) &&
+          (fabs(upperlimit - rhs.upperlimit) < CONF_FLT_DELTA) &&
+          filter == rhs.filter);
+}
+
+bool SensorConfig::operator!=(const SensorConfig& rhs) const
+{
+  return !(*this == rhs);
+}
 
 Driver::Driver(const char* host, unsigned port) :
   _host(host),
@@ -719,6 +856,7 @@ Driver::Driver(const char* host, unsigned port) :
   _writebuf_sz(BUFFER_SIZE),
   _end_frame(0),
   _last_frame(0),
+  _pending_cfg(false),
   _sleep_enabled(true),
   _system(MODULE_MAX),
   _buffer_info(NUM_BUFFERS)
@@ -1105,10 +1243,15 @@ bool Driver::wait_power_mode(PowerMode mode, int timeout)
 bool Driver::power_on()
 {
   if (fetch_status()) {
-    if (_status.power() == Pds::Archon::On)
+    if (_status.power() == Pds::Archon::On) {
       return true;
-    else
+    } else {
+      if (_pending_cfg && !command("APPLYCDS")) {
+        return false;
+      }
+      _pending_cfg = false;
       return command("POWERON");
+    }
   } else {
     return false;
   }
@@ -1284,8 +1427,18 @@ bool Driver::set_bias(int channel, bool enabled, float voltage, bool fetch)
         return false;
       }
 
-      snprintf(buffer, sizeof(buffer), "APPLYMOD%02X", module);
-      return command(buffer);
+      if (fetch_status()) {
+        if (_status.power() == Pds::Archon::On) {
+          // if power is on apply module settings
+          snprintf(buffer, sizeof(buffer), "APPLYMOD%02X", module-1);
+          return command(buffer);
+        } else {
+          // since power is off we'll need to apply modules settings on power on
+          _pending_cfg = true;
+          // if power is not on but also not off that is an error state
+          return _status.power() <= Pds::Archon::Off;
+        }
+      }
     }
   }
 
@@ -1311,6 +1464,355 @@ bool Driver::get_bias(int channel, float* voltage, float* current, bool fetch)
       if (current)
         *current = _status.get_module_current(module, buffer, abs(channel));
       return true;
+    }
+  }
+
+  return false;
+}
+
+bool Driver::get_heater_pid(char name, char term, uint32_t* value, bool fetch)
+{
+  int module = -1;
+  if (!fetch || (fetch_system() && fetch_status())) {
+    for (int i=1; i<=_system.num_modules(); i++) {
+      if (_system.module_type(i) == HEATERX_MOD_TYPE) {
+        module = i;
+        break;
+      }
+    }
+
+    if (module > 0) {
+      if (value)
+        *value = _status.get_heater_pid(module, name, term);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool Driver::get_heater_output(char name, double* output, bool fetch)
+{
+  int module = -1;
+  if (!fetch || (fetch_system() && fetch_status())) {
+    for (int i=1; i<=_system.num_modules(); i++) {
+      if (_system.module_type(i) == HEATERX_MOD_TYPE) {
+        module = i;
+        break;
+      }
+    }
+
+    if (module > 0) {
+      if (output)
+        *output = _status.get_heater_output(module, name);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool Driver::get_sensor_temp(char name, double* temp, bool fetch)
+{
+  int module = -1;
+  if (!fetch || (fetch_system() && fetch_status())) {
+    for (int i=1; i<=_system.num_modules(); i++) {
+      if (_system.module_type(i) == HEATERX_MOD_TYPE) {
+        module = i;
+        break;
+      }
+    }
+
+    if (module > 0) {
+      if (temp)
+        *temp = _status.get_sensor_temp(module, name);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool Driver::set_heater_config(char name, HeaterConfig* heater, bool reload, bool fetch)
+{
+  char buffer[32];
+  int module = -1;
+  size_t base_len;
+  char* modify = buffer;
+
+  if (heater) {
+    if (!fetch || fetch_system()) {
+      for (int i=1; i<=_system.num_modules(); i++) {
+        if (_system.module_type(i) == HEATERX_MOD_TYPE) {
+          module = i;
+          break;
+        }
+      }
+
+      if (module > 0) {
+        snprintf(buffer, sizeof(buffer), "MOD%d/HEATERUPDATETIME", module);
+        if (!edit_config_line(buffer, heater->updatetime)) {
+          return false;
+        }
+
+        snprintf(buffer, sizeof(buffer), "MOD%d/HEATER%c", module, name);
+        base_len = strlen(buffer);
+        modify += base_len;
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "LABEL");
+        if (!edit_config_line(buffer, heater->label.c_str())) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "ENABLE");
+        if (!edit_config_line(buffer, heater->enable)) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "FORCE");
+        if (!edit_config_line(buffer, heater->force)) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "FORCELEVEL");
+        if (!edit_config_line(buffer, heater->forcelevel)) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "LIMIT");
+        if (!edit_config_line(buffer, heater->limit)) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "TARGET");
+        if (!edit_config_line(buffer, heater->target)) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "SENSOR");
+        if (!edit_config_line(buffer, heater->sensor)) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "P");
+        if (!edit_config_line(buffer, heater->pterm)) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "I");
+        if (!edit_config_line(buffer, heater->iterm)) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "D");
+        if (!edit_config_line(buffer, heater->dterm)) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "IL");
+        if (!edit_config_line(buffer, heater->itermlimit)) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "RAMP");
+        if (!edit_config_line(buffer, heater->ramp)) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "RAMPRATE");
+        if (!edit_config_line(buffer, heater->ramprate)) {
+          return false;
+        }
+
+        if (reload) {
+          snprintf(buffer, sizeof(buffer), "APPLYMOD%02X", module-1);
+          return command(buffer);
+        } else {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+bool Driver::get_heater_config(char name, HeaterConfig* heater, bool fetch)
+{
+  char buffer[32];
+  int module = -1;
+  size_t base_len;
+  char* modify = buffer;
+
+  if (heater) {
+    if (!fetch || fetch_system()) {
+      for (int i=1; i<=_system.num_modules(); i++) {
+        if (_system.module_type(i) == HEATERX_MOD_TYPE) {
+          module = i;
+          break;
+        }
+      }
+
+      if (module > 0) {
+        snprintf(buffer, sizeof(buffer), "MOD%d/HEATERUPDATETIME", module);
+        heater->updatetime = _config.get_value_as_uint32(buffer);
+
+        snprintf(buffer, sizeof(buffer), "MOD%d/HEATER%c", module, name);
+        base_len = strlen(buffer);
+        modify += base_len;
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "LABEL");
+        heater->label = _config.get_value(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "ENABLE");
+        heater->enable = _config.get_value_as_uint32(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "FORCE");
+        heater->force = _config.get_value_as_uint32(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "FORCELEVEL");
+        heater->forcelevel = _config.get_value_as_double(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "LIMIT");
+        heater->limit = _config.get_value_as_double(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "TARGET");
+        heater->target = _config.get_value_as_double(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "SENSOR");
+        heater->sensor = _config.get_value_as_uint32(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "P");
+        heater->pterm = _config.get_value_as_double(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "I");
+        heater->iterm = _config.get_value_as_double(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "D");
+        heater->dterm = _config.get_value_as_double(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "IL");
+        heater->itermlimit = _config.get_value_as_uint32(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "RAMP");
+        heater->ramp = _config.get_value_as_uint32(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "RAMPRATE");
+        heater->ramprate = _config.get_value_as_uint32(buffer);
+
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+bool Driver::set_sensor_config(char name, SensorConfig* sensor, bool reload, bool fetch)
+{
+  char buffer[32];
+  int module = -1;
+  size_t base_len;
+  char* modify = buffer;
+
+  if (sensor) {
+    if (!fetch || fetch_system()) {
+      for (int i=1; i<=_system.num_modules(); i++) {
+        if (_system.module_type(i) == HEATERX_MOD_TYPE) {
+          module = i;
+          break;
+        }
+      }
+
+      if (module > 0) {
+        snprintf(buffer, sizeof(buffer), "MOD%d/SENSOR%c", module, name);
+        base_len = strlen(buffer);
+        modify += base_len;
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "LABEL");
+        if (!edit_config_line(buffer, sensor->label.c_str())) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "TYPE");
+        if (!edit_config_line(buffer, sensor->type)) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "CURRENT");
+        if (!edit_config_line(buffer, sensor->current)) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "LOWERLIMIT");
+        if (!edit_config_line(buffer, sensor->lowerlimit)) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "UPPERLIMIT");
+        if (!edit_config_line(buffer, sensor->upperlimit)) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "FILTER");
+        if (!edit_config_line(buffer, sensor->filter)) {
+          return false;
+        }
+
+        if (reload) {
+          snprintf(buffer, sizeof(buffer), "APPLYMOD%02X", module-1);
+          return command(buffer);
+        } else {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+bool Driver::get_sensor_config(char name, SensorConfig* sensor, bool fetch)
+{
+  char buffer[32];
+  int module = -1;
+  size_t base_len;
+  char* modify = buffer;
+
+  if (sensor) {
+    if (!fetch || fetch_system()) {
+      for (int i=1; i<=_system.num_modules(); i++) {
+        if (_system.module_type(i) == HEATERX_MOD_TYPE) {
+          module = i;
+          break;
+        }
+      }
+
+      if (module > 0) {
+        snprintf(buffer, sizeof(buffer), "MOD%d/SENSOR%c", module, name);
+        base_len = strlen(buffer);
+        modify += base_len;
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "LABEL");
+        sensor->label = _config.get_value(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "TYPE");
+        sensor->type = _config.get_value_as_uint32(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "CURRENT");
+        sensor->current = _config.get_value_as_uint32(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "LOWERLIMIT");
+        sensor->lowerlimit = _config.get_value_as_double(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "UPPERLIMIT");
+        sensor->upperlimit = _config.get_value_as_double(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "%s", "FILTER");
+        sensor->filter = _config.get_value_as_uint32(buffer);
+
+        return true;
+      }
     }
   }
 
@@ -1699,3 +2201,5 @@ bool Driver::lock_buffer(unsigned buffer_idx)
 #undef BURST_LEN
 #undef LOAD_PARAM_MAX
 #undef XV_MOD_TYPE
+#undef HEATERX_MOD_TYPE
+#undef CONF_FLT_DELTA

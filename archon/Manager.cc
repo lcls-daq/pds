@@ -140,10 +140,7 @@ namespace Pds {
         _config_version(0),
         _config_max_size(0),
         _occPool(sizeof(UserMessage),1),
-        _error(false),
-        _bias_cache(false),
-        _bias_cache_voltage(0.0),
-        _bias_cache_channel(ArchonConfigType::NV1)
+        _error(false)
       {
         ArchonConfigType ac_max(ArchonConfigMaxFileLength);
         _config_max_size = ac_max._sizeof();
@@ -245,16 +242,6 @@ namespace Pds {
               UserMessage* msg = new (&_occPool) UserMessage("Archon Config Error: unable to retrieve controller status!\n");
               _mgr.appliance().post(msg);
             } else {
-              if ((_bias_cache != config->bias()) ||
-                  (_bias_cache_channel != config->biasChan()) ||
-                  (fabs(_bias_cache_voltage - config->biasVoltage()) > 0.05)) {
-                printf("Bias configuration changed - need to power off controller!\n");
-                _driver.power_off();
-              }
-              // Update the cached values
-              _bias_cache = config->bias();
-              _bias_cache_voltage = config->biasVoltage();
-              _bias_cache_channel = config->biasChan();
               if (!_driver.set_bias(config->biasChan(), config->bias(), config->biasVoltage())) {
                 printf("ConfigAction: failed to set sensor bias parameters!\n");
                 _error = true;
@@ -397,9 +384,6 @@ namespace Pds {
       unsigned          _config_max_size;
       GenericPool       _occPool;
       bool              _error;
-      bool              _bias_cache;
-      float             _bias_cache_voltage;
-      ArchonConfigType::BiasChannelId  _bias_cache_channel;
     };
 
     class EnableAction : public Action {

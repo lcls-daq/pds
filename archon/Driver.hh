@@ -245,6 +245,23 @@ namespace Pds {
         uint32_t    filter;
     };
 
+    class BiasConfig {
+      public:
+        BiasConfig();
+        BiasConfig(const std::string& label,
+                   double voltage,
+                   uint32_t enable,
+                   uint32_t order);
+        ~BiasConfig();
+        bool operator==(const BiasConfig& rhs) const;
+        bool operator!=(const BiasConfig& rhs) const;
+      public:
+        std::string label;
+        double      voltage;
+        uint32_t    enable;
+        uint32_t    order;
+    };
+
     class Driver {
       public:
         Driver(const char* host, unsigned port);
@@ -290,7 +307,8 @@ namespace Pds {
         bool set_clock_at(unsigned ticks);
         bool set_clock_st(unsigned ticks);
         bool set_clock_stm1(unsigned ticks);
-        bool set_bias(int channel, bool enabled, float voltage, bool fetch=false);
+        bool set_bias_config(int channel, BiasConfig* bias, bool reload=true, bool fetch=false);
+        bool get_bias_config(int channel, BiasConfig* bias, bool fetch=false);
         bool get_bias(int channel, float* voltage, float* current, bool fetch=false);
         bool get_heater_output(char name, double* output, bool fetch=false);
         bool get_heater_pid(char name, char term, uint32_t* value, bool fetch=false);

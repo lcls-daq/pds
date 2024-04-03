@@ -220,6 +220,16 @@ namespace Pds {
                 printf("Power is good: %s\n", status.is_power_good() ? "yes" : "no");
                 printf("Overheated: %s\n", status.is_overheated() ? "yes" : "no");
                 printf("Backplane temp: %.3f\n", status.backplane_temp());
+                // Check the detector bias config
+                if (_driver.get_bias_config(config->biasChan(), &_biasCfg)) {
+                  printf("Detector bias label: %s\n", _biasCfg.label.c_str());
+                  printf("Detector bias voltage: %.3f\n", _biasCfg.voltage);
+                  printf("Detector bias enable: %s\n", _biasCfg.enable ? "yes" : "no");
+                  printf("Detector bias order: %u\n", _biasCfg.order);
+                }
+                // push values from config into bias config object
+                _biasCfg.enable = config->bias();
+                _biasCfg.voltage = config->biasVoltage();
                 // Check the detector bias readback
                 float voltage, current;
                 if (_driver.get_bias(config->biasChan(), &voltage, &current))
@@ -242,7 +252,7 @@ namespace Pds {
               UserMessage* msg = new (&_occPool) UserMessage("Archon Config Error: unable to retrieve controller status!\n");
               _mgr.appliance().post(msg);
             } else {
-              if (!_driver.set_bias(config->biasChan(), config->bias(), config->biasVoltage())) {
+              if (!_driver.set_bias_config(config->biasChan(), &_biasCfg)) {
                 printf("ConfigAction: failed to set sensor bias parameters!\n");
                 _error = true;
               } else {
@@ -384,6 +394,7 @@ namespace Pds {
       unsigned          _config_max_size;
       GenericPool       _occPool;
       bool              _error;
+      BiasConfig        _biasCfg;
     };
 
     class EnableAction : public Action {

@@ -870,6 +870,39 @@ Driver::Driver(const char* host, unsigned port) :
   connect();
 }
 
+BiasConfig::BiasConfig() :
+  label(""),
+  voltage(0.0),
+  enable(0),
+  order(0)
+{}
+
+BiasConfig::BiasConfig(const std::string& label,
+                       double voltage,
+                       uint32_t enable,
+                       uint32_t order) :
+  label(label),
+  voltage(voltage),
+  enable(enable),
+  order(order)
+{}
+
+BiasConfig::~BiasConfig()
+{}
+
+bool BiasConfig::operator==(const BiasConfig& rhs) const
+{
+  return (label == rhs.label &&
+          (fabs(voltage - rhs.voltage) < CONF_FLT_DELTA) &&
+          enable == rhs.enable &&
+          order == rhs.order);
+}
+
+bool BiasConfig::operator!=(const BiasConfig& rhs) const
+{
+  return !(*this == rhs);
+}
+
 Driver::~Driver()
 {
   disconnect();
@@ -1397,47 +1430,104 @@ bool Driver::set_clock_stm1(unsigned ticks)
   return load_parameter("STM1", ticks);
 }
 
-bool Driver::set_bias(int channel, bool enabled, float voltage, bool fetch)
+bool Driver::set_bias_config(int channel, BiasConfig* bias, bool reload, bool fetch)
 {
   char buffer[32];
   int module = -1;
   size_t base_len;
   char* modify = buffer;
 
-  if (!fetch || fetch_system()) {
-    for (int i=1; i<=_system.num_modules(); i++) {
-      if (_system.module_type(i) == XV_MOD_TYPE) {
-        module = i;
-        break;
+  if (bias) {
+    if (!fetch || fetch_system()) {
+      for (int i=1; i<=_system.num_modules(); i++) {
+        if (_system.module_type(i) == XV_MOD_TYPE) {
+          module = i;
+          break;
+        }
+      }
+
+      if (module > 0) {
+        snprintf(buffer, sizeof(buffer), "MOD%d/XV%s_", module, channel>0 ? "P" : "N");
+        base_len = strlen(buffer);
+        modify += base_len;
+
+        snprintf(modify, sizeof(buffer) - base_len, "LABEL%d", abs(channel));
+        if (!edit_config_line(buffer, bias->label.c_str())) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "V%d", abs(channel));
+        if (!edit_config_line(buffer, bias->voltage)) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "ENABLE%d", abs(channel));
+        if (!edit_config_line(buffer, bias->enable)) {
+          return false;
+        }
+
+        snprintf(modify, sizeof(buffer) - base_len, "ORDER%d", abs(channel));
+        if (!edit_config_line(buffer, bias->order)) {
+          return false;
+        }
+
+        if (reload) {
+          if (fetch_status()) {
+            if (_status.power() == Pds::Archon::On) {
+              // if power is on apply module settings
+              snprintf(buffer, sizeof(buffer), "APPLYMOD%02X", module-1);
+              return command(buffer);
+            } else {
+              // since power is off we'll need to apply modules settings on power on
+              _pending_cfg = true;
+              // if power is not on but also not off that is an error state
+              return _status.power() <= Pds::Archon::Off;
+            }
+          }
+        } else {
+          return true;
+        }
       }
     }
+  }
 
-    if (module > 0) {
-      snprintf(buffer, sizeof(buffer), "MOD%d/XV%s_", module, channel>0 ? "P" : "N");
-      base_len = strlen(buffer);
-      modify += base_len;
+  return false;
+}
 
-      snprintf(modify, sizeof(buffer) - base_len, "V%d", abs(channel));
-      if (!edit_config_line(buffer, voltage)) {
-        return false;
-      }
+bool Driver::get_bias_config(int channel, BiasConfig* bias, bool fetch)
+{
+  char buffer[32];
+  int module = -1;
+  size_t base_len;
+  char* modify = buffer;
 
-      snprintf(modify, sizeof(buffer) - base_len, "ENABLE%d", abs(channel));
-      if (!edit_config_line(buffer, enabled)) {
-        return false;
-      }
-
-      if (fetch_status()) {
-        if (_status.power() == Pds::Archon::On) {
-          // if power is on apply module settings
-          snprintf(buffer, sizeof(buffer), "APPLYMOD%02X", module-1);
-          return command(buffer);
-        } else {
-          // since power is off we'll need to apply modules settings on power on
-          _pending_cfg = true;
-          // if power is not on but also not off that is an error state
-          return _status.power() <= Pds::Archon::Off;
+  if (bias) {
+    if (!fetch || fetch_system()) {
+      for (int i=1; i<=_system.num_modules(); i++) {
+        if (_system.module_type(i) == XV_MOD_TYPE) {
+          module = i;
+          break;
         }
+      }
+
+      if (module > 0) {
+        snprintf(buffer, sizeof(buffer), "MOD%d/XV%s_", module, channel>0 ? "P" : "N");
+        base_len = strlen(buffer);
+        modify += base_len;
+
+        snprintf(modify, sizeof(buffer) - base_len, "LABEL%d", abs(channel));
+        bias->label = _config.get_value(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "V%d", abs(channel));
+        bias->voltage = _config.get_value_as_double(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "ENABLE%d", abs(channel));
+        bias->enable = _config.get_value_as_uint32(buffer);
+
+        snprintf(modify, sizeof(buffer) - base_len, "ORDER%d", abs(channel));
+        bias->order = _config.get_value_as_uint32(buffer);
+
+        return true;
       }
     }
   }

@@ -286,7 +286,7 @@ Pds::InDatagram* QuadAdcServer::fire(Pds::InDatagram* dg)
       CHECK_PV(_lowThreshPv,  _lowThresh);
     }
     if (_highThreshPv) {
-      CHECK_PV(_highThreshPv, _highThreshPv);
+      CHECK_PV(_highThreshPv, _highThresh);
     }
     if (_prescalePv) {
       CHECK_PV(_prescalePv,   _prescale);

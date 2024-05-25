@@ -1,32 +1,16 @@
 #include "DetectorId.hh"
 
+#include <fstream>
+#include <algorithm>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+
 using namespace Pds;
 using namespace Pds::Jungfrau;
 
 static const uint64_t MOD_ID_BITS = 16;
 static const uint64_t MOD_ID_MASK = (1<<MOD_ID_BITS) - 1;
-
-static const DetIdItem DEFAULTS[] = {
-  DetIdItem("det-jungfrau4m-00", DetId(0x0050c246df50, 269)),
-  DetIdItem("det-jungfrau4m-01", DetId(0x0050c246df51, 279)),
-  DetIdItem("det-jungfrau4m-02", DetId(0x0050c246df53, 282)),
-  DetIdItem("det-jungfrau4m-03", DetId(0x0050c246df54, 296)),
-  DetIdItem("det-jungfrau4m-04", DetId(0x0050c246df55, 277)),
-  DetIdItem("det-jungfrau4m-05", DetId(0x0050c246df56, 287)),
-  DetIdItem("det-jungfrau4m-06", DetId(0x0050c246df57, 289)),
-  DetIdItem("det-jungfrau4m-07", DetId(0x0050c246df58, 254)),
-  DetIdItem("cxi-jungfrau4m-00", DetId(0x0050c246df50, 269)),
-  DetIdItem("cxi-jungfrau4m-01", DetId(0x0050c246df51, 279)),
-  DetIdItem("cxi-jungfrau4m-02", DetId(0x0050c246df53, 282)),
-  DetIdItem("cxi-jungfrau4m-03", DetId(0x0050c246df54, 296)),
-  DetIdItem("cxi-jungfrau4m-04", DetId(0x0050c246df55, 277)),
-  DetIdItem("cxi-jungfrau4m-05", DetId(0x0050c246df56, 287)),
-  DetIdItem("cxi-jungfrau4m-06", DetId(0x0050c246df57, 289)),
-  DetIdItem("cxi-jungfrau4m-07", DetId(0x0050c246df58, 254)),
-  DetIdItem("det-jungfrau-89"  , DetId(0x0050c246de81,  88)),
-  DetIdItem("det-jungfrau-91"  , DetId(0x0050c246de83,  68)),
-  DetIdItem("det-jungfrau-31"  , DetId(0x0050c246d8b3,  44)),
-};
 
 DetId::DetId() :
   _id(0)
@@ -38,6 +22,10 @@ DetId::DetId(uint64_t id) :
 
 DetId::DetId(uint64_t board, uint64_t module) :
   _id((board<<MOD_ID_BITS) | (MOD_ID_MASK & module))
+{}
+
+DetId::DetId(const std::string& mac, uint64_t module) :
+  _id((DetIdLookup::mac_to_hex(mac)<<MOD_ID_BITS) | (MOD_ID_MASK & module))
 {}
 
 DetId::~DetId()
@@ -59,21 +47,56 @@ uint64_t DetId::module() const
 }
 
 DetIdLookup::DetIdLookup()
-{
-  for(unsigned i=0; i<sizeof(DEFAULTS)/sizeof(DEFAULTS[0]); i++)
-    _lookup.insert(DEFAULTS[i]);
-}
+{}
 
 DetIdLookup::~DetIdLookup()
 {}
 
-bool DetIdLookup::has(const std::string& hostname) const
+bool DetIdLookup::has(const std::string& hostname)
 {
-  DetIdIter it = _lookup.find(hostname);
-  return it != _lookup.end();
+  std::string ipAddr = host_to_ip(hostname);
+
+  ArpCacheIter it = _arp.find(ipAddr);
+  if (it == _arp.end()) {
+    // refresh the arp cache and try again
+    load();
+
+    it = _arp.find(ipAddr);
+  }
+
+  return it != _arp.end();
 }
 
-const DetId& DetIdLookup::operator[](const std::string& hostname)
+const std::string& DetIdLookup::operator[](const std::string& hostname)
 {
-  return _lookup[hostname];
+  return _arp[host_to_ip(hostname)];
+}
+
+void DetIdLookup::load()
+{
+  std::ifstream arpf("/proc/net/arp");
+  if (arpf.is_open()) {
+    std::string header, addr, mac, mask, dev;
+    unsigned hw, flags;
+
+    // ignore the header line
+    std::getline(arpf, header);
+
+    while(arpf >> addr >> std::hex >> hw >> flags >> mac >> mask >> dev) {
+      _arp[addr] = mac;
+    }
+
+    arpf.close();
+  }
+}
+
+std::string DetIdLookup::host_to_ip(const std::string& hostname)
+{
+  return std::string(inet_ntoa(*(struct in_addr*)gethostbyname(hostname.c_str())->h_addr_list[0]));
+}
+
+uint64_t DetIdLookup::mac_to_hex(std::string mac)
+{
+  mac.erase(std::remove(mac.begin(), mac.end(), ':'), mac.end());
+  return strtoul(mac.c_str(), nullptr, 16);
 }

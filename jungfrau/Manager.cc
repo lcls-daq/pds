@@ -117,7 +117,7 @@ namespace Pds {
 
     class L1Action : public Action, public Pds::XtcIterator {
     public:
-      static const unsigned skew_min_time = 0x2fffffff;
+      static const unsigned skew_min_time = 10000000; // aka 1 sec in jf clock ticks
       static const unsigned fid_rollover_secs = Pds::TimeStamp::MaxFiducials / 360;
       L1Action(unsigned num_modules, Manager& mgr) :
         _mgr(mgr),
@@ -173,11 +173,23 @@ namespace Pds {
             _lreset = false;
             _dgm_ts   = _in->datagram().seq.stamp().fiducials();
             _dgm_time = _in->datagram().seq.clock();
-            // reset module timestamps and skews
+            // reset module timestamps
+            uint64_t max_ts = 0;
             for (unsigned i=0; i<_num_modules; i++) {
               _mod_ts[i] = mod_info[i].timestamp();
-              _skew[i] = 1.0;
+              if (_mod_ts[i] > max_ts) {
+                max_ts = _mod_ts[i];
+              }
             }
+            // reset module skews
+            for (unsigned i=0; i<_num_modules; i++) {
+              if (_mod_ts[i] > skew_min_time) {
+                _skew[i] = double(max_ts) / _mod_ts[i];
+              } else {
+                _skew[i] = 1.0;
+              }
+            }
+
           } else {
             bool mods_synced = true;
             bool frames_synced = true;
@@ -288,7 +300,7 @@ namespace Pds {
             _cfg.configure(false);
           } else {
             if (_cfg.configure()) {
-              _server.setFrame(_detector.sync_nframes());
+              _server.setFrame(_detector.sync_next_frame() - 1);
               _l1.reset();
               _detector.flush();
               _enable.call();
@@ -334,7 +346,7 @@ namespace Pds {
           if (error) {
             printf("BeginCalibCycleAction: failed to configure Jungfrau during scan!\n");
           } else {
-            _server.setFrame(_detector.sync_nframes());
+            _server.setFrame(_detector.sync_next_frame() - 1);
             _l1.reset();
             _detector.flush();
             _enable.call();

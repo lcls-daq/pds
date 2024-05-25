@@ -1,6 +1,7 @@
 #include "Driver.hh"
 #include "DataFormat.hh"
-#include "slsDetectorUsers.h"
+#include "DetectorId.hh"
+#include "sls/Detector.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -12,45 +13,16 @@
 #include <string.h>
 #include <errno.h>
 
-#define CMD_LEN 128
 #define MSG_LEN 256
-#define CLKDIV_HALF 1
-#define CLKDIV_QUARTER 2
 
 // Temporary fixed sizes :(
 #define NUM_ROWS 512
 #define NUM_COLUMNS 1024
 
-#define get_command_print(cmd, ...) \
-  { printf("cmd_get %s: %s\n", cmd, get_command(cmd, ##__VA_ARGS__).c_str()); }
-
-#define put_command_print(cmd, val, ...) \
-  { printf("cmd_put %s: %s\n", cmd, put_command(cmd, val, ##__VA_ARGS__).c_str()); }
-
-#define get_register_print(cmd, val, ...) \
-  { printf("reg_gett %#x: %s\n", cmd, get_register(cmd, val, ##__VA_ARGS__).c_str()); }
-
-#define put_register_print(cmd, val, ...) \
-  { printf("reg_put %#x - %#x: %s\n", cmd, val, put_register(cmd, val, ##__VA_ARGS__).c_str()); }
-
-#define put_adcreg_print(cmd, val, ...) \
-  { printf("adc_put %#x - %#x: %s\n", cmd, val, put_adcreg(cmd, val, ##__VA_ARGS__).c_str()); }
-
-#define setbit_print(cmd, val, ...) \
-  { printf("setbit %#x - %d: %s\n", cmd, val, setbit(cmd, val, ##__VA_ARGS__).c_str()); }
-
-#define clearbit_print(cmd, val, ...) \
-  { printf("clearbit %#x - %d: %s\n", cmd, val, clearbit(cmd, val, ##__VA_ARGS__).c_str()); }
-
 #define error_print(fmt, ...) \
   { snprintf(_msgbuf, MSG_LEN, fmt, ##__VA_ARGS__); fprintf(stderr, _msgbuf); }
 
 using namespace Pds::Jungfrau;
-
-static const char* ADCREG   = "adcreg";
-static const char* REG      = "reg";
-static const char* SETBIT   = "setbit";
-static const char* CLEARBIT = "clearbit";
 
 struct frame_thread_args {
   uint64_t* frame;
@@ -66,6 +38,12 @@ static void* frame_thread(void* args_ptr)
   args->status = args->module->get_frame(args->frame, args->metadata, args->data);
 
   return NULL;
+}
+
+static std::chrono::nanoseconds secs_to_ns(double secs)
+{
+  std::chrono::duration<double> dursecs{secs};
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(dursecs);
 }
 
 DacsConfig::DacsConfig() :
@@ -104,17 +82,7 @@ DacsConfig::DacsConfig(uint16_t vb_ds, uint16_t vb_comp, uint16_t vb_pixbuf, uin
 
 DacsConfig::~DacsConfig() {}
 
-bool DacsConfig::operator==(DacsConfig& rhs) const
-{
-  return equals(rhs);
-}
-
-bool DacsConfig::operator!=(DacsConfig& rhs) const
-{
-  return !equals(rhs);
-}
-
-bool DacsConfig::equals(DacsConfig& rhs) const
+bool DacsConfig::operator==(const DacsConfig& rhs) const
 {
   if (_vb_ds != rhs.vb_ds())
     return false;
@@ -136,6 +104,11 @@ bool DacsConfig::equals(DacsConfig& rhs) const
   return true;
 }
 
+bool DacsConfig::operator!=(const DacsConfig& rhs) const
+{
+  return !(*this == rhs);
+}
+
 uint16_t DacsConfig::vb_ds() const      { return _vb_ds; }
 uint16_t DacsConfig::vb_comp() const    { return _vb_comp; }
 uint16_t DacsConfig::vb_pixbuf() const  { return _vb_pixbuf; }
@@ -154,52 +127,63 @@ Module::Module(const int id, const char* control, const char* host, unsigned por
 {
   _readbuf = new char[_readbuf_sz];
   _msgbuf  = new char[MSG_LEN];
-  for (int i=0; i<MAX_JUNGFRAU_CMDS; i++) {
-    _cmdbuf[i] = new char[CMD_LEN];
-  }
 
-  int failed = 0;
-  _det = new slsDetectorUsers(failed, _id);
-  if (failed) {
-    error_print("Error: failed to allocate share memory for Jungfrau control interface of %s!\n", _control);
-    // cleanup detector after failure
-    delete _det;
-    _det = 0;
-  } else {
-    std::string reply = put_command("hostname", _control);
-    // Check if detector control interface is present
-    if (!reply.empty()) {
-      std::string type  = _det->getDetectorType();
+  try {
+    // allocate shared memory detector class with specified id.
+    _det = new sls::Detector(_id);
 
-      bool detmac_status = configure_mac(config_det_ip);
-
-      int nb = -1;
-      hostent* entries = gethostbyname(host);
-      if (entries) {
-        _socket = ::socket(AF_INET, SOCK_DGRAM, 0);
-        ::setsockopt(_socket, SOL_SOCKET, SO_RCVBUF, &_sockbuf_sz, sizeof(unsigned));
-
-        unsigned addr = htonl(*(in_addr_t*)entries->h_addr_list[0]);
-
-        sockaddr_in sa;
-        sa.sin_family = AF_INET;
-        sa.sin_addr.s_addr = htonl(addr);
-        sa.sin_port        = htons(port);
-
-        nb = ::bind(_socket, (sockaddr*)&sa, sizeof(sa));
-      }
-
-      if (nb<0) {
-        error_print("Error: failed to bind to Jungfrau data receiver at %s on port %d: %s\n", host, port, strerror(errno));
-      } else if (strncmp(control, reply.c_str(), strlen(control)) != 0) {
-        error_print("Error: failed to connect to Jungfrau control interface at %s: %s\n", control, reply.c_str());
-      } else if (strcmp(type.c_str(), "Jungfrau+") !=0) {
-        error_print("Error: detector at %s on port %d is not a Jungfrau: %s\n", host, port, type.c_str());
+    // set the hostname of the detector
+    std::vector<std::string> hostnames{_control};
+    try {
+      _det->setHostname(hostnames);
+    } catch (const sls::RuntimeError &err) {
+      // If the detector is running try stopping acquisition and retry
+      Status detstat = status();
+      if ((detstat == RUNNING || detstat == WAITING) && stop()) {
+        _det->setHostname(hostnames);
       } else {
-        _connected=detmac_status;
+        // if detector wasn't running or stop fails re-raise to outer handler
+        throw;
       }
+    }
+
+    // Check if detector control hostname setup worked
+    sls::defs::detectorType type  = _det->getDetectorType().squash();
+
+    bool detmac_status = configure_mac(config_det_ip);
+
+    int nb = -1;
+    hostent* entries = gethostbyname(host);
+    if (entries) {
+      _socket = ::socket(AF_INET, SOCK_DGRAM, 0);
+      ::setsockopt(_socket, SOL_SOCKET, SO_RCVBUF, &_sockbuf_sz, sizeof(unsigned));
+
+      unsigned addr = htonl(*(in_addr_t*)entries->h_addr_list[0]);
+
+      sockaddr_in sa;
+      sa.sin_family = AF_INET;
+      sa.sin_addr.s_addr = htonl(addr);
+      sa.sin_port        = htons(port);
+
+      nb = ::bind(_socket, (sockaddr*)&sa, sizeof(sa));
+    }
+
+    if (nb<0) {
+      error_print("Error: failed to bind to Jungfrau data receiver at %s on port %d: %s\n", host, port, strerror(errno));
+    } else if (_det->getHostname().squash().compare(_control) != 0) {
+      error_print("Error: failed to connect to Jungfrau control interface at %s\n", control);
+    } else if (type != sls::defs::JUNGFRAU) {
+      error_print("Error: detector at %s on port %d is not a Jungfrau: %s\n", host, port, sls::ToString(type).c_str());
     } else {
-      error_print("Error: failed to connect to Jungfrau control interface of %s!\n", _control);
+      _connected=detmac_status;
+    }
+  }
+  catch(const sls::RuntimeError &err) {
+    error_print("Error: failed to initialize Jungfrau control interface of %s: %s\n", _control, err.what());
+    // cleanup detector after failure if it was created
+    if (_det) {
+      delete _det;
+      _det = 0;
     }
   }
 }
@@ -213,9 +197,6 @@ Module::~Module()
   if (_msgbuf) {
     delete[] _msgbuf;
   }
-  for (int i=0; i<MAX_JUNGFRAU_CMDS; i++) {
-    if (_cmdbuf[i]) delete[] _cmdbuf[i];
-  }
 }
 
 void Module::shutdown()
@@ -225,7 +206,8 @@ void Module::shutdown()
     _socket = -1;
   }
   if (_det) {
-    put_command("free", "0");
+    _connected = false;
+    _det->freeSharedMemory();
     delete _det;
     _det = 0;
   }
@@ -253,16 +235,15 @@ bool Module::check_config()
   }
 
   // stop the detector if not!
-  if (status() == RUNNING) {
+  Status detstat = status();
+  if (detstat == RUNNING || detstat == WAITING) {
     if (!stop()) {
       error_print("Error: can't configure when the detector is in a running state\n");
       return false;
     }
   }
 
-  int power_status = 0;
-  get_register_print(0x5e, &power_status);
-  _boot = (power_status == 0);
+  _boot = !_det->getPowerChip().squash();
   if (_boot) {
     printf("module chips need to be powered on\n");
     if (_poweron) {
@@ -280,32 +261,45 @@ bool Module::configure_mac(bool config_det_ip)
 {
   bool needs_config = false;
   bool detmac_status = false;
-  std::string rx_ip  = get_command("rx_udpip");
-  std::string rx_mac = get_command("rx_udpmac");
 
-  if (!strcmp(rx_ip.c_str(), "none") || !strcmp(rx_mac.c_str(), "none")) {
-    printf("detector udp_rx interface appears to be unset\n");
-    needs_config = true;
+  if (!_det) {
+    error_print("Error: detector control interface is not initialized!\n");
+    return detmac_status;
   }
 
-  if (config_det_ip || needs_config) {
-      printf("setting up detector udp_rx interface\n");
-      put_command_print("rx_udpport", _port);
-      put_command_print("rx_udpip",   _host);
-      put_command_print("rx_udpmac", _mac);
-      put_command_print("detectorip", _det_ip);
-      put_command_print("detectormac", "00:aa:bb:cc:dd:ee");
-      std::string cfgmac_reply = put_command("configuremac", 0);
-      printf("cmd_put configuremac: %s\n", cfgmac_reply.c_str());
-      if (!strcmp(cfgmac_reply.c_str(), "3") || !strcmp(cfgmac_reply.c_str(), "0")) {
+  try {
+    sls::IpAddr rx_ip = _det->getDestinationUDPIP().squash();
+    sls::MacAddr rx_mac = _det->getDestinationUDPMAC().squash();
+
+    if ((rx_ip == 0) || (rx_mac == 0)) {
+      printf("detector udp_rx interface appears to be unset\n");
+      needs_config = true;
+    }
+
+    if (config_det_ip || needs_config) {
+        printf("setting up detector udp_rx interface\n");
+        _det->setDestinationUDPPort(_port);
+        _det->setDestinationUDPIP(sls::HostnameToIp(_host));
+        _det->setDestinationUDPMAC(sls::MacAddr(_mac));
+        _det->setSourceUDPIP(sls::HostnameToIp(_det_ip));
+        _det->setSourceUDPMAC(sls::MacAddr("00:aa:bb:cc:dd:ee"));
+        _det->validateUDPConfiguration();
+        // if we get here they the config was successful
         detmac_status = true;
+        // print readback values
+        printf("rx_udpport:  %u\n", _det->getDestinationUDPPort().squash());
+        printf("rx_udpip:    %s\n", _det->getDestinationUDPIP().squash().str().c_str());
+        printf("rx_udpmac:   %s\n", _det->getDestinationUDPMAC().squash().str().c_str());
+        printf("detectorip:  %s\n", _det->getSourceUDPIP().squash().str().c_str());
+        printf("detectormac: %s\n", _det->getSourceUDPMAC().squash().str().c_str());
         printf("detector udp_rx interface is up\n");
-      } else {
-        error_print("Error: detector udp_rx interface did not come up\n");
-      }
-  } else {
-    printf("detector udp_rx interface is being set externally\n");
-    detmac_status = true;
+    } else {
+      printf("detector udp_rx interface is being set externally\n");
+      detmac_status = true;
+    }
+  }
+  catch (const sls::RuntimeError &err) {
+    error_print("Error: detector udp_rx interface did not come up: %s\n", err.what());
   }
 
   return detmac_status;
@@ -313,161 +307,390 @@ bool Module::configure_mac(bool config_det_ip)
 
 bool Module::configure_dacs(const DacsConfig& dac_config)
 {
-  if (_boot || dac_config != _dac_config) {
-    // Setting Dacs 12bit on 2.5V  (i.e. 2.5v=4096)
-    printf("Setting Dacs:\n");
-  
-    // setting vb_ds
-    printf("setting vb_ds to %hu\n", dac_config.vb_ds());
-    put_command_print("dac:5", dac_config.vb_ds());
-
-    // setting vb_comp
-    printf("setting vb_comp to %hu\n", dac_config.vb_comp());
-    put_command_print("dac:0", dac_config.vb_comp());
-
-    // setting vb_pixbuf
-    printf("setting vb_pixbuf to %hu\n", dac_config.vb_pixbuf());
-    put_command_print("dac:4", dac_config.vb_pixbuf());
-
-    // setting vref_ds
-    printf("setting vref_ds to %hu\n", dac_config.vref_ds());
-    put_command_print("dac:6", dac_config.vref_ds());
-
-    // setting vref_comp
-    printf("setting vref_comp to %hu\n", dac_config.vref_comp());
-    put_command_print("dac:7", dac_config.vref_comp());
-
-    // setting vref_prech
-    printf("setting vref_prech to %hu\n", dac_config.vref_prech());  
-    put_command_print("dac:3", dac_config.vref_prech());
-
-    // setting vin_com
-    printf("setting vin_com to %hu\n", dac_config.vin_com());
-    put_command_print("dac:2", dac_config.vin_com());
-
-    // setting vdd_prot
-    printf("setting vdd_prot to %hu\n", dac_config.vdd_prot());
-    put_command_print("dac:1", dac_config.vdd_prot());
-
-    _dac_config = dac_config;
+  if (!_det) {
+    error_print("Error: detector control interface is not initialized!\n");
+    return false;
   }
 
-  return status() != ERROR;
+  try {
+    if (_boot || dac_config != _dac_config) {
+      // Setting Dacs 12bit on 2.5V  (i.e. 2.5v=4096)
+      printf("Setting Dacs:\n");
+
+      // setting vb_ds
+      printf("setting vb_ds to %hu\n", dac_config.vb_ds());
+      _det->setDAC(sls::defs::VB_DS, dac_config.vb_ds());
+
+      // setting vb_comp
+      printf("setting vb_comp to %hu\n", dac_config.vb_comp());
+      _det->setDAC(sls::defs::VB_COMP, dac_config.vb_comp());
+
+      // setting vb_pixbuf
+      printf("setting vb_pixbuf to %hu\n", dac_config.vb_pixbuf());
+      _det->setDAC(sls::defs::VB_PIXBUF, dac_config.vb_pixbuf());
+
+      // setting vref_ds
+      printf("setting vref_ds to %hu\n", dac_config.vref_ds());
+      _det->setDAC(sls::defs::VREF_DS, dac_config.vref_ds());
+
+      // setting vref_comp
+      printf("setting vref_comp to %hu\n", dac_config.vref_comp());
+      _det->setDAC(sls::defs::VREF_COMP, dac_config.vref_comp());
+
+      // setting vref_prech
+      printf("setting vref_prech to %hu\n", dac_config.vref_prech());
+      _det->setDAC(sls::defs::VREF_PRECH, dac_config.vref_prech());
+
+      // setting vin_com
+      printf("setting vin_com to %hu\n", dac_config.vin_com());
+      _det->setDAC(sls::defs::VIN_COM, dac_config.vin_com());
+
+      // setting vdd_prot
+      printf("setting vdd_prot to %hu\n", dac_config.vdd_prot());
+      _det->setDAC(sls::defs::VDD_PROT, dac_config.vdd_prot());
+    }
+  }
+  catch (const sls::RuntimeError &err) {
+    error_print("Error: detector dacs configuration failed: %s\n", err.what());
+    return false;
+  }
+
+  return verify_dacs(dac_config);
 }
 
-bool Module::configure_adc()
+bool Module::verify_dacs(const DacsConfig& dac_config)
 {
-  if (_boot) {
-    // power on the chips
-    printf("powering on the chip\n");
-    put_register_print(0x5e, 0x1);
-
-    // reset adc
-    printf("resetting the adc\n");
-    put_adcreg_print(0x08, 0x3);
-    put_adcreg_print(0x08, 0x0);
-    put_adcreg_print(0x14, 0x40);
-    put_adcreg_print(0x4, 0xf);
-    put_adcreg_print(0x5, 0x3f);
-    put_adcreg_print(0x18, 0x2);
-    put_register_print(0x43, 0x453b2a9c);
+  if (!_det) {
+    error_print("Error: detector control interface is not initialized!\n");
+    return false;
   }
 
-  // initial powerup complete
-  _poweron = true;
+  try {
+    // readback all the dac values
+    uint16_t vb_ds      = (uint16_t) _det->getDAC(sls::defs::VB_DS).squash();
+    uint16_t vb_comp    = (uint16_t) _det->getDAC(sls::defs::VB_COMP).squash();
+    uint16_t vb_pixbuf  = (uint16_t) _det->getDAC(sls::defs::VB_PIXBUF).squash();
+    uint16_t vref_ds    = (uint16_t) _det->getDAC(sls::defs::VREF_DS).squash();
+    uint16_t vref_comp  = (uint16_t) _det->getDAC(sls::defs::VREF_COMP).squash();
+    uint16_t vref_prech = (uint16_t) _det->getDAC(sls::defs::VREF_PRECH).squash();
+    uint16_t vin_com    = (uint16_t) _det->getDAC(sls::defs::VIN_COM).squash();
+    uint16_t vdd_prot   = (uint16_t) _det->getDAC(sls::defs::VDD_PROT).squash();
+    // updated cached dac_config to reflect readback
+    _dac_config = DacsConfig(vb_ds,
+                             vb_comp,
+                             vb_pixbuf,
+                             vref_ds,
+                             vref_comp,
+                             vref_prech,
+                             vin_com,
+                             vdd_prot);
 
-  return status() != ERROR;
+    // print and set error for any readbacks that don't match
+    check_readback("vb_ds", vb_ds, dac_config.vb_ds());
+    check_readback("vb_comp", vb_comp, dac_config.vb_comp());
+    check_readback("vb_pixbuf", vb_pixbuf, dac_config.vb_pixbuf());
+    check_readback("vref_ds", vref_ds, dac_config.vref_ds());
+    check_readback("vref_comp", vref_comp, dac_config.vref_comp());
+    check_readback("vref_prech", vref_prech, dac_config.vref_prech());
+    check_readback("vin_com", vin_com, dac_config.vin_com());
+    check_readback("vdd_prot", vdd_prot, dac_config.vdd_prot());
+
+    return _dac_config == dac_config;
+  }
+  catch (const sls::RuntimeError &err) {
+    error_print("Error: detector dacs readback failed: %s\n", err.what());
+    return false;
+  }
+}
+
+bool Module::configure_power(bool reset_adc)
+{
+  if (!_det) {
+    error_print("Error: detector control interface is not initialized!\n");
+    return false;
+  }
+
+  try {
+    if (_boot) {
+      // power on the chips
+      printf("powering on the chip\n");
+      _det->setPowerChip(true);
+
+      // reset adc
+      if (reset_adc) {
+        printf("resetting the adc\n");
+        _det->writeAdcRegister(0x08, 0x3);
+        _det->writeAdcRegister(0x08, 0x0);
+        _det->writeAdcRegister(0x14, 0x40);
+        _det->writeAdcRegister(0x4, 0xf);
+        _det->writeAdcRegister(0x5, 0x3f);
+        _det->writeAdcRegister(0x18, 0x2);
+
+        // the value here seems hardware version dependent
+        //_det->writeRegister(0x43, 0x453b2a9c);
+      }
+    }
+
+    // initial powerup complete
+    _poweron = true;
+
+    return _poweron;
+  } catch (const sls::RuntimeError &err) {
+    error_print("Error: detector power configuration failed: %s\n", err.what());
+    return false;
+  }
 }
 
 bool Module::configure_speed(JungfrauConfigType::SpeedMode speed, bool& sleep)
 {
-  if (_boot || speed != _speed) {
-    // set speed
-    switch (speed) {
-    case JungfrauConfigType::Quarter:
-      printf("setting detector to quarter speed\n");
-      put_command_print("clkdivider", CLKDIV_QUARTER);
-      break;
-    case JungfrauConfigType::Half:
-      printf("setting detector to half speed\n");
-      put_command_print("clkdivider", CLKDIV_HALF);
-      break;
-    default:
-      error_print("Error: invalid clock speed setting for the camera %d\n", speed);
-      return false;
-    } 
-    _speed = speed;
-    sleep = true;
+  if (!_det) {
+    error_print("Error: detector control interface is not initialized!\n");
+    return false;
   }
 
-  return status() != ERROR;
+  try {
+    if (_boot || speed != _speed) {
+      // set the speed value
+      switch (speed) {
+        case JungfrauConfigType::Quarter:
+          printf("setting detector to quarter speed\n");
+          _det->setReadoutSpeed(sls::defs::QUARTER_SPEED);
+          break;
+        case JungfrauConfigType::Half:
+          printf("setting detector to half speed\n");
+          _det->setReadoutSpeed(sls::defs::HALF_SPEED);
+          break;
+        default:
+          error_print("Error: invalid clock speed setting for the detector %d\n", speed);
+          return false;
+      }
+
+      _speed = speed;
+      sleep = true;
+
+      return verify_speed(speed);
+    } else {
+      return true;
+    }
+  } catch (const sls::RuntimeError &err) {
+    error_print("Error: detector speed configuration failed: %s\n", err.what());
+    return false;
+  }
 }
 
-bool Module::configure_acquistion(uint64_t nframes, double trig_delay, double exposure_time, double exposure_period)
+bool Module::verify_speed(JungfrauConfigType::SpeedMode speed)
 {
-  reset();
-
-  printf("setting trigger delay to %.6f\n", trig_delay);
-  put_command("delay", trig_delay);
-
-  if (!nframes) {
-    printf("configuring triggered mode\n");
-    put_register_print(0x4e, 0x3);
-    put_command_print("cycles", 10000000000);
-    put_command_print("frames", 1);
-    put_command_print("period", exposure_period);
-    _freerun = false;
-  } else {
-    printf("configuring for free run\n");
-    put_register_print(0x4e, 0x0);
-    put_command_print("cycles", 1);
-    put_command_print("frames", nframes);
-    put_command_print("period", exposure_period);
-    _freerun = true;
+  if (!_det) {
+    error_print("Error: detector control interface is not initialized!\n");
+    return false;
   }
 
-  printf("setting exposure time to %.6f seconds\n", exposure_time);
-  put_command_print("exptime", exposure_time);
+  try {
+    switch (_det->getReadoutSpeed().squash()) {
+      case sls::defs::QUARTER_SPEED:
+        return speed == JungfrauConfigType::Quarter;
+      case sls::defs::HALF_SPEED:
+        return speed == JungfrauConfigType::Half;
+      default:
+        error_print("Error: invalid clock speed setting for the detector\n");
+        return false;
+    }
+  } catch (const sls::RuntimeError &err) {
+    error_print("Error: detector speed readback failed: %s\n", err.what());
+    return false;
+  }
+}
 
-  return status() != ERROR;
+bool Module::configure_acquistion(uint64_t nframes,
+                                  double trig_delay,
+                                  double exposure_time,
+                                  double exposure_period,
+                                  bool force_reset)
+{
+  if (!_det) {
+    error_print("Error: detector control interface is not initialized!\n");
+    return false;
+  }
+
+  // reset run control only if requested
+  if (force_reset) {
+    reset();
+  }
+
+  try {
+    // check if freerunning or triggered
+    _freerun = nframes > 0;
+    sls::defs::timingMode trig_mode = _freerun ? sls::defs::AUTO_TIMING : sls::defs::TRIGGER_EXPOSURE;
+    // for trigger mode one frame per trigger
+    nframes = _freerun ? nframes : 1;
+    uint64_t ncycles = _freerun ? 1 : 10000000000;
+    // convert time in seconds to ns
+    sls::ns trig_delay_ns = secs_to_ns(trig_delay);
+    sls::ns exposure_time_ns = secs_to_ns(exposure_time);
+    sls::ns exposure_period_ns = secs_to_ns(exposure_period);
+
+    printf("setting trigger delay to %.6f\n", trig_delay);
+    _det->setDelayAfterTrigger(trig_delay_ns);
+
+    printf("configuring for %s\n", _freerun ? "free run" : "triggered mode");
+    _det->setTimingMode(trig_mode);
+    _det->setNumberOfTriggers(ncycles);
+    _det->setNumberOfFrames(nframes);
+
+    printf("setting exposure period to %.6f seconds\n", exposure_period);
+    _det->setPeriod(exposure_period_ns);
+
+    printf("setting exposure time to %.6f seconds\n", exposure_time);
+    _det->setExptime(exposure_time_ns);
+
+    return verify_acquistion(nframes, ncycles, trig_delay, exposure_time, exposure_period);
+  } catch (const sls::RuntimeError &err) {
+    error_print("Error: detector acquistion configuration failed: %s\n", err.what());
+    return false;
+  }
+}
+
+bool Module::verify_acquistion(uint64_t nframes, uint64_t ncycles, double trig_delay, double exposure_time, double exposure_period)
+{
+  if (!_det) {
+    error_print("Error: detector control interface is not initialized!\n");
+    return false;
+  }
+
+  try {
+    uint64_t nframes_rbv = _det->getNumberOfFrames().squash();
+    uint64_t ncycles_rbv = _det->getNumberOfTriggers().squash();
+    sls::ns trig_delay_rbv = _det->getDelayAfterTrigger().squash();
+    sls::ns exposure_time_rbv = _det->getExptime().squash();
+    sls::ns exposure_period_rbv = _det->getPeriod().squash();
+    sls::defs::timingMode trig_mode_rbv = _det->getTimingMode().squash();
+
+    return (nframes_rbv == nframes) &&
+           (ncycles_rbv == ncycles) &&
+           (trig_mode_rbv == (_freerun ? sls::defs::AUTO_TIMING : sls::defs::TRIGGER_EXPOSURE)) &&
+           (trig_delay_rbv == secs_to_ns(trig_delay)) &&
+           (exposure_time_rbv == secs_to_ns(exposure_time)) &&
+           (exposure_period_rbv == secs_to_ns(exposure_period));
+  } catch (const sls::RuntimeError &err) {
+    error_print("Error: detector acquistion readback failed: %s\n", err.what());
+    return false;
+  }
 }
 
 bool Module::configure_gain(uint32_t bias, JungfrauConfigType::GainMode gain)
 {
-  printf("setting bias voltage to %d volts\n", bias);
-  put_command_print("vhighvoltage", bias);
+  if (!_det) {
+    error_print("Error: detector control interface is not initialized!\n");
+    return false;
+  }
 
-  printf("setting gain mode %d\n", gain);
-  // Clear all the bits
-  clearbit_print(0x5d, 0);
-  clearbit_print(0x5d, 1);
-  clearbit_print(0x5d, 2);
-  clearbit_print(0x5d, 12);
-  clearbit_print(0x5d, 13);
+  try {
+    printf("setting bias voltage to %d volts\n", bias);
+    _det->setHighVoltage(bias);
+
+    printf("setting gain mode %d\n", gain);
+
   // Now set the ones of the gain we want
   switch(gain) {
     case JungfrauConfigType::Normal:
+      _det->setSettings(sls::defs::GAIN0);
+      _det->setGainMode(sls::defs::DYNAMIC);
       break;
     case JungfrauConfigType::FixedGain1:
-      setbit_print(0x5d, 1);
+      _det->setSettings(sls::defs::GAIN0);
+      _det->setGainMode(sls::defs::FIX_G1);
       break;
     case JungfrauConfigType::FixedGain2:
-      setbit_print(0x5d, 1);
-      setbit_print(0x5d, 2);
+      _det->setSettings(sls::defs::GAIN0);
+      _det->setGainMode(sls::defs::FIX_G2);
       break;
     case JungfrauConfigType::ForcedGain1:
-      setbit_print(0x5d, 12);
+      _det->setSettings(sls::defs::GAIN0);
+      _det->setGainMode(sls::defs::FORCE_SWITCH_G1);
       break;
     case JungfrauConfigType::ForcedGain2:
-      setbit_print(0x5d, 12);
-      setbit_print(0x5d, 13);
+      _det->setSettings(sls::defs::GAIN0);
+      _det->setGainMode(sls::defs::FORCE_SWITCH_G2);
       break;
     case JungfrauConfigType::HighGain0:
-      setbit_print(0x5d, 0);
+      _det->setSettings(sls::defs::HIGHGAIN0);
+      _det->setGainMode(sls::defs::DYNAMIC);
       break;
+    default:
+      error_print("Error: invalid gain mode for the detector\n");
+      return false;
   }
 
-  return status() != ERROR;
+    return verify_gain(bias, gain);
+  } catch (const sls::RuntimeError &err) {
+    error_print("Error: detector gain readback failed: %s\n", err.what());
+    return false;
+  }
+}
+
+bool Module::verify_gain(uint32_t bias, JungfrauConfigType::GainMode gain)
+{
+  if (!_det) {
+    error_print("Error: detector control interface is not initialized!\n");
+    return false;
+  }
+
+  try {
+    uint32_t bias_rbv = _det->getHighVoltage().squash();
+    sls::defs::detectorSettings settings_rbv = _det->getSettings().squash();
+    sls::defs::gainMode gain_rbv = _det->getGainMode().squash();
+
+    sls::defs::detectorSettings settings_expected;
+    sls::defs::gainMode gain_expected;
+
+    switch(gain) {
+      case JungfrauConfigType::Normal:
+        settings_expected = sls::defs::GAIN0;
+        gain_expected = sls::defs::DYNAMIC;
+        break;
+      case JungfrauConfigType::FixedGain1:
+        settings_expected = sls::defs::GAIN0;
+        gain_expected = sls::defs::FIX_G1;
+        break;
+      case JungfrauConfigType::FixedGain2:
+        settings_expected = sls::defs::GAIN0;
+        gain_expected = sls::defs::FIX_G2;
+        break;
+      case JungfrauConfigType::ForcedGain1:
+        settings_expected = sls::defs::GAIN0;
+        gain_expected = sls::defs::FORCE_SWITCH_G1;
+        break;
+      case JungfrauConfigType::ForcedGain2:
+        settings_expected = sls::defs::GAIN0;
+        gain_expected = sls::defs::FORCE_SWITCH_G2;
+        break;
+      case JungfrauConfigType::HighGain0:
+        settings_expected = sls::defs::HIGHGAIN0;
+        gain_expected = sls::defs::DYNAMIC;
+        break;
+      default:
+        error_print("Error: invalid gain mode for the detector\n");
+        return false;
+    }
+
+    return (bias_rbv == bias) &&
+           (settings_rbv == settings_expected) &&
+           (gain_rbv == gain_expected);
+  } catch (const sls::RuntimeError &err) {
+    error_print("Error: detector gain readback failed: %s\n", err.what());
+    return false;
+  } 
+}
+
+bool Module::check_readback(const char* name, uint32_t rbv, uint32_t expected)
+{
+  if (rbv != expected) {
+    error_print("Error: detector readback of %s does not match: %u vs %u\n",
+                name, rbv, expected);
+    return false;
+  } else {
+    return true;
+  }
 }
 
 bool Module::check_size(uint32_t num_rows, uint32_t num_columns) const
@@ -475,267 +698,239 @@ bool Module::check_size(uint32_t num_rows, uint32_t num_columns) const
   return (num_rows == NUM_ROWS) && (num_columns == NUM_COLUMNS);
 }
 
-std::string Module::put_command_raw(int narg, int pos)
+uint64_t Module::next_frame()
 {
-  if(_det) {
-    return _det->putCommand(narg, _cmdbuf, pos);
-  } else {
-    return "unable to send command";
+  if (!_det) {
+    error_print("Error: detector control interface is not initialized!\n");
+    return false;
+  }
+
+  try {
+    return _det->getNextFrameNumber().squash();
+  } catch (const sls::RuntimeError &err) {
+    error_print("Error: detector next frame readback failed: %s\n", err.what());
+    return 0;
   }
 }
 
-std::string Module::get_command_raw(int narg, int pos)
+void Module::set_next_frame(uint64_t nframe)
 {
-  if(_det) {
-    return _det->getCommand(narg, _cmdbuf, pos);
-  } else {
-    return "unable to send command";
+  if (!_det) {
+    error_print("Error: detector control interface is not initialized!\n");
+    return ;
+  }
+
+  try {
+    _det->setNextFrameNumber(nframe);
+  } catch (const sls::RuntimeError &err) {
+    error_print("Error: detector next frame counter set failed: %s\n", err.what());
   }
 }
 
-std::string Module::put_command(const char* cmd, const char* value, int pos)
+uint64_t Module::moduleid()
 {
-  if (strlen(cmd) >= CMD_LEN || strlen(value) >= CMD_LEN) {
-    return "invalid command or value length";
-  } 
-  strcpy(_cmdbuf[0], cmd);
-  strcpy(_cmdbuf[1], value);
-  if (value) {
-    return put_command_raw(2, pos);
-  } else {
-    return put_command_raw(1, pos);
-  }
-}
-
-std::string Module::put_command(const char* cmd, const short value, int pos)
-{
-  if (strlen(cmd) >= CMD_LEN) {
-    return "invalid command or value length";
-  }
-  strcpy(_cmdbuf[0], cmd);
-  sprintf(_cmdbuf[1], "%hd", value);
-  return put_command_raw(2, pos);
-}
-
-std::string Module::put_command(const char* cmd, const unsigned short value, int pos)
-{
-  if (strlen(cmd) >= CMD_LEN) {
-    return "invalid command or value length";
-  }
-  strcpy(_cmdbuf[0], cmd);
-  sprintf(_cmdbuf[1], "%hu", value);
-  return put_command_raw(2, pos);
-}
-
-std::string Module::put_command(const char* cmd, const int value, int pos)
-{
-  if (strlen(cmd) >= CMD_LEN) {
-    return "invalid command or value length";
-  }
-  strcpy(_cmdbuf[0], cmd);
-  sprintf(_cmdbuf[1], "%d", value);
-  return put_command_raw(2, pos);
-}
-
-std::string Module::put_command(const char* cmd, const unsigned int value, int pos)
-{
-  if (strlen(cmd) >= CMD_LEN) {
-    return "invalid command or value length";
-  }
-  strcpy(_cmdbuf[0], cmd);
-  sprintf(_cmdbuf[1], "%u", value);
-  return put_command_raw(2, pos);
-}
-
-std::string Module::put_command(const char* cmd, const long value, int pos)
-{
-  if (strlen(cmd) >= CMD_LEN) {
-    return "invalid command or value length";
-  }
-  strcpy(_cmdbuf[0], cmd);
-  sprintf(_cmdbuf[1], "%ld", value);
-  return put_command_raw(2, pos);
-}
-
-std::string Module::put_command(const char* cmd, const unsigned long value, int pos)
-{
-  if (strlen(cmd) >= CMD_LEN) {
-    return "invalid command or value length";
-  }
-  strcpy(_cmdbuf[0], cmd);
-  sprintf(_cmdbuf[1], "%lu", value);
-  return put_command_raw(2, pos);
-}
-
-std::string Module::put_command(const char* cmd, const long long value, int pos)
-{
-  if (strlen(cmd) >= CMD_LEN) {
-    return "invalid command or value length";
-  }
-  strcpy(_cmdbuf[0], cmd);
-  sprintf(_cmdbuf[1], "%lld", value);
-  return put_command_raw(2, pos);
-}
-
-std::string Module::put_command(const char* cmd, const unsigned long long value, int pos)
-{
-  if (strlen(cmd) >= CMD_LEN) {
-    return "invalid command or value length";
-  }
-  strcpy(_cmdbuf[0], cmd);
-  sprintf(_cmdbuf[1], "%llu", value);
-  return put_command_raw(2, pos);
-}
-
-std::string Module::put_command(const char* cmd, const double value, int pos)
-{
-  if (strlen(cmd) >= CMD_LEN) {
-    return "invalid command or value length";
-  }
-  strcpy(_cmdbuf[0], cmd);
-  sprintf(_cmdbuf[1], "%f", value);
-  return put_command_raw(2, pos);
-}
-
-std::string Module::get_command(const char* cmd, int pos)
-{
-  if (strlen(cmd) >= CMD_LEN) {
-    return "invalid command or value length";
-  }
-  strcpy(_cmdbuf[0], cmd);
-  return get_command_raw(1, pos);
-}
-
-std::string Module::get_register(const int reg, int* register_value, int pos)
-{
-  strcpy(_cmdbuf[0], REG);
-  sprintf(_cmdbuf[1], "%#x", reg);
-  std::string reply = get_command_raw(2, pos);
-
-  if (register_value) {
-    *register_value = (int) strtol(reply.c_str(), NULL, 0);
+  if (!_det) {
+    error_print("Error: detector control interface is not initialized!\n");
+    return 0;
   }
 
-  return reply;
-}
-
-std::string Module::put_register(const int reg, const int value, int pos)
-{
-  strcpy(_cmdbuf[0], REG);
-  sprintf(_cmdbuf[1], "%#x", reg);
-  sprintf(_cmdbuf[2], "%#x", value);
-  return put_command_raw(3, pos);
-}
-
-std::string Module::put_adcreg(const int reg, const int value, int pos)
-{
-  strcpy(_cmdbuf[0], ADCREG);
-  sprintf(_cmdbuf[1], "%#x", reg);
-  sprintf(_cmdbuf[2], "%#x", value);
-  return put_command_raw(3, pos);
-}
-
-std::string Module::setbit(const int reg, const int bit, int pos)
-{
-  strcpy(_cmdbuf[0], SETBIT);
-  sprintf(_cmdbuf[1], "%#x", reg);
-  sprintf(_cmdbuf[2],  "%d", bit);
-  return put_command_raw(3, pos);
-}
-
-std::string Module::clearbit(const int reg, const int bit, int pos)
-{
-  strcpy(_cmdbuf[0], CLEARBIT);
-  sprintf(_cmdbuf[1], "%#x", reg);
-  sprintf(_cmdbuf[2],  "%d", bit);  
-  return put_command_raw(3, pos);
-}
-
-uint64_t Module::nframes()
-{
-  std::string reply = get_command("nframes");
-  return strtoull(reply.c_str(), NULL, 10);
+  try {
+    return _det->getModuleId().squash();
+  } catch (const sls::RuntimeError &err) {
+    error_print("Error: detector module id readback failed: %s\n", err.what());
+    return 0;
+  }
 }
 
 uint64_t Module::serialnum()
 {
-  std::string reply = get_command("detectornumber");
-  return strtoull(reply.c_str(), NULL, 0);
+  if (!_det) {
+    error_print("Error: detector control interface is not initialized!\n");
+    return 0;
+  }
+
+  try {
+    return _det->getSerialNumber().squash();
+  } catch (const sls::RuntimeError &err) {
+    error_print("Error: detector serial number readback failed: %s\n", err.what());
+    return 0;
+  }
 }
 
-uint64_t Module::version()
+uint64_t Module::software()
 {
-  std::string reply = get_command("softwareversion");
-  return strtoull(reply.c_str(), NULL, 0);
+  if (!_det) {
+    error_print("Error: detector control interface is not initialized!\n");
+    return 0;
+  }
+
+  try {
+    uint64_t version_id = 0;
+    std::string version = _det->getDetectorServerVersion().squash();
+    size_t start=0, end =0;
+    int shift = 3;
+    while (shift >= 0) {
+      end = version.find(".", start);
+      version_id |= (strtoull(version.substr(start, end).c_str(), NULL, 0) << (shift*16));
+      shift--;
+      if (end != std::string::npos) {
+        start = end+1;
+      } else {
+        break;
+      }
+    }
+
+    return version_id;
+  } catch (const sls::RuntimeError &err) {
+    error_print("Error: detector software version readback failed: %s\n", err.what());
+    return 0;
+  }
 }
 
 uint64_t Module::firmware()
 {
-  std::string reply = get_command("detectorversion");
-  return strtoull(reply.c_str(), NULL, 0);
-}
+  if (!_det) {
+    error_print("Error: detector control interface is not initialized!\n");
+    return 0;
+  }
 
-Module::Status Module::status(const std::string& reply)
-{
-  if (!strcmp(reply.c_str(), "waiting"))
-    return WAIT;
-  else if (!strcmp(reply.c_str(), "idle"))
-    return IDLE;
-  else if (!strcmp(reply.c_str(), "running"))
-    return RUNNING;
-  else if (!strcmp(reply.c_str(), "data"))
-    return DATA;
-  else
-    return ERROR;
+  try {
+    return _det->getFirmwareVersion().squash();
+  } catch (const sls::RuntimeError &err) {
+    error_print("Error: detector firmware readback failed: %s\n", err.what());
+    return 0;
+  }
 }
 
 Module::Status Module::status()
 {
-  std::string reply = get_command("status");
-  return status(reply);
+  Status status = UNKNOWN;
+  try {
+    if (_det) {
+      sls::defs::runStatus rstat = _det->getDetectorStatus().squash();
+      switch(rstat) {
+        case sls::defs::IDLE:
+          status = IDLE;
+          break;
+        case sls::defs::ERROR:
+          status = ERROR;
+          break;
+        case sls::defs::WAITING:
+          status = WAITING;
+          break;
+        case sls::defs::RUN_FINISHED:
+          status = RUN_FINISHED;
+          break;
+        case sls::defs::TRANSMITTING:
+          status = TRANSMITTING;
+          break;
+        case sls::defs::RUNNING:
+          status = RUNNING;
+          break;
+        case sls::defs::STOPPED:
+          status = STOPPED;
+          break;
+      }
+    } else {
+      error_print("Error: detector control interface is not initialized!\n");
+    }
+  }
+  catch(const sls::RuntimeError &err) {
+    error_print("Error: failed to get detector status: %s\n", err.what());
+  }
+
+  return status;
 }
 
 std::string Module::status_str()
 {
-  return get_command("status");
+  switch(status()) {
+    case IDLE:
+      return sls::ToString(sls::defs::IDLE);
+    case ERROR:
+      return sls::ToString(sls::defs::ERROR);
+    case WAITING:
+      return sls::ToString(sls::defs::WAITING);
+    case RUN_FINISHED:
+      return sls::ToString(sls::defs::RUN_FINISHED);
+    case TRANSMITTING:
+      return sls::ToString(sls::defs::TRANSMITTING);
+    case RUNNING:
+      return sls::ToString(sls::defs::RUNNING);
+    case STOPPED:
+      return sls::ToString(sls::defs::STOPPED);
+    case UNKNOWN:
+    default:
+      return "unknown";  
+  }
 }
 
 bool Module::start()
 {
-  std::string reply = put_command("status", "start");
-  printf("starting detector: %s\n", reply.c_str());
-  /*
-   * IDLE status is okay when the detector is free running since the frame acquisiton may have finished
-   * before the status call happens. Often this happens in the case of aquiring only a single frame.
-   *
-   * Triggered mode always runs until explicitly stopped, so being at IDLE after starting aquisiton is
-   * an error state.
-   */
-  return status(reply) == RUNNING || status(reply) == WAIT || ((status(reply) == IDLE) && (_freerun)) ;
+  try {
+    if (_det) {
+      // start the acquisiton
+      _det->startDetector();
+      // check the detector status
+      Status detstat = status();
+      /*
+       * IDLE status is okay when the detector is free running since the frame acquisiton may have finished
+       * before the status call happens. Often this happens in the case of aquiring only a single frame.
+       *
+       * Triggered mode always runs until explicitly stopped, so being at IDLE after starting aquisiton is
+       * an error state.
+       */
+      return detstat == RUNNING || detstat == WAITING || ((detstat == IDLE) && (_freerun));
+    } else {
+      error_print("Error: detector control interface is not initialized!\n");
+      return false;
+    }
+  }
+  catch(const sls::RuntimeError &err) {
+    error_print("Error: failed to start detector acquisition: %s\n", err.what());
+    return false;
+  }
 }
 
 bool Module::stop()
 {
-  std::string reply = put_command("status", "stop");
-  if (!strcmp(reply.c_str(), "error")) {
-    printf("stopping detector:  done\n");
-    reset();
-  } else {
-    printf("stopping detector: %s\n", reply.c_str());
+  try {
+    if (_det) {
+      // stop the acquisition
+      _det->stopDetector();
+      // check the detector status
+      Status detstat = status();
+      return detstat != RUNNING && detstat != WAITING;
+    } else {
+      error_print("Error: detector control interface is not initialized!\n");
+      return false;
+    }
   }
-  return status(reply) != RUNNING;
+  catch(const sls::RuntimeError &err) {
+    error_print("Error: failed to stop detector acquisition: %s\n", err.what());
+    return false;
+  }
 }
 
 void Module::reset()
 {
-  printf("reseting run control ...");
-  // reset mem machine fifos fifos
-  put_register(0x4f, 0x4000);
-  put_register(0x4f, 0x0);
-  // reset run control
-  put_register(0x4f, 0x0400);
-  put_register(0x4f, 0x0);
-  printf(" done\n");
+  if (!_det) {
+    error_print("Error: detector control interface is not initialized!\n");
+    return ;
+  }
+
+  try {
+    printf("reseting run control ...");
+    // reset mem machine fifos fifos
+    _det->writeRegister(0x4f, 0x4000);
+    _det->writeRegister(0x4f, 0x0);
+    // reset run control
+    _det->writeRegister(0x4f, 0x0400);
+    _det->writeRegister(0x4f, 0x0);
+    printf(" done\n");
+  } catch (const sls::RuntimeError &err) {
+    error_print("Error: detector reset failed: %s\n", err.what());
+  }
 }
 
 unsigned Module::flush()
@@ -881,7 +1076,6 @@ Detector::Detector(std::vector<Module*>& modules, bool use_threads, int thread_r
   _pfds(0),
   _num_modules(modules.size()),
   _module_frames(new uint64_t[modules.size()]),
-  _module_frames_offset(new uint64_t[modules.size()]),
   _module_first_packet(new bool[modules.size()]),
   _module_last_packet(new bool[modules.size()]),
   _module_npackets(new unsigned[modules.size()]),
@@ -893,9 +1087,8 @@ Detector::Detector(std::vector<Module*>& modules, bool use_threads, int thread_r
   if (err) {
     fprintf(stderr, "%s pipe error: %s\n", __FUNCTION__, strerror(errno));
   }
-  // explicitly zero the _module_frames and _module_frames_offset buffers
+  // explicitly zero the _module_frames buffer
   memset(_module_frames, 0, modules.size() * sizeof(uint64_t));
-  memset(_module_frames_offset, 0, modules.size() * sizeof(uint64_t));
   if (_use_threads) {
     _threads = new pthread_t[_num_modules];
     _thread_attr = new pthread_attr_t;
@@ -938,7 +1131,6 @@ Detector::~Detector()
   }
   if (_pfds) delete[] _pfds;
   if (_module_frames) delete[] _module_frames;
-  if (_module_frames_offset) delete[] _module_frames_offset;
   if (_module_first_packet) delete[] _module_first_packet;
   if (_module_last_packet) delete[] _module_last_packet;
   if (_module_npackets) delete[] _module_npackets;
@@ -988,25 +1180,25 @@ bool Detector::aborted() const
   return _aborted;
 }
 
-uint64_t Detector::sync_nframes()
+uint64_t Detector::sync_next_frame()
 {
   uint64_t frame_num[_num_modules];
-  uint64_t last_frame = 0;
+  uint64_t next_frame = 1;
   for (unsigned i=0; i<_num_modules; i++) {
-    frame_num[i] = _modules[i]->nframes();
-    if (frame_num[i] > last_frame) {
-      last_frame = frame_num[i];
+    frame_num[i] = _modules[i]->next_frame();
+    if (frame_num[i] > next_frame) {
+      next_frame = frame_num[i];
     }
   }
 
   for (unsigned i=0; i<_num_modules; i++) {
-    if (frame_num[i] < last_frame) {
-        printf("Warning: module %u is behind by %lu frame%s! - adjusting frame offset\n", i, last_frame - frame_num[i], (last_frame - frame_num[i])==1 ? "" : "s");
-        _module_frames_offset[i] = last_frame - frame_num[i];
+    if (frame_num[i] < next_frame) {
+        printf("Warning: module %u is behind by %lu frame%s! - adjusting frame offset\n", i, next_frame - frame_num[i], (next_frame - frame_num[i])==1 ? "" : "s");
+        _modules[i]->set_next_frame(next_frame);
     }
   }
 
-  return last_frame;
+  return next_frame;
 }
 
 bool Detector::check_size(uint32_t num_modules, uint32_t num_rows, uint32_t num_columns) const
@@ -1045,9 +1237,9 @@ bool Detector::configure(uint64_t nframes, JungfrauConfigType::GainMode gain, Ju
     }
 
     for (unsigned i=0; i<_num_modules; i++) {
-      printf("configuring adc of module %u\n", i);
-      if(!_modules[i]->configure_adc()) {
-        fprintf(stderr, "Error: module %u adc configuration failed!\n", i);
+      printf("configuring power of module %u\n", i);
+      if(!_modules[i]->configure_power()) {
+        fprintf(stderr, "Error: module %u power configuration failed!\n", i);
         success = false;
       }
     }
@@ -1137,11 +1329,12 @@ bool Detector::get_frame_thread(uint64_t* frame, JungfrauModInfoType* metadata, 
     // Check that we got a consistent frame
     for (unsigned i=0; i<_num_modules; i++) {
       if (frame_unset) {
-        *frame = (_module_frames[i] + _module_frames_offset[i]);
+        *frame = _module_frames[i];
         frame_unset = false;
       } else {
-        if (*frame != (_module_frames[i] + _module_frames_offset[i])) {
-          fprintf(stderr,"Error: data out-of-order got data for module %u got frame %lu, but was expecting frame %lu\n", i, _module_frames[i] + _module_frames_offset[i], *frame);
+        if (*frame != _module_frames[i]) {
+          fprintf(stderr,"Error: data out-of-order got data for module %u got frame %lu, but was expecting frame %lu\n",
+                  i, _module_frames[i], *frame);
           drop_frame = true;
         }
       }
@@ -1189,12 +1382,12 @@ bool Detector::get_frame_poll(uint64_t* frame, JungfrauModInfoType* metadata, ui
       if ((_pfds[i].revents & POLLIN) && (!_module_last_packet[i])) {
         if (_modules[i]->get_packet(&_module_frames[i], metadata?&metadata[i]:NULL, _module_data[i], &_module_first_packet[i], &_module_last_packet[i], &_module_npackets[i])) {
           if (frame_unset) {
-            *frame = _module_frames[i] + _module_frames_offset[i];
+            *frame = _module_frames[i];
             frame_unset = false;
           } else {
-            if (*frame != (_module_frames[i] + _module_frames_offset[i])) {
+            if (*frame != _module_frames[i]) {
               fprintf(stderr,"Error: data out-of-order got data for module %u got frame %lu, but was expecting frame %lu\n",
-                      i, _module_frames[i] + _module_frames_offset[i], *frame);
+                      i, _module_frames[i], *frame);
               _module_last_packet[i] = true;
               drop_frame = true;
             }
@@ -1202,7 +1395,7 @@ bool Detector::get_frame_poll(uint64_t* frame, JungfrauModInfoType* metadata, ui
 
           if (_module_last_packet[i] && (_module_npackets[i] != JF_PACKET_NUM)) {
             fprintf(stderr,"Error: frame %lu from module %u is incomplete, received %u out of %d expected\n",
-                    _module_frames[i] + _module_frames_offset[i], i, _module_npackets[i], JF_PACKET_NUM);
+                    _module_frames[i], i, _module_npackets[i], JF_PACKET_NUM);
             drop_frame = true;
           }
         }
@@ -1225,7 +1418,9 @@ bool Detector::get_module_config(JungfrauModConfigType* module_config, unsigned 
   }
 
   for (unsigned i=0; i<_num_modules; i++) {
-    module_config[i] = JungfrauModConfigType(_modules[i]->serialnum(), _modules[i]->version(), _modules[i]->firmware());
+    module_config[i] = JungfrauModConfigType(DetId(_modules[i]->serialnum(), _modules[i]->moduleid()).full(),
+                                             _modules[i]->software(),
+                                             _modules[i]->firmware());
   }
 
   return true;
@@ -1354,17 +1549,7 @@ void Detector::clear_errors()
   }
 }
 
-#undef CMD_LEN
 #undef MSG_LEN
-#undef CLKDIV_HALF
-#undef CLKDIV_QUARTER
 #undef NUM_ROWS
 #undef NUM_COLUMNS
-#undef get_command_print
-#undef put_command_print
-#undef get_register_print
-#undef put_register_print
-#undef put_adcreg_print
-#undef setbit_print
-#undef clearbit_print
 #undef error_print

@@ -67,10 +67,14 @@ bool ConfigCache::configure(bool apply)
     for (unsigned i=0; i<_detector.get_num_modules(); i++) {
       const char* hostname = _detector.get_hostname(i);
       if (hostname) {
-        if(_lookup.has(hostname))
-          JungfrauModConfig::setSerialNumber(module_config[i], _lookup[hostname].full());
+        if(_lookup.has(hostname)) {
+          DetId old_id(module_config[i].serialNumber());
+          DetId new_id(_lookup[hostname], old_id.module());
+          JungfrauModConfig::setSerialNumber(module_config[i], new_id.full());
+          printf("ConfigCache: module %u serial number updated from %#lx to %#lx\n", i, old_id.full(), new_id.full());
+        }
       } else {
-        printf("ConfigCache: module %d appears to have no hostname to use for serial number lookup!\n", i);
+        printf("ConfigCache: module %u appears to have no hostname to use for serial number lookup!\n", i);
         UserMessage* msg = new (&_occPool) UserMessage("Jungfrau Config Error: failed to lookup serial number!\n");
         _mgr.appliance().post(msg);
         error = true;

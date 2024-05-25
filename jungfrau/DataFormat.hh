@@ -12,7 +12,6 @@ namespace Pds {
 #pragma pack(push)
 #pragma pack(2)
     struct jungfrau_header {
-      char emptyheader[6];
       uint64_t framenum;
       uint32_t exptime;
       uint32_t packetnum;

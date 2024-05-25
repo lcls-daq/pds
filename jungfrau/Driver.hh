@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-#define MAX_JUNGFRAU_CMDS 3
-
-class slsDetectorUsers;
+namespace sls {
+  class Detector;
+}
 
 namespace Pds {
   namespace Jungfrau {
@@ -21,8 +21,8 @@ namespace Pds {
         DacsConfig(uint16_t vb_ds, uint16_t vb_comp, uint16_t vb_pixbuf, uint16_t vref_ds,
                    uint16_t vref_comp, uint16_t vref_prech, uint16_t vin_com, uint16_t  vdd_prot);
         ~DacsConfig();
-        bool operator==(DacsConfig& rhs) const;
-        bool operator!=(DacsConfig& rhs) const;
+        bool operator==(const DacsConfig& rhs) const;
+        bool operator!=(const DacsConfig& rhs) const;
       public:
         uint16_t vb_ds() const;
         uint16_t vb_comp() const;
@@ -32,8 +32,6 @@ namespace Pds {
         uint16_t vref_prech() const;
         uint16_t vin_com() const;
         uint16_t vdd_prot() const;
-      private:
-        bool equals(DacsConfig& rhs) const;
       private:
         uint16_t  _vb_ds;
         uint16_t  _vb_comp;
@@ -47,7 +45,7 @@ namespace Pds {
 
     class Module {
       public:
-        enum Status { IDLE, RUNNING, WAIT, DATA, ERROR };
+        enum Status { IDLE, ERROR, WAITING, RUN_FINISHED, TRANSMITTING, RUNNING, STOPPED, UNKNOWN };
         Module(const int id, const char* control, const char* host, const unsigned port,
                const char* mac, const char* det_ip, bool config_det_ip=true);
         ~Module();
@@ -57,33 +55,21 @@ namespace Pds {
         bool check_config();
         bool configure_mac(bool config_det_ip=true);
         bool configure_dacs(const DacsConfig& dac_config);
-        bool configure_adc();
+        bool configure_power(bool reset_adc=false);
         bool configure_speed(JungfrauConfigType::SpeedMode speed, bool& sleep);
-        bool configure_acquistion(uint64_t nframes, double trig_delay, double exposure_time, double exposure_period);
+        bool configure_acquistion(uint64_t nframes,
+                                  double trig_delay,
+                                  double exposure_time,
+                                  double exposure_period,
+                                  bool force_reset=false);
         bool configure_gain(uint32_t bias, JungfrauConfigType::GainMode gain);
         bool check_size(uint32_t num_rows, uint32_t num_columns) const;
-        std::string put_command(const char* cmd, const char* value, int pos=-1);
-        std::string put_command(const char* cmd, const short value, int pos=-1);
-        std::string put_command(const char* cmd, const unsigned short value, int pos=-1);
-        std::string put_command(const char* cmd, const int value, int pos=-1);
-        std::string put_command(const char* cmd, const unsigned int value, int pos=-1);
-        std::string put_command(const char* cmd, const long value, int pos=-1);
-        std::string put_command(const char* cmd, const unsigned long value, int pos=-1);
-        std::string put_command(const char* cmd, const long long value, int pos=-1);
-        std::string put_command(const char* cmd, const unsigned long long value, int pos=-1);
-        std::string put_command(const char* cmd, const double value, int pos=-1);
-        std::string put_register(const int reg, const int value, int pos=-1);
-        std::string get_register(const int reg, int* register_value, int pos=-1);
-        std::string setbit(const int reg, const int bit, int pos=-1);
-        std::string clearbit(const int reg, const int bit, int pos=-1);
-        std::string put_adcreg(const int reg, const int value, int pos=-1);
-        std::string get_command(const char* cmd, int pos=-1);
-        uint64_t nframes();
+        uint64_t next_frame();
+        uint64_t moduleid();
         uint64_t serialnum();
-        uint64_t version();
+        uint64_t software();
         uint64_t firmware();
         Status status();
-        Status status(const std::string& reply);
         std::string status_str();
         bool start();
         bool stop();
@@ -96,14 +82,18 @@ namespace Pds {
         const char* error();
         void set_error(const char* fmt, ...);
         void clear_error();
+        void set_next_frame(uint64_t nframe);
         int fd() const;
         unsigned get_num_rows() const;
         unsigned get_num_columns() const;
         unsigned get_num_pixels() const;
         unsigned get_frame_size() const;
       private:
-        std::string put_command_raw(int narg, int pos);
-        std::string get_command_raw(int narg, int pos);
+        bool check_readback(const char* name, uint32_t rbv, uint32_t expected);
+        bool verify_dacs(const DacsConfig& dac_config);
+        bool verify_speed(JungfrauConfigType::SpeedMode speed);
+        bool verify_acquistion(uint64_t nframes, uint64_t ncycles, double trig_delay, double exposure_time, double exposure_period);
+        bool verify_gain(uint32_t bias, JungfrauConfigType::GainMode gain);
       private:
         const int         _id;
         const char*       _control;
@@ -122,8 +112,7 @@ namespace Pds {
         unsigned          _frame_elem;
         char*             _readbuf;
         char*             _msgbuf;
-        char*             _cmdbuf[MAX_JUNGFRAU_CMDS];
-        slsDetectorUsers* _det;
+        sls::Detector*    _det;
         DacsConfig        _dac_config;
         JungfrauConfigType::SpeedMode _speed;
     };
@@ -148,7 +137,7 @@ namespace Pds {
         unsigned get_num_modules() const;
         unsigned get_num_pixels() const;
         unsigned get_frame_size() const;
-        uint64_t sync_nframes();
+        uint64_t sync_next_frame();
         const char* get_hostname(unsigned module) const;
         const char** errors();
         void clear_errors();
@@ -167,7 +156,6 @@ namespace Pds {
         int                   _sigfd[2];
         unsigned              _num_modules;
         uint64_t*             _module_frames;
-        uint64_t*             _module_frames_offset;
         bool*                 _module_first_packet;
         bool*                 _module_last_packet;
         unsigned*             _module_npackets;

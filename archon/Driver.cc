@@ -21,6 +21,7 @@
 #define XV_MOD_TYPE 12
 #define HEATERX_MOD_TYPE 11
 #define CONF_FLT_DELTA 0.001
+#define MIN_BATCH_TS_VER 1252
 
 static const char* PowerModeStrings[] = {"Unknown", "Not Configured", "Off", "Intermediate", "On", "Standby"};
 
@@ -329,6 +330,22 @@ uint32_t System::rev() const
   return get_value_as_uint32("BACKPLANE_REV");
 }
 
+uint32_t System::build() const
+{
+  uint32_t build = 0;
+  std::string ver = version();
+  size_t pos = ver.find(".");
+
+  if (pos != std::string::npos) {
+    pos = ver.find(".", pos + 1);
+    if (pos != std::string::npos) {
+      build = strtoul(ver.substr(pos+1, ver.find(".", pos + 1)).c_str(), NULL, 0);
+    }
+  }
+
+  return build;
+}
+
 std::string System::version() const
 {
   return get_value("BACKPLANE_VERSION");
@@ -370,6 +387,22 @@ uint32_t System::module_rev(unsigned mod) const
   snprintf(_cmd_buff, MAX_CMD_LEN, "MOD%u_REV", mod);
   std::string cmd(_cmd_buff);
   return get_value_as_uint32(cmd);
+}
+
+uint32_t System::module_build(unsigned mod) const
+{
+  uint32_t build = 0;
+  std::string ver = module_version(mod);
+  size_t pos = ver.find(".");
+
+  if (pos != std::string::npos) {
+    pos = ver.find(".", pos + 1);
+    if (pos != std::string::npos) {
+      build = strtoul(ver.substr(pos + 1, ver.find(".", pos + 1)).c_str(), NULL, 0);
+    }
+  }
+
+  return build;
 }
 
 std::string System::module_version(unsigned mod) const
@@ -844,32 +877,6 @@ bool SensorConfig::operator!=(const SensorConfig& rhs) const
   return !(*this == rhs);
 }
 
-Driver::Driver(const char* host, unsigned port) :
-  _host(host),
-  _port(port),
-  _socket(-1),
-  _connected(false),
-  _timeout_req(false),
-  _acq_mode(Stopped),
-  _msgref(0),
-  _readbuf_sz(BUFFER_SIZE),
-  _writebuf_sz(BUFFER_SIZE),
-  _end_frame(0),
-  _last_frame(0),
-  _pending_cfg(false),
-  _sleep_enabled(true),
-  _system(MODULE_MAX),
-  _buffer_info(NUM_BUFFERS)
-{
-  // 1ms frame poll interval by default
-  _sleep_time.tv_sec = 0;
-  _sleep_time.tv_nsec = 1000000U; // 1ms
-  _readbuf = new char[_readbuf_sz];
-  _writebuf = new char[_writebuf_sz];
-  _message = &_readbuf[MSG_HEADER_LEN];
-  connect();
-}
-
 BiasConfig::BiasConfig() :
   label(""),
   voltage(0.0),
@@ -901,6 +908,37 @@ bool BiasConfig::operator==(const BiasConfig& rhs) const
 bool BiasConfig::operator!=(const BiasConfig& rhs) const
 {
   return !(*this == rhs);
+}
+
+Driver::Driver(const char* host, unsigned port) :
+  _host(host),
+  _port(port),
+  _socket(-1),
+  _connected(false),
+  _timeout_req(false),
+  _acq_mode(Stopped),
+  _msgref(0),
+  _readbuf_sz(BUFFER_SIZE),
+  _writebuf_sz(BUFFER_SIZE),
+  _end_frame(0),
+  _last_frame(0),
+  _batched_ts(false),
+  _pending_cfg(false),
+  _sleep_enabled(true),
+  _system(MODULE_MAX),
+  _buffer_info(NUM_BUFFERS)
+{
+  // 1ms frame poll interval by default
+  _sleep_time.tv_sec = 0;
+  _sleep_time.tv_nsec = 1000000U; // 1ms
+  _readbuf = new char[_readbuf_sz];
+  _writebuf = new char[_writebuf_sz];
+  _message = &_readbuf[MSG_HEADER_LEN];
+  connect();
+  // check firmware version
+  if (fetch_system()) {
+    _batched_ts = (_system.build() >= MIN_BATCH_TS_VER);
+  }
 }
 
 Driver::~Driver()
@@ -1077,7 +1115,7 @@ bool Driver::fetch_frame(uint32_t frame_number, void* data, FrameMetaData* frame
     width = _buffer_info.width(buffer_idx);
     height = _buffer_info.height(buffer_idx);
     is32bit = _buffer_info.is32bit(buffer_idx);
-    size = fetch_buffer(buffer_idx, data);
+    size = fetch_buffer(buffer_idx, data, batch && _batched_ts);
     if (size != _buffer_info.size(buffer_idx)) {
       fprintf(stderr, "Error fetching frame %u: unexpected size %lu vs expected of %u\n", frame_number, size, _buffer_info.size(buffer_idx));
       return false;
@@ -1132,7 +1170,7 @@ bool Driver::flush_frame(void* data, FrameMetaData* frame_meta)
     width = _buffer_info.width(buffer_idx);
     height = _buffer_info.height(buffer_idx);
     is32bit = _buffer_info.is32bit(buffer_idx);
-    size = fetch_buffer(buffer_idx, data);
+    size = fetch_buffer(buffer_idx, data, batch && _batched_ts);
     if (size != _buffer_info.size(buffer_idx)) {
       fprintf(stderr, "Error fetching frame %u: unexpected size %lu vs expected of %u\n", frame_number, size, _buffer_info.size(buffer_idx));
       return false;
@@ -1921,7 +1959,12 @@ void Driver::set_frame_poll_interval(unsigned microseconds)
   _sleep_time.tv_nsec = (microseconds % 1000000U) * 1000U;
 }
 
-ssize_t Driver::fetch_buffer(unsigned buffer_idx, void* data)
+bool Driver::has_batched_timestamps() const
+{
+  return _batched_ts;
+}
+
+ssize_t Driver::fetch_buffer(unsigned buffer_idx, void* data, bool batched_ts)
 {
   ssize_t len;
   ssize_t ret;
@@ -1933,7 +1976,7 @@ ssize_t Driver::fetch_buffer(unsigned buffer_idx, void* data)
   uint32_t size = _buffer_info.size(buffer_idx);
   uint32_t blocks = (size + BURST_LEN -1) / BURST_LEN;
 
-  if (!lock_buffer(buffer_idx)) {
+  if (!lock_buffer(buffer_idx, batched_ts)) {
     fprintf(stderr, "Error on locking buffer: %u\n", buffer_idx);
     return wbytes;
   }
@@ -1976,7 +2019,7 @@ ssize_t Driver::fetch_buffer(unsigned buffer_idx, void* data)
 
   _msgref += 1;
 
-  if (!lock_buffer(0)) {
+  if (!lock_buffer(0, batched_ts)) {
     fprintf(stderr, "Error unlocking buffer: %u\n", buffer_idx);
   }
 
@@ -2269,14 +2312,14 @@ const Config& Driver::config() const
   return _config;
 }
 
-bool Driver::lock_buffer(unsigned buffer_idx)
+bool Driver::lock_buffer(unsigned buffer_idx, bool batched_ts)
 {
   if (buffer_idx > _buffer_info.nbuffers()) {
     fprintf(stderr, "Invalid buffer number for locking: %u\n", buffer_idx);
     return false;
   } else {
     char cmdstr[6];
-    sprintf(cmdstr, "LOCK%u", buffer_idx);
+    sprintf(cmdstr, batched_ts ? "LOCKT%u" : "LOCK%u", buffer_idx);
     return command(cmdstr);
   }
 }
@@ -2293,3 +2336,4 @@ bool Driver::lock_buffer(unsigned buffer_idx)
 #undef XV_MOD_TYPE
 #undef HEATERX_MOD_TYPE
 #undef CONF_FLT_DELTA
+#undef MIN_BATCH_TS_VER

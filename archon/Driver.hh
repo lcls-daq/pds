@@ -84,12 +84,14 @@ namespace Pds {
         int num_modules() const;
         uint32_t type() const;
         uint32_t rev() const;
+        uint32_t build() const;
         std::string version() const;
         std::string id() const;
         std::string power_id() const;
         uint16_t present() const;
         uint32_t module_type(unsigned mod) const;
         uint32_t module_rev(unsigned mod) const;
+        uint32_t module_build(unsigned mod) const;
         std::string module_version(unsigned mod) const;
         std::string module_id(unsigned mod) const;
         bool module_present(unsigned mod) const;
@@ -320,6 +322,7 @@ namespace Pds {
         int find_config_line(const char* line, bool use_cache=true);
         void timeout_waits(bool request_timeout=true);
         void set_frame_poll_interval(unsigned microseconds);
+        bool has_batched_timestamps() const;
         const uint32_t last_frame() const;
         const unsigned long long time();
         const char* rd_config_line(unsigned num);
@@ -331,8 +334,8 @@ namespace Pds {
         const BufferInfo& buffer_info() const;
         const Config& config() const;
       private:
-        ssize_t fetch_buffer(unsigned buffer_idx, void* data);
-        bool lock_buffer(unsigned buffer_idx);
+        ssize_t fetch_buffer(unsigned buffer_idx, void* data, bool batched_ts=false);
+        bool lock_buffer(unsigned buffer_idx, bool batched_ts=false);
         bool replace_param_line(const char* param, unsigned value, bool use_cache=true);
         bool replace_config_line(const char* key, const char* newline);
         bool load_config_file(FILE* f);
@@ -352,6 +355,7 @@ namespace Pds {
         char*         _message;
         uint32_t      _end_frame;
         uint32_t      _last_frame;
+        bool          _batched_ts;
         bool          _pending_cfg;
         bool          _sleep_enabled;
         timespec      _sleep_time;

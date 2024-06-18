@@ -1,7 +1,7 @@
 libnames := config configdata configdbc configutils
 
 libsrcs_configdbc := DbClient.cc XtcClient.cc PdsDefs.cc DeviceEntry.cc
-libincs_configdbc := pdsdata/include ndarray/include boost/include
+libincs_configdbc := pdsdata/include ndarray/include boost/include mysql/include
 
 libsrcs_config := CfgCache.cc CfgClientNfs.cc
 libincs_config := pdsdata/include

@@ -38,5 +38,6 @@ ifneq ($(findstring x86_64-rhel7,$(tgt_arch)),)
   packages += zyla picam archon quadadc vimba
 endif
 
-
-
+ifneq ($(findstring x86_64-rhel9,$(tgt_arch)),)
+  packages += zyla picam archon quadadc vimba
+endif

@@ -100,7 +100,7 @@ unsigned Fsm::_allowed(State reqState, TransitionId::Value id) {
     return true;
   }
   else {
-    return (abs((unsigned)reqState-_state)==1);
+    return (abs(static_cast<int>(reqState-_state))==1);
   }
 }
 

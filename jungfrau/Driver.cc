@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/uio.h>
 
 #define MSG_LEN 256
 

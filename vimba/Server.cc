@@ -45,12 +45,24 @@ int Server::fetch( char* payload, int flags )
 
   // Check that the frame buffer is the expected size
   if (frame->imageSize != cam->payloadSize()) {
-    fprintf(stderr, "Error: frame is size %u instead of the expected %llu\n", frame->imageSize, cam->payloadSize());
+    fprintf(stderr,
+            "Error: frame %llu is size %u instead of the expected %llu\n",
+            frame->frameID,
+            frame->imageSize,
+            cam->payloadSize());
     xtc.damage.increase(Pds::Damage::UserDefined);
     xtc.damage.userBits(0x1);
+  } else if (frame->receiveStatus != VmbFrameStatusComplete) {
+    fprintf(stderr,
+            "Error: frame %llu is damaged with status '%s'\n",
+            frame->frameID,
+            FrameStatusCodes::desc(frame->receiveStatus));
+    xtc.damage.increase(Pds::Damage::UserDefined);
+    xtc.damage.userBits(0x4);
   } else if (!FrameBuffer::copyAs16Bit(frame, xtc.alloc(FrameBuffer::sizeAs16Bit(frame)))) {
     fprintf(stderr,
-            "Error: failed to convert frame with pixel format %s into Mono16\n",
+            "Error: failed to convert frame %llu with pixel format %s into Mono16\n",
+            frame->frameID,
             PixelFormatTypes::desc(frame->pixelFormat));
     xtc.damage.increase(Pds::Damage::UserDefined);
     xtc.damage.userBits(0x2);

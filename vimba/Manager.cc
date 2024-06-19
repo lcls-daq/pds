@@ -77,6 +77,12 @@ namespace Pds {
         else if (xtc->contains.value() == _vimbaDataType.value()) {
           VimbaDataType* frame = reinterpret_cast<VimbaDataType*>(xtc->payload());
 
+          // vimba sdk sometimes marks frames as damaged so add those user bits to the L1Accept datagram as well
+          if (xtc->damage.value() & (1<<Pds::Damage::UserDefined)) {
+            _in->datagram().xtc.damage.increase(Pds::Damage::UserDefined);
+            _in->datagram().xtc.damage.userBits(xtc->damage.userBits());
+          }
+
           if (_lreset) {
             _lreset = false;
             _dgm_ts   = _in->datagram().seq.stamp().fiducials();

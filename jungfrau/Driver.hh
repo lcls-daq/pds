@@ -47,7 +47,7 @@ namespace Pds {
       public:
         enum Status { IDLE, ERROR, WAITING, RUN_FINISHED, TRANSMITTING, RUNNING, STOPPED, UNKNOWN };
         Module(const int id, const char* control, const char* host, const unsigned port,
-               const char* mac, const char* det_ip, bool config_det_ip=true);
+               const char* mac, const char* det_ip, bool use_flow_ctrl, bool config_det_ip=true);
         ~Module();
         void shutdown();
         bool allocated() const;
@@ -101,6 +101,7 @@ namespace Pds {
         const unsigned    _port;
         const char*       _mac;
         const char*       _det_ip;
+        const bool        _use_flow_ctrl;
         int               _socket;
         bool              _connected;
         bool              _boot;

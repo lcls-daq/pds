@@ -119,8 +119,8 @@ uint16_t DacsConfig::vref_prech() const { return _vref_prech; }
 uint16_t DacsConfig::vin_com() const    { return _vin_com; }
 uint16_t DacsConfig::vdd_prot() const   { return _vdd_prot; }
 
-Module::Module(const int id, const char* control, const char* host, unsigned port, const char* mac, const char* det_ip, bool config_det_ip) :
-  _id(id), _control(control), _host(host), _port(port), _mac(mac), _det_ip(det_ip),
+Module::Module(const int id, const char* control, const char* host, unsigned port, const char* mac, const char* det_ip, bool use_flow_ctrl, bool config_det_ip) :
+  _id(id), _control(control), _host(host), _port(port), _mac(mac), _det_ip(det_ip), _use_flow_ctrl(use_flow_ctrl),
   _socket(-1), _connected(false), _boot(true), _freerun(false), _poweron(false),
   _sockbuf_sz(sizeof(jungfrau_dgram)*JF_PACKET_NUM*JF_EVENTS_TO_BUFFER), _readbuf_sz(sizeof(jungfrau_header)),
   _frame_sz(JF_DATA_ELEM * sizeof(uint16_t)), _frame_elem(JF_DATA_ELEM),
@@ -208,9 +208,9 @@ void Module::shutdown()
   }
   if (_det) {
     _connected = false;
-    _det->freeSharedMemory();
     delete _det;
     _det = 0;
+    sls::freeSharedMemory(_id);
   }
 }
 
@@ -269,6 +269,7 @@ bool Module::configure_mac(bool config_det_ip)
   }
 
   try {
+    bool flow_ctrl = _det->getTenGigaFlowControl().squash();
     sls::IpAddr rx_ip = _det->getDestinationUDPIP().squash();
     sls::MacAddr rx_mac = _det->getDestinationUDPMAC().squash();
 
@@ -277,7 +278,14 @@ bool Module::configure_mac(bool config_det_ip)
       needs_config = true;
     }
 
+    if (flow_ctrl != _use_flow_ctrl) {
+      printf("detector udp_rx interface flow control needs to be set\n");
+      needs_config = true;
+    }
+
     if (config_det_ip || needs_config) {
+        printf("setting detector udp_rx interface flow control to %s\n", _use_flow_ctrl ? "on" : "off");
+        _det->setTenGigaFlowControl(_use_flow_ctrl);
         printf("setting up detector udp_rx interface\n");
         _det->setDestinationUDPPort(_port);
         _det->setDestinationUDPIP(sls::HostnameToIp(_host));

@@ -309,6 +309,7 @@ namespace Pds {
         bool set_clock_at(unsigned ticks);
         bool set_clock_st(unsigned ticks);
         bool set_clock_stm1(unsigned ticks);
+        bool set_pocket_pump(unsigned count);
         bool set_bias_config(int channel, BiasConfig* bias, bool reload=true, bool fetch=false);
         bool get_bias_config(int channel, BiasConfig* bias, bool fetch=false);
         bool get_bias(int channel, float* voltage, float* current, bool fetch=false);

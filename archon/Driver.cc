@@ -1468,6 +1468,11 @@ bool Driver::set_clock_stm1(unsigned ticks)
   return load_parameter("STM1", ticks);
 }
 
+bool Driver::set_pocket_pump(unsigned count)
+{
+  return load_parameter("PumpCount", count);
+}
+
 bool Driver::set_bias_config(int channel, BiasConfig* bias, bool reload, bool fetch)
 {
   char buffer[32];

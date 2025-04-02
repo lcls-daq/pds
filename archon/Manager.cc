@@ -305,6 +305,9 @@ namespace Pds {
                 } else if (!_driver.set_clock_stm1(config->stm1())) {
                   printf("ConfigAction: failed to set clock_stm1 parameter!\n");
                   _error = true;
+                } else if (!_driver.set_pocket_pump(0)) {
+                  printf("ConfigAction: failed to set pocket_pump parameter!\n");
+                  _error = true;
                 }
               }
 

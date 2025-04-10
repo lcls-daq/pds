@@ -11,6 +11,7 @@ namespace Pds {
         ~ImageServer();
       public:
         const char* name() const;
+        size_t elem_size() const;
         int  fetch      (void* copyTo, size_t len);
         void update     ();
       private:

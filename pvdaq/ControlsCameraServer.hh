@@ -61,6 +61,7 @@ namespace Pds {
       uint32_t                    _width;
       uint32_t                    _height;
       uint32_t                    _depth;
+      uint32_t                    _bytes;
       uint32_t                    _offset;
       uint32_t                    _roi_x_org;
       uint32_t                    _roi_x_len;

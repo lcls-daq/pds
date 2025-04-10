@@ -93,6 +93,7 @@ ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
   _width      (0),
   _height     (0),
   _depth      (0),
+  _bytes      (0),
   _offset     (0),
   _roi_x_org  (0),
   _roi_x_len  (0),
@@ -352,8 +353,9 @@ void ControlsCameraServer::updated()
       break;
     }
 
+    uint32_t depth = (_bytes > (_depth+7)/8) ? _bytes*8 : _depth;
     EpicsCamDataType* frameptr = new (dg->xtc.alloc(sizeof(EpicsCamDataType)))
-      EpicsCamDataType(_width, _height, _depth, _offset);
+      EpicsCamDataType(_width, _height, depth, _offset);
     char* dataptr = ((char*) frameptr) + sizeof(EpicsCamDataType);
     dg->xtc.alloc(frameptr->_sizeof()-sizeof(EpicsCamDataType));
     int fetch_sz = _image->fetch(dataptr, _frame_sz);
@@ -613,6 +615,20 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
       if (ca_current_context() == NULL) ca_attach_context(_context);
       printf("Creating EpicsCA(%s)\n", _image_pvname);
       _image = new ImageServer(_image_pvname, this, _width * _height);
+
+      // try waiting for pv to connect to read element size
+      int tries = 100;
+      while(!_image->connected() && tries > 0) {
+        usleep(10000);
+        tries--;
+      }
+      if (_image->connected()) {
+        _bytes = _image->elem_size();
+      } else {
+        printf("Error: failed to read image element size from image pv: %s\n", _image_pvname);
+        _bytes = 0;
+        error = true;
+      }
     }
 
     printf("Camera configuration information:\n"
@@ -621,12 +637,13 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
            "  ncols:            %u\n"
            "  nrows:            %u\n"
            "  nbits:            %u\n"
+           "  bytes per pixel:  %u\n"
            "  gain:             %f\n"
            "  exposure:         %f\n"
            "  roi (org, end):   x: (%u, %u), y: (%u, %u)\n",
            _manufacturer_str,
            _model_str,
-           _width, _height, _depth,
+           _width, _height, _depth, _bytes,
            _gain_val, _exposure_val,
            _roi_x_org, _roi_x_end, _roi_y_org, _roi_y_end);
     if (_scale) {
@@ -685,7 +702,7 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
       dg->xtc.alloc(xtc->extent);
     }
 
-    _frame_sz = _width * _height * ((_depth+7)/8);
+    _frame_sz = _width * _height * std::max((_depth+7)/8, _bytes);
 
     if (!error) {
       if (_frame_sz > _max_evt_sz) {

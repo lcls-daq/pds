@@ -3,6 +3,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#define size_type(ctype, stype, dtype)  \
+  case ctype: result = sizeof (dtype);
+
 #define handle_type(ctype, stype, dtype) case ctype:    \
   if (nelem * sizeof (dtype) > len) {                   \
     result = -1;                                        \
@@ -32,6 +35,21 @@ const char* ImageServer::name() const
   return _name;
 }
 
+size_t ImageServer::elem_size() const
+{
+  size_t result = 0;
+  switch(_channel.type()) {
+    size_type(DBR_TIME_SHORT , dbr_time_short , dbr_short_t ) break;
+    size_type(DBR_TIME_FLOAT , dbr_time_float , dbr_float_t ) break;
+    size_type(DBR_TIME_ENUM  , dbr_time_enum  , dbr_enum_t  ) break;
+    size_type(DBR_TIME_LONG  , dbr_time_long  , dbr_long_t  ) break;
+    size_type(DBR_TIME_DOUBLE, dbr_time_double, dbr_double_t) break;
+    size_type(DBR_TIME_CHAR  , dbr_time_char  , dbr_char_t  ) break;
+  default: printf("Unknown type %d\n", int(_channel.type())); break;
+  }
+  return result;
+}
+
 int ImageServer::fetch(void* payload, size_t len)
 {
 #ifdef DBUG
@@ -53,5 +71,5 @@ int ImageServer::fetch(void* payload, size_t len)
 
 void ImageServer::update() { _channel.get(); }
 
-
+#undef size_type
 #undef handle_type

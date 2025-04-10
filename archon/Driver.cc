@@ -1976,7 +1976,7 @@ ssize_t Driver::fetch_buffer(unsigned buffer_idx, void* data, bool batched_ts)
   ssize_t wbytes = 0;
   char* data_ptr = (char*) data;
   char buf[16];
-  char cmdstr[22 + MSG_HEADER_LEN];
+  char cmdstr[23 + MSG_HEADER_LEN];
   uint32_t base = _buffer_info.base(buffer_idx);
   uint32_t size = _buffer_info.size(buffer_idx);
   uint32_t blocks = (size + BURST_LEN -1) / BURST_LEN;
@@ -2119,7 +2119,8 @@ bool Driver::replace_param_line(const char* param, unsigned value, bool use_cach
 {
   char* par = NULL;
   int line_num = -1;
-  char newline[MAX_CONFIG_LINE];
+  char newline[MAX_CONFIG_LINE+1];
+  newline[MAX_CONFIG_LINE] = 0;
   if (use_cache) {
     snprintf(newline, sizeof(newline), "PARAMETER%d", _config.get_parameter_num(param));
     line_num = _config.get_cache(newline);
@@ -2162,29 +2163,29 @@ bool Driver::replace_config_line(const char* key, const char* newline)
 
 bool Driver::edit_config_line(const char* key, const char* value)
 {
-  char newline[MAX_CONFIG_LINE];
-  snprintf(newline, MAX_CONFIG_LINE, "%s=%s", key, value);
+  char newline[MAX_CONFIG_LINE+1];
+  snprintf(newline, sizeof(newline), "%s=%s", key, value);
   return replace_config_line(key, newline);
 }
 
 bool Driver::edit_config_line(const char* key, unsigned value)
 {
-  char newline[MAX_CONFIG_LINE];
-  snprintf(newline, MAX_CONFIG_LINE, "%s=%u", key, value);
+  char newline[MAX_CONFIG_LINE+1];
+  snprintf(newline, sizeof(newline), "%s=%u", key, value);
   return replace_config_line(key, newline);
 }
 
 bool Driver::edit_config_line(const char* key, signed value)
 {
-  char newline[MAX_CONFIG_LINE];
-  snprintf(newline, MAX_CONFIG_LINE, "%s=%d", key, value);
+  char newline[MAX_CONFIG_LINE+1];
+  snprintf(newline, sizeof(newline), "%s=%d", key, value);
   return replace_config_line(key, newline);
 }
 
 bool Driver::edit_config_line(const char* key, double value)
 {
-  char newline[MAX_CONFIG_LINE];
-  snprintf(newline, MAX_CONFIG_LINE, "%s=%.3f", key, value);
+  char newline[MAX_CONFIG_LINE+1];
+  snprintf(newline, sizeof(newline), "%s=%.3f", key, value);
   return replace_config_line(key, newline);
 }
 

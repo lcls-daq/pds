@@ -1391,7 +1391,8 @@ bool Driver::set_idle_clear(unsigned num_lines)
 
 bool Driver::set_preframe_skip(unsigned num_lines)
 {
-  return load_parameter("PreSkipLines", num_lines);
+  return load_parameter("PreSkipLines", num_lines) &&
+         load_parameter("DoPreSkipLines", num_lines > 0 ? 1 : 0);
 }
 
 bool Driver::set_integration_time(unsigned milliseconds)

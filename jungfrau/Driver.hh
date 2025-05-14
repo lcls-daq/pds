@@ -46,8 +46,8 @@ namespace Pds {
     class Module {
       public:
         enum Status { IDLE, ERROR, WAITING, RUN_FINISHED, TRANSMITTING, RUNNING, STOPPED, UNKNOWN };
-        Module(const int id, const char* control, const char* host, const unsigned port,
-               const char* mac, const char* det_ip, bool use_flow_ctrl, bool config_det_ip=true);
+        Module(const int id, const std::string& control, const std::string& host, const unsigned port,
+               const std::string& mac, const std::string& det_ip, bool use_flow_ctrl, bool config_det_ip=true);
         ~Module();
         void shutdown();
         bool allocated() const;
@@ -96,11 +96,11 @@ namespace Pds {
         bool verify_gain(uint32_t bias, JungfrauConfigType::GainMode gain);
       private:
         const int         _id;
-        const char*       _control;
-        const char*       _host;
+        std::string       _control;
+        std::string       _host;
         const unsigned    _port;
-        const char*       _mac;
-        const char*       _det_ip;
+        std::string       _mac;
+        std::string       _det_ip;
         const bool        _use_flow_ctrl;
         int               _socket;
         bool              _connected;

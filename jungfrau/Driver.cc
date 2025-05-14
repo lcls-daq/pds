@@ -119,7 +119,8 @@ uint16_t DacsConfig::vref_prech() const { return _vref_prech; }
 uint16_t DacsConfig::vin_com() const    { return _vin_com; }
 uint16_t DacsConfig::vdd_prot() const   { return _vdd_prot; }
 
-Module::Module(const int id, const char* control, const char* host, unsigned port, const char* mac, const char* det_ip, bool use_flow_ctrl, bool config_det_ip) :
+Module::Module(const int id, const std::string& control, const std::string& host, unsigned port,
+               const std::string& mac, const std::string& det_ip, bool use_flow_ctrl, bool config_det_ip) :
   _id(id), _control(control), _host(host), _port(port), _mac(mac), _det_ip(det_ip), _use_flow_ctrl(use_flow_ctrl),
   _socket(-1), _connected(false), _boot(true), _freerun(false), _poweron(false),
   _sockbuf_sz(sizeof(jungfrau_dgram)*JF_PACKET_NUM*JF_EVENTS_TO_BUFFER), _readbuf_sz(sizeof(jungfrau_header)),
@@ -154,7 +155,7 @@ Module::Module(const int id, const char* control, const char* host, unsigned por
     bool detmac_status = configure_mac(config_det_ip);
 
     int nb = -1;
-    hostent* entries = gethostbyname(host);
+    hostent* entries = gethostbyname(_host.c_str());
     if (entries) {
       _socket = ::socket(AF_INET, SOCK_DGRAM, 0);
       ::setsockopt(_socket, SOL_SOCKET, SO_RCVBUF, &_sockbuf_sz, sizeof(unsigned));
@@ -170,17 +171,17 @@ Module::Module(const int id, const char* control, const char* host, unsigned por
     }
 
     if (nb<0) {
-      error_print("Error: failed to bind to Jungfrau data receiver at %s on port %d: %s\n", host, port, strerror(errno));
+      error_print("Error: failed to bind to Jungfrau data receiver at %s on port %d: %s\n", host.c_str(), port, strerror(errno));
     } else if (_det->getHostname().squash().compare(_control) != 0) {
-      error_print("Error: failed to connect to Jungfrau control interface at %s\n", control);
+      error_print("Error: failed to connect to Jungfrau control interface at %s\n", _control.c_str());
     } else if (type != sls::defs::JUNGFRAU) {
-      error_print("Error: detector at %s on port %d is not a Jungfrau: %s\n", host, port, sls::ToString(type).c_str());
+      error_print("Error: detector at %s on port %d is not a Jungfrau: %s\n", host.c_str(), port, sls::ToString(type).c_str());
     } else {
       _connected=detmac_status;
     }
   }
   catch(const sls::RuntimeError &err) {
-    error_print("Error: failed to initialize Jungfrau control interface of %s: %s\n", _control, err.what());
+    error_print("Error: failed to initialize Jungfrau control interface of %s: %s\n", _control.c_str(), err.what());
     // cleanup detector after failure if it was created
     if (_det) {
       delete _det;
@@ -231,7 +232,7 @@ bool Module::connected() const
 bool Module::check_config()
 {
   if (!_connected) {
-    error_print("Error: failed to connect to Jungfrau at address %s\n", _control);
+    error_print("Error: failed to connect to Jungfrau at address %s\n", _control.c_str());
     return false;
   }
 
@@ -288,9 +289,9 @@ bool Module::configure_mac(bool config_det_ip)
         _det->setTenGigaFlowControl(_use_flow_ctrl);
         printf("setting up detector udp_rx interface\n");
         _det->setDestinationUDPPort(_port);
-        _det->setDestinationUDPIP(sls::HostnameToIp(_host));
-        _det->setDestinationUDPMAC(sls::MacAddr(_mac));
-        _det->setSourceUDPIP(sls::HostnameToIp(_det_ip));
+        _det->setDestinationUDPIP(sls::HostnameToIp(_host.c_str()));
+        _det->setDestinationUDPMAC(sls::MacAddr(_mac.c_str()));
+        _det->setSourceUDPIP(sls::HostnameToIp(_det_ip.c_str()));
         _det->setSourceUDPMAC(sls::MacAddr("00:aa:bb:cc:dd:ee"));
         _det->validateUDPConfiguration();
         // if we get here they the config was successful
@@ -972,7 +973,7 @@ bool Module::get_packet(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t
 
   nb = ::recvfrom(_socket, _readbuf, sizeof(jungfrau_header), MSG_PEEK, (struct sockaddr *)&clientaddr, &clientaddrlen);
   if (nb<0) {
-    fprintf(stderr,"Error: failure receiving packet from Jungfru at %s on port %d: %s\n", _host, _port, strerror(errno));
+    fprintf(stderr,"Error: failure receiving packet from Jungfru at %s on port %d: %s\n", _host.c_str(), _port, strerror(errno));
     return false;
   } else {
     header = (jungfrau_header*) _readbuf;
@@ -982,7 +983,7 @@ bool Module::get_packet(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t
       *first_packet = false;
     } else if(*frame != header->framenum) {
       *last_packet = true;
-      fprintf(stderr,"Error: data out-of-order got data for frame %lu, but was expecting frame %lu from Jungfru at %s\n", header->framenum, *frame, _host);
+      fprintf(stderr,"Error: data out-of-order got data for frame %lu, but was expecting frame %lu from Jungfru at %s\n", header->framenum, *frame, _host.c_str());
       return false;
     }
 
@@ -993,7 +994,7 @@ bool Module::get_packet(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t
 
     nb = ::readv(_socket, dgram_vec, 2);
     if (nb<0) {
-      fprintf(stderr,"Error: failure receiving packet from Jungfru at %s on port %d: %s\n", _host, _port, strerror(errno));
+      fprintf(stderr,"Error: failure receiving packet from Jungfru at %s on port %d: %s\n", _host.c_str(), _port, strerror(errno));
       return false;
     }
 
@@ -1022,7 +1023,7 @@ bool Module::get_frame(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t*
   if (npackets == JF_PACKET_NUM) {
     *frame = cur_frame;
   } else {
-    fprintf(stderr,"Error: frame %lu from Jungfrau at %s is incomplete, received %u out of %d expected\n", cur_frame, _host, npackets, JF_PACKET_NUM);
+    fprintf(stderr,"Error: frame %lu from Jungfrau at %s is incomplete, received %u out of %d expected\n", cur_frame, _host.c_str(), npackets, JF_PACKET_NUM);
   }
  
   return (npackets == JF_PACKET_NUM);
@@ -1030,7 +1031,7 @@ bool Module::get_frame(uint64_t* frame, JungfrauModInfoType* metadata, uint16_t*
 
 const char* Module::get_hostname() const
 {
-  return _control;
+  return _control.c_str();
 }
 
 const char* Module::error()

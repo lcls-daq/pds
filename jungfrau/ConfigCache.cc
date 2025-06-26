@@ -113,7 +113,9 @@ bool ConfigCache::configure(bool apply)
       for (unsigned i=0; i<_detector.get_num_modules(); i++) {
         if (strlen(errors[i])) {
           UserMessage* msg = new (&_occPool) UserMessage("Jungfrau Config ");
-          msg->append(errors[i]);
+          if (strlen(errors[i])) {
+            msg->append(errors[i]);
+          }
           _mgr.appliance().post(msg);
         }
       }

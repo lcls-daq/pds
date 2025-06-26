@@ -129,6 +129,7 @@ Module::Module(const int id, const std::string& control, const std::string& host
 {
   _readbuf = new char[_readbuf_sz];
   _msgbuf  = new char[MSG_LEN];
+  memset(_msgbuf, 0, MSG_LEN);
 
   try {
     // allocate shared memory detector class with specified id.
@@ -385,6 +386,7 @@ bool Module::verify_dacs(const DacsConfig& dac_config)
     uint16_t vref_prech = (uint16_t) _det->getDAC(sls::defs::VREF_PRECH).squash();
     uint16_t vin_com    = (uint16_t) _det->getDAC(sls::defs::VIN_COM).squash();
     uint16_t vdd_prot   = (uint16_t) _det->getDAC(sls::defs::VDD_PROT).squash();
+
     // updated cached dac_config to reflect readback
     _dac_config = DacsConfig(vb_ds,
                              vb_comp,
@@ -1474,10 +1476,14 @@ void Detector::flush()
   } else {
     int npoll = 0;
     do {
-    npoll = ::poll(_pfds, (nfds_t) _num_modules+1, 500);
+      npoll = ::poll(_pfds, (nfds_t) _num_modules+1, 500);
       if (npoll < 0) {
         fprintf(stderr,"Error: frame poller failed with error code: %s\n", strerror(errno));
       } else {
+        if (_pfds[_num_modules].revents & POLLIN) {
+          int signal;
+          ::read(_sigfd[0], &signal, sizeof(signal));
+        }
         for (unsigned i=0; i<_num_modules; i++) {
           if (_pfds[i].revents & POLLIN)
             counts[i] += _modules[i]->flush();

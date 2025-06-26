@@ -196,7 +196,7 @@ namespace Pds {
             uint64_t max_ts = 0;
             const double clkratio  = 360./10e6;
             const double tdiff = 2.5e-5;    // the max allowed time difference (in seconds) between different modules in a frame
-            const double tolerance = 0.003; // AC line rate jitter and Jungfrau clock drift
+            const double tolerance = 0.005; // AC line rate jitter and Jungfrau clock drift
             const unsigned maxdfid = 21600; // if there is more than 1 minute between triggers
             const unsigned maxunsync = 240;
 

@@ -27,10 +27,12 @@ namespace Pds {
 
     bool      RegisterSlaveExportFrame::_use_aes = false;
     int       RegisterSlaveExportFrame::_fd  = 0;
+    bool      RegisterSlaveExportFrame::_is_datadev = false;
     unsigned  RegisterSlaveExportFrame::count = 0;
     unsigned  RegisterSlaveExportFrame::errors = 0;
 
-    void RegisterSlaveExportFrame::FileDescr(int i, bool use_aes) {
+    void RegisterSlaveExportFrame::FileDescr(int i, bool use_aes, bool is_datadev) {
+      _is_datadev = is_datadev;
       _use_aes = use_aes; // maybe there is a way to reliably determine what driver a fd comes from but for now pass that when registering fd.
       _fd = i;
 //      printf("RegisterSlaveExportFrame::FileDescr(%d)\n", _fd);
@@ -73,7 +75,7 @@ namespace Pds {
         
         pgpCardTx.is32   = (sizeof(&pgpCardTx) == 4);
         pgpCardTx.flags  = 0;
-        pgpCardTx.dest   = this->bits._vc | ((this->bits._lane + Pgp::portOffset())<<2);
+        pgpCardTx.dest   = Destination::build(this->bits._lane + Pgp::portOffset(), this->bits._vc, _is_datadev);
         pgpCardTx.index  = 0;
         pgpCardTx.size   = size * sizeof(uint32_t);
         pgpCardTx.data   = (__u64)this;

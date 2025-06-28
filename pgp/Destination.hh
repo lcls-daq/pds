@@ -18,6 +18,13 @@ namespace Pds {
       public:
         Destination() { _dest = 0; };
         Destination(unsigned d) { _dest = d; };
+        Destination(unsigned d, bool convert) {
+          if (convert) {
+           _dest = ((d>>8) & 0x7) | (d & 0x3);
+          } else {
+            _dest = d;
+          }
+        };
         virtual ~Destination() {};
 
       public:
@@ -47,6 +54,10 @@ namespace Pds {
           };
           strcpy(_ret, _lanes[lane()]);
           return strcat(_ret, _vcs[vc()]);
+        }
+
+        static unsigned build(unsigned lane, unsigned vc, bool convert) {
+          return vc | lane<<(convert ? 8 : 2);
         }
 
       protected:

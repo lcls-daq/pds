@@ -79,6 +79,7 @@ namespace Pds {
         int           IoctlCommand(unsigned command, long long unsigned arg = 0);
         void          maskHWerror(bool m) { _maskHWerror = m; }
         bool          G3Flag() {return _myG3Flag;}
+        bool          isDataDev() {return _isDataDev;}
         char*         errorString();
         void          errorStringAppend(char*);
         void          clearErrorString();
@@ -101,6 +102,7 @@ namespace Pds {
         bool                 _maskHWerror;
         bool                 _myG3Flag;
         bool                 _useAesDriver;
+        bool                 _isDataDev;
     };
   }
 }

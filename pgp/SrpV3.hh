@@ -39,7 +39,7 @@ namespace Pds {
 
       class Protocol {
       public:
-        Protocol(int fd, unsigned lane);
+        Protocol(int fd, unsigned lane, bool isDataDev=false);
       public:
         unsigned      writeRegister( Destination* dest,
                                      unsigned     addr,
@@ -56,6 +56,7 @@ namespace Pds {
         enum {BufferWords=8192};
         int                    _fd;
         unsigned               _lane;
+        bool                   _isDataDev;
         unsigned               _readBuffer [BufferWords];
         unsigned               _writeBuffer[BufferWords];
       };

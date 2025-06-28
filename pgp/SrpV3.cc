@@ -49,9 +49,10 @@ void RegisterSlaveFrame::print(unsigned nw) const {
   printf("\n");
 }
 
-Protocol::Protocol(int fd, unsigned lane) :
-  _fd    (fd),
-  _lane  (lane)
+Protocol::Protocol(int fd, unsigned lane, bool isDataDev) :
+  _fd       (fd),
+  _lane     (lane),
+  _isDataDev(isDataDev)
 {
   memset(_readBuffer, 0, BufferWords*sizeof(unsigned));
 }
@@ -90,8 +91,9 @@ Pds::Pgp::RegisterSlaveImportFrame* Protocol::read(unsigned size)
           reinterpret_cast<SrpV3::RegisterSlaveFrame*>(_readBuffer);
         if (rsf->opcode() == PgpRSBits::read) {
           found = true;
+          Destination dest(pgpCardRx.dest, _isDataDev);
           if (pgpCardRx.error) {
-            printError(pgpCardRx.error, pgpCardRx.dest);
+            printError(pgpCardRx.error, dest.dest());
           } else {
             //            rsf->print(pgpCardRx.ret/sizeof(uint32_t));
             // Sometimes we are missing the trailing word
@@ -117,7 +119,6 @@ Pds::Pgp::RegisterSlaveImportFrame* Protocol::read(unsigned size)
                 // Format the SrpV0 frame header
                 SrpV3::RegisterSlaveFrame rsfv = *rsf;
                 ret = reinterpret_cast<Pds::Pgp::RegisterSlaveImportFrame*>(_readBuffer+3);
-                Destination dest(pgpCardRx.dest);
                 ret->bits._vc      = dest.vc();
                 ret->bits.mbz      = 0;
                 ret->bits._lane    = dest.lane();
@@ -136,8 +137,9 @@ Pds::Pgp::RegisterSlaveImportFrame* Protocol::read(unsigned size)
     } else {
       found = true;  // we might as well give up!
       if (sret < 0) {
+        Destination dest(pgpCardRx.dest, _isDataDev);
         perror("SrpV3::read select error: ");
-        printf("\tpgpLane(%u), pgpVc(%u)\n", pgpCardRx.dest>>2, pgpCardRx.dest&3);
+        printf("\tpgpLane(%u), pgpVc(%u)\n", dest.lane(), dest.vc());
       } else {
         printf("SrpV3::read select timed out! fd[%u]\n", _fd);
       }
@@ -176,7 +178,7 @@ unsigned Protocol::writeRegister(Destination* dest,
   struct DmaWriteData  pgpCardTx;
   pgpCardTx.is32   = (sizeof(&pgpCardTx) == 4);
   pgpCardTx.flags  = 0;
-  pgpCardTx.dest   = dest->vc() | ((dest->lane() + _lane)<<2);
+  pgpCardTx.dest   = Destination::build(dest->lane() + _lane, dest->vc(), _isDataDev);
   pgpCardTx.index  = 0;
   pgpCardTx.size   = sizeof(*hdr) + size*sizeof(uint32_t);
   pgpCardTx.data   = (__u64)hdr;
@@ -218,7 +220,7 @@ unsigned Protocol::readRegister(Destination* dest,
   struct DmaWriteData  pgpCardTx;
   pgpCardTx.is32   = (sizeof(&pgpCardTx) == 4);
   pgpCardTx.flags  = 0;
-  pgpCardTx.dest   = dest->vc() | ((dest->lane() + _lane)<<2);
+  pgpCardTx.dest   = Destination::build(dest->lane() + _lane, dest->vc(), _isDataDev);
   pgpCardTx.index  = 0;
   pgpCardTx.size   = sizeof(hdr);
   pgpCardTx.data   = (__u64)&hdr;

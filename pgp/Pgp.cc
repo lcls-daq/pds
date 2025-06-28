@@ -14,8 +14,10 @@
 #include "pds/pgp/PgpCardG3StatusWrap.hh"
 #include "pds/pgp/AesDriverG2StatusWrap.hh"
 #include "pds/pgp/AesDriverG3StatusWrap.hh"
+#include "pds/pgp/DataDevStatusWrap.hh"
 #include "pgpcard/PgpCardMod.h"
 #include <PgpDriver.h>
+#include <AxiVersion.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -61,7 +63,13 @@ Pgp::Pgp(bool use_aes, int f, bool pf, unsigned lane) : _fd(f), _useAesDriver(us
   // See if we can determine the type of card
   if (_useAesDriver) {
     _myG3Flag = true;
-    dmaReadRegister(_fd, 0, (unsigned*)&(version) );
+    if (dmaReadRegister(_fd, 0x0, (unsigned*)&(version)) < 0) {
+      struct AxiVersion aVer;
+      axiVersionGet(_fd, &aVer);
+      version = aVer.firmwareVersion;
+      _isDataDev = true;
+      ::RegisterSlaveExportFrame::FileDescr(f, _useAesDriver, _isDataDev);
+    }
   } else {
     _myG3Flag = false;
     unsigned* ptr = (unsigned*)malloc(sizeof(PgpCardG3Status)); // the larger one
@@ -73,9 +81,11 @@ Pgp::Pgp(bool use_aes, int f, bool pf, unsigned lane) : _fd(f), _useAesDriver(us
     }
     free(ptr);
   }
-  _myG3Flag = ((version>>12) & 0xf) == 3;
+  _myG3Flag = _isDataDev ? true : ((version>>12) & 0xf) == 3;
   printf("Pgp::Pgp found card version 0x%x which I see is %sa G3 card\n", version, _myG3Flag ? "" : "NOT ");
-  if (_myG3Flag) {
+  if (_isDataDev) {
+    _status = new DataDevStatusWrap(_fd, 0, this, lane);
+  } else if (_myG3Flag) {
     if (use_aes) {
       _status = new AesDriverG3StatusWrap(_fd, 0, this, lane);
     } else {
@@ -218,8 +228,9 @@ void     Pgp::Pgp::printStatus() {
             //          printf("data->0x%x 0x%x 0x%x\n", u[0], u[1], u[2]);
             readRet = pgpCardRx.ret; // this where the size of the data is now
             found = true;
+            Destination dest(pgpCardRx.dest, _isDataDev);
             if (pgpCardRx.error) {
-              printError(pgpCardRx.error, pgpCardRx.dest);
+              printError(pgpCardRx.error, dest.dest());
               ret = 0;
             } else {
               if (readRet != int(size*sizeof(uint32_t))) {
@@ -235,7 +246,7 @@ void     Pgp::Pgp::printStatus() {
                     ret->print();
                     hardwareFailure = true;
                   } else {
-                    _maskedHWerrorCount[pgpCardRx.dest&3] += 1;
+                    _maskedHWerrorCount[dest.vc()] += 1;
                   }
                 }
                 if (ret->timeout((::LastBits*)(u+size-1))) {
@@ -256,8 +267,9 @@ void     Pgp::Pgp::printStatus() {
         found = true;  // we might as well give up!
         ret = 0;
         if (sret < 0) {
+          Destination dest(pgpCardRx.dest, _isDataDev);
           perror("Pgp::read(aes) select error: ");
-          printf("\tpgpLane(%u), pgpVc(%u)\n", pgpCardRx.dest>>2, pgpCardRx.dest&3);
+          printf("\tpgpLane(%u), pgpVc(%u)\n", dest.lane(), dest.vc());
         } else {
           printf("Pgp::read(aes) select timed out!\n");
         }

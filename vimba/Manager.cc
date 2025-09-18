@@ -91,8 +91,8 @@ namespace Pds {
             _cam_ts = frame->timestamp();
           } else {
             const double clkratio  = 360./1e9;
-            const double tolerance = 0.005; // AC line rate jitter and clock drift
-            const unsigned maxdfid = 21600; // if there is more than 1 minute between triggers
+            const double tolerance = 0.0055; // AC line rate jitter and clock drift of the zyla internal clock
+            const unsigned maxdfid = 21600;  // if there is more than 1 minute between triggers
             const unsigned maxunsync = 240;
 
             double fdelta = double(frame->timestamp() - _cam_ts)*clkratio/double(_nfid) - 1;

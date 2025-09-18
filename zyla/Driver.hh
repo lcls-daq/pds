@@ -88,6 +88,7 @@ namespace Pds {
         bool is_present() const;
         size_t frame_size() const;
         bool get_frame(AT_64& timestamp, uint16_t* data);
+        bool set_max_frame_rate(double rate);
       public:
         AT_64 sensor_width() const;
         AT_64 sensor_height() const;

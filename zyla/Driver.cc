@@ -475,6 +475,11 @@ bool Driver::get_frame(AT_64& timestamp, uint16_t* data)
   }
 }
 
+bool Driver::set_max_frame_rate(double rate)
+{
+    return at_set_float(AT3_FRAME_RATE, rate);
+}
+
 AT_64 Driver::sensor_width() const
 {
   return at_get_int(AT3_SENSOR_WIDTH);

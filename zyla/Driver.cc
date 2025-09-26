@@ -291,8 +291,8 @@ bool Driver::configure(const AT_64 nframes)
   if (_queued) flush();
 
   // set metadata settings
-  set_config_bool(AT3_METADATA_ENABLE, true);
-  set_config_bool(AT3_METADATA_TIMESTAMP, true);
+  set_config_bool(AT3_METADATA_ENABLE, AT_TRUE);
+  set_config_bool(AT3_METADATA_TIMESTAMP, AT_TRUE);
 
   if (nframes > 0) {
     // set camera to acquire requested number of frames
@@ -402,34 +402,38 @@ size_t Driver::frame_size() const
 bool Driver::get_frame(AT_64& timestamp, uint16_t* data)
 {
   int retcode;
-  AT_64 width;
-  AT_64 height;
-  AT_64 stride;
+  AT_64 width = 0;
+  AT_64 height = 0;
+  AT_64 stride = 0;
   unsigned char* buffer;
 
   retcode = AT_WaitBuffer(_cam, &buffer, &_buffer_size, AT_INFINITE);
   if (retcode == AT_SUCCESS) {
     bool success = true;
 
-    if (AT_GetTimeStampFromMetadata(buffer, _buffer_size, timestamp) != AT_SUCCESS) {
-      fprintf(stderr, "Failure retrieving timestamp from frame metadata\n");
+    retcode = AT_GetTimeStampFromMetadata(buffer, _buffer_size, timestamp);
+    if (retcode != AT_SUCCESS) {
+      fprintf(stderr, "Failure retrieving timestamp from frame metadata: %s\n", ErrorCodes::name(retcode));
       success = false;
     }
     if (at_check_implemented(AT3_METADATA_FRAME_INFO)) {
-      if (AT_GetWidthFromMetadata(buffer, _buffer_size, width) != AT_SUCCESS) {
-        fprintf(stderr, "Failure retrieving timestamp from frame metadata\n");
+      retcode = AT_GetWidthFromMetadata(buffer, _buffer_size, width);
+      if (retcode != AT_SUCCESS) {
+        fprintf(stderr, "Failure retrieving width from frame metadata: %s\n", ErrorCodes::name(retcode));
         success = false;
       }
-      if (AT_GetHeightFromMetadata(buffer, _buffer_size, height) != AT_SUCCESS) {
-        fprintf(stderr, "Failure retrieving timestamp from frame metadata\n");
+      retcode = AT_GetHeightFromMetadata(buffer, _buffer_size, height);
+      if (retcode != AT_SUCCESS) {
+        fprintf(stderr, "Failure retrieving height from frame metadata: %s\n", ErrorCodes::name(retcode));
         success = false;
       }
-      if (AT_GetStrideFromMetadata(buffer, _buffer_size, stride) != AT_SUCCESS) {
-        fprintf(stderr, "Failure retrieving timestamp from frame metadata\n");
+      retcode = AT_GetStrideFromMetadata(buffer, _buffer_size, stride);
+      if (retcode != AT_SUCCESS) {
+        fprintf(stderr, "Failure retrieving stride from frame metadata: %s\n", ErrorCodes::name(retcode));
         success = false;
       }
       // Check if the metadata matches with the expected frame size
-      if ((width != _width) || (height != _height) || (stride != _stride)) {
+      if (success && ((width != _width) || (height != _height) || (stride != _stride))) {
         fprintf(stderr,
                 "Unexpected frame size returned by camera: width (%lld vs %lld), height (%lld vs %lld), stride (%lld vs %lld)\n",
                 width,
@@ -440,7 +444,6 @@ bool Driver::get_frame(AT_64& timestamp, uint16_t* data)
                 _stride);
         success = false;
       }
-    
   
       // If the metadata looks good convert the buffer to a usable image an return it
       if (success) {

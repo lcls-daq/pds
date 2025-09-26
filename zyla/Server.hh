@@ -42,7 +42,6 @@ namespace Pds {
       Xtc       _xtc;
       unsigned  _count;
       unsigned  _framesz;
-      uint64_t  _last_frame;
       int _pfd[4];
     };
   }

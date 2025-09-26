@@ -15,6 +15,7 @@
 #include "pdsdata/xtc/DetInfo.hh"
 
 #include <errno.h>
+#include <math.h>
 
 
 #define AT_MAX_MSG_LEN 256
@@ -132,15 +133,130 @@ namespace Pds {
       ConfigCache& _cfg;
     };
 
+    class L1Action : public Action, public Pds::XtcIterator {
+    public:
+      static const unsigned fid_rollover_secs = Pds::TimeStamp::MaxFiducials / 360;
+      L1Action(Manager& mgr) :
+        _mgr(mgr),
+        _lreset(true),
+        _synced(true),
+        _sync_msg(true),
+        _unsycned_count(0),
+        _dgm_ts(0),
+        _nfid(0),
+        _cam_ts(0),
+        _occPool(sizeof(UserMessage),4) {}
+      ~L1Action() {}
+      InDatagram* fire(InDatagram* in) {
+        unsigned dgm_ts = in->datagram().seq.stamp().fiducials();
+        ClockTime dgm_time = in->datagram().seq.clock();
+        unsigned nrollover = unsigned((dgm_time.asDouble() - _dgm_time.asDouble()) / fid_rollover_secs);
+        if (nrollover > 0) {
+          _nfid = (Pds::TimeStamp::MaxFiducials * nrollover + dgm_ts) - _dgm_ts;
+        } else {
+          _nfid = dgm_ts - _dgm_ts;
+          if (((signed) _nfid) < 0)
+            _nfid += Pds::TimeStamp::MaxFiducials;
+        }
+
+        _in = in;
+        iterate(&in->datagram().xtc);
+
+        return _in;
+      }
+      void sync() { _synced=true; _unsycned_count=0; _sync_msg=true; }
+      void reset() { _lreset=true; }
+      void set_clock_freq(double clock_freq) { _cam_clock_freq = clock_freq; };
+      uint64_t diff_ts(uint64_t t1, uint64_t t2) {
+        if (t1 > t2)
+          return t1-t2;
+        else
+          return t2-t1;
+      }
+      int process(Xtc* xtc) {
+        if (xtc->contains.id()==TypeId::Id_Xtc)
+          iterate(xtc);
+        else if (xtc->contains.value() == _zylaDataType.value()) {
+          ZylaDataType* frame = reinterpret_cast<ZylaDataType*>(xtc->payload());
+
+          // vimba sdk sometimes marks frames as damaged so add those user bits to the L1Accept datagram as well
+          if (xtc->damage.value() & (1<<Pds::Damage::UserDefined)) {
+            _in->datagram().xtc.damage.increase(Pds::Damage::UserDefined);
+            _in->datagram().xtc.damage.userBits(xtc->damage.userBits());
+          }
+
+          if (_lreset) {
+            _lreset = false;
+            _dgm_ts   = _in->datagram().seq.stamp().fiducials();
+            _dgm_time = _in->datagram().seq.clock();
+            // reset camera timestamp
+            _cam_ts = frame->timestamp();
+          } else {
+            const double clkratio  = 360./_cam_clock_freq;
+            const double tolerance = 0.0055; // AC line rate jitter and clock drift of the zyla internal clock
+            const unsigned maxdfid = 21600;  // if there is more than 1 minute between triggers
+            const unsigned maxunsync = 240;
+
+            double fdelta = double(frame->timestamp() - _cam_ts)*clkratio/double(_nfid) - 1;
+            if (fabs(fdelta) > tolerance && (_nfid < maxdfid || !_synced)) {
+              unsigned nfid = unsigned(double(frame->timestamp() - _cam_ts)*clkratio + 0.5);
+              printf("  timestep error: fdelta %f  dfid %d  tds %lu,%lu [%d]\n", fdelta, _nfid, frame->timestamp(), _cam_ts, nfid);
+              _synced = false;
+            } else {
+              _synced = true;
+            }
+
+            if (!_synced) {
+              xtc->damage.increase(Pds::Damage::OutOfSynch);
+              // add the damage to the L1Accept datagram as well
+              _in->datagram().xtc.damage.increase(xtc->damage.value());
+              _unsycned_count++;
+              if ((_unsycned_count > maxunsync) && _sync_msg) {
+                printf("L1Action: Detector has been out of sync for %u frames - reconfiguration needed!\n", _unsycned_count);
+                UserMessage* msg = new (&_occPool) UserMessage("Zyla Error: Detector is out of sync - reconfiguration needed!\n");
+                _mgr.appliance().post(msg);
+                Occurrence* occ = new(&_occPool) Occurrence(OccurrenceId::ClearReadout);
+                _mgr.appliance().post(occ);
+                _sync_msg = false;
+              }
+            } else {
+              _unsycned_count = 0;
+              _dgm_ts   = _in->datagram().seq.stamp().fiducials();
+              _dgm_time = _in->datagram().seq.clock();
+              _cam_ts = frame->timestamp();
+            }
+          }
+          return 0;
+        }
+        return 1;
+      }
+    private:
+      Manager&    _mgr;
+      bool        _lreset;
+      bool        _synced;
+      bool        _sync_msg;
+      unsigned    _unsycned_count;
+      unsigned    _dgm_ts;
+      unsigned    _nfid;
+      uint64_t    _cam_ts;
+      double      _cam_clock_freq;
+      ClockTime   _dgm_time;
+      GenericPool _occPool;
+      InDatagram* _in;
+    };
+
+
     class ConfigAction : public Action {
     public:
       enum { MaxErrMsgLength=256 };
-      ConfigAction(Manager& mgr, Driver& driver, Server& server, FrameReader& reader, ConfigCache& cfg) :
+      ConfigAction(Manager& mgr, Driver& driver, Server& server,
+                   FrameReader& reader, ConfigCache& cfg, L1Action& l1) :
         _mgr(mgr),
         _driver(driver),
         _server(server),
         _reader(reader),
         _cfg(cfg),
+        _l1(l1),
         _occPool(sizeof(UserMessage),1) {}
       ~ConfigAction() {}
       InDatagram* fire(InDatagram* dg) {
@@ -176,6 +292,8 @@ namespace Pds {
               _reader.reset_diff();
               _reader.set_clock_rate(_driver.clock_rate());
               _reader.set_frame_sz(_driver.frame_size() * sizeof(uint16_t));
+              _l1.reset();
+              _l1.set_clock_freq(_driver.clock_rate());
             } else {
               fprintf(stderr,
                       "ConfigAction: Configuration of the detector failed!\n");
@@ -198,6 +316,7 @@ namespace Pds {
       Server&             _server;
       FrameReader&        _reader;
       ConfigCache&        _cfg;
+      L1Action&           _l1;
       GenericPool         _occPool;
       char                _err_buffer[MaxErrMsgLength];
 #ifdef TIMING_DEBUG
@@ -297,12 +416,13 @@ namespace Pds {
 
     class BeginCalibCycleAction : public Action {
     public:
-      BeginCalibCycleAction(Driver& driver, Server& server,
-                            FrameReader& reader, ConfigCache& cfg) :
+      BeginCalibCycleAction(Driver& driver, Server& server, FrameReader& reader,
+                            ConfigCache& cfg, L1Action& l1) :
         _driver(driver),
         _server(server),
         _reader(reader),
-        _cfg(cfg) {}
+        _cfg(cfg),
+        _l1(l1) {}
       ~BeginCalibCycleAction() {}
       InDatagram* fire(InDatagram* dg) {
         if (_cfg.scanning() && _cfg.changed()) {
@@ -324,6 +444,8 @@ namespace Pds {
             _reader.reset_diff();
             _reader.set_clock_rate(_driver.clock_rate());
             _reader.set_frame_sz(_driver.frame_size() * sizeof(uint16_t));
+            _l1.reset();
+            _l1.set_clock_freq(_driver.clock_rate());
           }
         }
 
@@ -334,6 +456,7 @@ namespace Pds {
       Server&       _server;
       FrameReader&  _reader;
       ConfigCache&  _cfg;
+      L1Action&     _l1;
     };
 
     class EndCalibCycleAction : public Action {
@@ -363,18 +486,22 @@ Manager::Manager(Driver& driver, Server& server,
   Task* task = new Task(TaskObject("ZylaReadout",35));
   FrameReader& reader = *new FrameReader(driver, server,task);
 
+  L1Action* l1 = new L1Action(*this);
+
   _fsm.callback(Pds::TransitionId::Map,
                 new AllocAction(cfg));
   _fsm.callback(Pds::TransitionId::Configure,
-                new ConfigAction(*this, driver, server, reader, cfg));
+                new ConfigAction(*this, driver, server, reader, cfg, *l1));
   _fsm.callback(Pds::TransitionId::Enable,
                 new EnableAction(*this, driver, reader, wait_cooling));
   _fsm.callback(Pds::TransitionId::Disable,
                 new DisableAction(driver, reader));
   _fsm.callback(Pds::TransitionId::BeginCalibCycle,
-                new BeginCalibCycleAction(driver, server, reader, cfg));
+                new BeginCalibCycleAction(driver, server, reader, cfg, *l1));
   _fsm.callback(Pds::TransitionId::EndCalibCycle,
                 new EndCalibCycleAction(cfg));
+  _fsm.callback(Pds::TransitionId::L1Accept,
+                l1);
 }
 
 Manager::~Manager() {}

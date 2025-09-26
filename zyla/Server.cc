@@ -10,7 +10,7 @@
 using namespace Pds::Zyla;
 
 Server::Server( const Src& client )
-  : _xtc( _zylaDataType, client ), _count(0), _framesz(0), _last_frame(0)
+  : _xtc( _zylaDataType, client ), _count(0), _framesz(0)
 {
   _xtc.extent = sizeof(ZylaDataType) + sizeof(Xtc);
   int err = ::pipe(_pfd);
@@ -40,20 +40,7 @@ int Server::fetch( char* payload, int flags )
 
   memcpy(xtc.payload(), ptr, sizeof(ZylaDataType) + _framesz);
 
-  uint64_t current_frame = *(uint64_t*) xtc.payload();
-  // Check that the frame count is sequential
-  /*if (_last_frame == 0) {
-    _last_frame = current_frame;
-    _count++;
-  } else {
-    if (current_frame - _last_frame > 1) {
-      fprintf(stderr, "Error: expected frame %d instead of %d - it appears that %d frames have been dropped\n", _last_frame+1, current_frame, (current_frame - _last_frame - 1));
-    }
-    _count+=(current_frame-_last_frame);
-  }*/
   _count++;
-
-  _last_frame = current_frame;
 
   ::write(_pfd[3], &ptr, sizeof(ptr));
 
@@ -68,7 +55,6 @@ unsigned Server::count() const
 void Server::resetCount()
 {
   _count = 0;
-  _last_frame = 0;
 }
 
 void Server::post(const void* ptr)

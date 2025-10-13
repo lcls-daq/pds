@@ -572,7 +572,11 @@ bool Camera::setImageFlip(VmbBool_t flipX, VmbBool_t flipY)
 
 bool Camera::setImageCorrections(VmbBool_t enabled, CorrectionType corr_type, CorrectionSet corr_set)
 {
-  return setCorrectionsEnabled(enabled) && setCorrectionsType(corr_type) && setCorrectionsSet(corr_set);
+  if (isWritable(VMB_CORRECTION_MODE)) {
+    return setCorrectionsEnabled(enabled) && setCorrectionsType(corr_type) && setCorrectionsSet(corr_set);
+  } else {
+    return enabled == imageCorrectionEnabled();
+  }
 }
 
 bool Camera::setCorrectionsEnabled(VmbBool_t enabled) {
@@ -1196,6 +1200,20 @@ std::string Camera::getString(const char* name) const
     desc << "failed to get " << name << " feature";
     throw VimbaException(err, desc.str());
   }
+}
+
+VmbBool_t Camera::isWritable(const char* name) const
+{
+  VmbError_t err = VmbErrorSuccess;
+  VmbBool_t readable = VmbBoolFalse;
+  VmbBool_t writeable = VmbBoolFalse;
+
+  err = VmbFeatureAccessQuery(_cam, name, &readable, &writeable);
+  if (err != VmbErrorSuccess) {
+    fprintf(stderr, "Failed to query read/write status of feature %s: %s\n", name, ErrorCodes::desc(err)); 
+  }
+
+  return writeable;
 }
 
 bool Camera::setEnum(const char* name, const char* value)

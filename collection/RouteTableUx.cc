@@ -199,7 +199,7 @@ RouteTable::RouteTable() :
     //
     //  Require an interface index and destination IP address for this route
     //
-    if (dev >= 0 && prefsrc) {
+    if (dev >= 0 && dst && prefsrc) {
       for(unsigned i=0; i<MaxRoutes; i++) {
         struct ifreq* ifr = ifrarray+i;
         if (!ifr || !(((sockaddr_in&)ifr->ifr_addr).sin_addr.s_addr)) {

@@ -1,7 +1,7 @@
 #ifndef Pds_Vimba_Errors_hh
 #define Pds_Vimba_Errors_hh
 
-#include "vimba/include/VimbaC.h"
+#include "VmbC/VmbC.h"
 
 namespace Pds {
   namespace Vimba {
@@ -27,6 +27,12 @@ namespace Pds {
     public:
       static const char *name(VmbPixelFormat_t format);
       static const char *desc(VmbPixelFormat_t format);
+    };
+
+    class TransportTypes {
+    public:
+      static const char *name(VmbTransportLayerType_t type);
+      static const char *desc(VmbTransportLayerType_t type);
     };
   }
 }

@@ -31,6 +31,7 @@ std::string VimbaException::buildMsg(VmbError_t code, const std::string& msg)
 Camera::Camera(VmbCameraInfo_t* info) :
   _cam(0),
   _num_features(0),
+  _max_features(0),
   _features(NULL),
   _capture(false)
 {
@@ -44,24 +45,22 @@ Camera::Camera(VmbCameraInfo_t* info) :
               info->cameraIdString,
               ErrorCodes::desc(err));
     } else {
-      err = VmbFeaturesList(_cam, NULL, 0, &_num_features, sizeof *_features);
-      if (err != VmbErrorSuccess) {
-        fprintf(stderr,
-                "Failure determining the number of features of the camera (%s): %s\n",
-                info->cameraIdString,
-                ErrorCodes::desc(err));
-      } else {
-        _features = new VmbFeatureInfo_t[_num_features];
-        err = VmbFeaturesList(_cam, _features, _num_features, &_num_features, sizeof *_features);
-        if (err != VmbErrorSuccess) {
-          fprintf(stderr,
-                  "Failure to retrieve the features of the camera (%s): %s\n",
-                  info->cameraIdString,
-                  ErrorCodes::desc(err));
-        }
+      getCameraInfo(&_info, _cam);
+
+      addNumFeatures(_cam);
+      addNumFeatures(_info.transportLayerHandle);
+      for (VmbUint32_t s = 0; s < _info.streamCount; s++) {
+        addNumFeatures(_info.streamHandles[s]);
+      }
+
+      _features = new VmbFeatureInfo_t[_max_features];
+
+      addFeatures(_cam);
+      addFeatures(_info.transportLayerHandle);
+      for (VmbUint32_t s = 0; s < _info.streamCount; s++) {
+        addFeatures(_info.streamHandles[s]);
       }
     }
-    _info = *info;
   }
 }
 
@@ -134,6 +133,11 @@ VmbBool_t Camera::acquisitionFrameRateEnable() const
   return getBool(VMB_ACQ_FRAME_RATE_EN);
 }
 
+VmbBool_t Camera::streamIsGrabbing() const
+{
+  return getBool(VMB_STREAM_IS_GRABBING);
+}
+
 Camera::TriggerMode Camera::triggerModeEnum() const
 {
   const char* trig_src = getEnum(VMB_TRIGGER_SOURCE);
@@ -176,9 +180,17 @@ Camera::PixelFormat Camera::pixelFormatEnum() const
   return UnsupportedFormat;
 }
 
-VmbInt64_t Camera::payloadSize() const
+VmbUint32_t Camera::payloadSize() const
 {
-  return getInt(VMB_PAYLOAD_SIZE);
+  VmbUint32_t size = 0;
+  VmbError_t err = VmbPayloadSizeGet(_cam, &size);
+  if (err == VmbErrorSuccess) {
+    return size;
+  } else {
+    std::stringstream desc;
+    desc << "failed to get " <<  VMB_PAYLOAD_SIZE << " feature";
+    throw VimbaException(err, desc.str());
+  }
 }
 
 VmbInt64_t Camera::deviceLinkThroughputLimit() const
@@ -416,6 +428,11 @@ std::string Camera::deviceUserID() const
   return getString(VMB_DEV_USER_ID);
 }
 
+std::string Camera::streamID() const
+{
+  return getString(VMB_STREAM_ID);
+}
+
 const char* Camera::triggerMode() const
 {
   switch (triggerModeEnum()) {
@@ -513,6 +530,11 @@ const char* Camera::correctionSet() const
 const char* Camera::correctionSetDefault() const
 {
   return getEnum(VMB_CORRECTION_SET_DEF);
+}
+
+const char* Camera::streamType() const
+{
+  return getEnum(VMB_STREAM_TYPE);
 }
 
 bool Camera::checkImageRoi(VmbInt64_t offset_x, VmbInt64_t offset_y, VmbInt64_t width, VmbInt64_t height) const
@@ -746,6 +768,12 @@ void Camera::listFeatures() const
 
   printf("Listing features of camera (%s):\n", _info.cameraName);
   for (VmbUint32_t i=0; i<_num_features; i++) {
+    VmbHandle_t handle = lookupHandle(_features[i].name);
+    if (!handle) {
+      fprintf(stderr, "Handle not found for feature: %s\n", _features[i].name);
+      continue;
+    }
+
     printf("  %s:\n", _features[i].name ? _features[i].name : "");
     printf("    Display Name   - %s\n", _features[i].displayName ? _features[i].displayName : "");
     printf("    Tooltip        - %s\n", _features[i].tooltip ? _features[i].tooltip : "");
@@ -754,7 +782,7 @@ void Camera::listFeatures() const
     switch (_features[i].featureDataType) {
       case VmbFeatureDataBool:
         printf("    Type           - Bool\n");
-        err = VmbFeatureBoolGet(_cam, _features[i].name, &bval);
+        err = VmbFeatureBoolGet(handle, _features[i].name, &bval);
         if (err == VmbErrorSuccess) {
           printf("    Value          - %d\n", bval);
         } else {
@@ -764,7 +792,7 @@ void Camera::listFeatures() const
         break;
       case VmbFeatureDataEnum:
         printf("    Type           - Enum\n");
-        err = VmbFeatureEnumGet(_cam, _features[i].name, &eval);
+        err = VmbFeatureEnumGet(handle, _features[i].name, &eval);
         if (err == VmbErrorSuccess) {
           printf("    Value          - %s\n", eval);
         } else {
@@ -775,19 +803,19 @@ void Camera::listFeatures() const
         break;
       case VmbFeatureDataFloat:
         printf("    Type           - Float\n");
-        err = VmbFeatureFloatGet(_cam, _features[i].name, &fval);
+        err = VmbFeatureFloatGet(handle, _features[i].name, &fval);
         if (err == VmbErrorSuccess) {
           printf("    Value          - %f\n", fval);
         } else {
           printf("    Value          - error: %s\n", ErrorCodes::desc(err));
         }
-        err = VmbFeatureFloatRangeQuery(_cam, _features[i].name, &fmin, &fmax);
+        err = VmbFeatureFloatRangeQuery(handle, _features[i].name, &fmin, &fmax);
         if (err == VmbErrorSuccess) {
           printf("    Range          - %f to %f\n", fmin, fmax);
         } else {
           printf("    Range          - error: %s\n", ErrorCodes::desc(err));
         }
-        err = VmbFeatureFloatIncrementQuery(_cam, _features[i].name, &bstep, &fstep);
+        err = VmbFeatureFloatIncrementQuery(handle, _features[i].name, &bstep, &fstep);
         if (err == VmbErrorSuccess) {
           if (bstep) {
             printf("    Step           - %f\n", fstep);
@@ -801,19 +829,19 @@ void Camera::listFeatures() const
         break;
       case VmbFeatureDataInt:
         printf("    Type           - Integer\n");
-        err = VmbFeatureIntGet(_cam, _features[i].name, &ival);
+        err = VmbFeatureIntGet(handle, _features[i].name, &ival);
         if (err == VmbErrorSuccess) {
           printf("    Value          - %lld\n", ival);
         } else {
           printf("    Value          - error: %s\n", ErrorCodes::desc(err));
         }
-        err = VmbFeatureIntRangeQuery(_cam, _features[i].name, &imin, &imax);
+        err = VmbFeatureIntRangeQuery(handle, _features[i].name, &imin, &imax);
         if (err == VmbErrorSuccess) {
           printf("    Range          - %lld to %lld\n", imin, imax);
         } else {
           printf("    Range          - error: %s\n", ErrorCodes::desc(err));
         }
-        err = VmbFeatureIntIncrementQuery(_cam, _features[i].name, &istep);
+        err = VmbFeatureIntIncrementQuery(handle, _features[i].name, &istep);
         if (err == VmbErrorSuccess) {
           printf("    Step           - %lld\n", istep);
         } else {
@@ -823,10 +851,10 @@ void Camera::listFeatures() const
         break;
       case VmbFeatureDataString:
         printf("    Type           - String\n");
-        err = VmbFeatureStringGet(_cam, _features[i].name, NULL, 0, &nsize);
+        err = VmbFeatureStringGet(handle, _features[i].name, NULL, 0, &nsize);
         if (err == VmbErrorSuccess) {
           sval = new char[nsize];
-          err = VmbFeatureStringGet(_cam, _features[i].name, sval, nsize, &nsize);
+          err = VmbFeatureStringGet(handle, _features[i].name, sval, nsize, &nsize);
           if (err == VmbErrorSuccess) {
             printf("    Value          - %s\n", sval);
           } else {
@@ -837,7 +865,7 @@ void Camera::listFeatures() const
         } else {
           printf("    Value          - error: %s\n", ErrorCodes::desc(err));
         }
-        err = VmbFeatureStringMaxlengthQuery(_cam, _features[i].name, &nsize);
+        err = VmbFeatureStringMaxlengthQuery(handle, _features[i].name, &nsize);
         if (err == VmbErrorSuccess) {
           printf("    Range          - %u chars\n", nsize);
         } else {
@@ -859,13 +887,56 @@ void Camera::listFeatures() const
   }
 }
 
+VmbHandle_t Camera::lookupHandle(const char* name) const
+{
+  auto it = _lookup.find(name);
+  if (it != _lookup.end()) {
+    return it->second;
+  } else {
+    return NULL;
+  }
+}
+
+void Camera::addNumFeatures(VmbHandle_t handle)
+{
+  VmbUint32_t num_features = 0;
+  VmbError_t err = VmbFeaturesList(handle, NULL, 0, &num_features, sizeof *_features);
+  if (err != VmbErrorSuccess) {
+    fprintf(stderr,
+            "Failure determining the number of features of the camera (%s): %s\n",
+            _info.cameraIdString,
+            ErrorCodes::desc(err));
+  } else {
+    _max_features += num_features;
+  }
+}
+
+void Camera::addFeatures(VmbHandle_t handle)
+{
+  VmbUint32_t num_features = 0;
+  VmbError_t err = VmbFeaturesList(handle, &_features[_num_features], _max_features - _num_features, &num_features, sizeof *_features);
+  if (err != VmbErrorSuccess) {
+    fprintf(stderr,
+            "Failure to retrieve the features of the camera (%s): %s\n",
+            _info.cameraIdString,
+            ErrorCodes::desc(err));
+  } else {
+    // Add these features to the lookup map by name
+    for (VmbUint32_t i=_num_features; i<_num_features+num_features; i++) {
+      _lookup[_features[i].name] = handle;
+    }
+    _num_features += num_features;
+  }
+}
+
 void Camera::listAccess(const char* name) const
 {
   VmbError_t err = VmbErrorSuccess;
   VmbBool_t readable = VmbBoolFalse;
   VmbBool_t writeable = VmbBoolFalse;
+  VmbHandle_t handle = lookupHandle(name);
 
-  err = VmbFeatureAccessQuery(_cam, name, &readable, &writeable);
+  err = VmbFeatureAccessQuery(handle, name, &readable, &writeable);
   if (err == VmbErrorSuccess) {
     printf("    isReadable     - %s\n", Bool::desc(readable));
     printf("    isWriteable    - %s\n", Bool::desc(writeable));
@@ -880,11 +951,12 @@ void Camera::listEnumRange(const char* name) const
   VmbError_t err = VmbErrorSuccess;
   VmbUint32_t nenum = 0;
   const char** enums = NULL;
+  VmbHandle_t handle = lookupHandle(name);
 
-  err = VmbFeatureEnumRangeQuery(_cam, name, NULL, 0, &nenum);
+  err = VmbFeatureEnumRangeQuery(handle, name, NULL, 0, &nenum);
   if (err == VmbErrorSuccess) {
     enums = new const char*[nenum];
-    err = VmbFeatureEnumRangeQuery(_cam, name, enums, nenum, &nenum);
+    err = VmbFeatureEnumRangeQuery(handle, name, enums, nenum, &nenum);
     if (err == VmbErrorSuccess) {
       printf("    Range          -");
       for (VmbUint32_t n=0; n<nenum; n++) {
@@ -907,7 +979,7 @@ void Camera::listEnumRange(const char* name) const
 std::string Camera::getGeniCamPath()
 {
   std::string path = Pds::PathTools::getBuildPathStr();
-  path.append("/vimba/VimbaUSBTL/CTI/x86_64bit");
+  path.append("/vimba/cti");
   return path;
 }
 
@@ -924,6 +996,17 @@ bool Camera::getVersionInfo(VmbVersionInfo_t* info)
   } else {
     fprintf(stderr, "No memory allocated for VmbVersionInfo!\n");
     return false;
+  }
+}
+
+bool Camera::getCameraInfo (VmbCameraInfo_t* info, VmbHandle_t handle)
+{
+  VmbError_t err = VmbCameraInfoQueryByHandle(handle, info, sizeof *info);
+  if (err != VmbErrorSuccess) {
+    fprintf(stderr, "Failed to retrieve camera info: %s\n", ErrorCodes::desc(err));
+    return false;
+  } else {
+    return true;
   }
 }
 
@@ -958,6 +1041,36 @@ bool Camera::getCameraInfo(VmbCameraInfo_t* info, VmbUint32_t index, const char*
     delete[] cameras;
   } else {
     fprintf(stderr, "Failed to retrieve number of available cameras: %s\n", ErrorCodes::desc(err));
+  }
+
+  return false;
+}
+
+bool Camera::getTransportLayerInfo (VmbTransportLayerInfo_t* info, VmbHandle_t transport)
+{
+  VmbError_t  err = VmbErrorSuccess;
+  VmbUint32_t ncount = 0;
+  VmbUint32_t ninfo = 0;
+  VmbTransportLayerInfo_t* tls = NULL;
+
+  err = VmbTransportLayersList(NULL, 0, &ncount, sizeof *tls);
+  if (err == VmbErrorSuccess) {
+    tls = new VmbTransportLayerInfo_t[ncount];
+    err = VmbTransportLayersList(tls, ncount, &ninfo, sizeof *tls);
+    if (err == VmbErrorSuccess || err == VmbErrorMoreData) {
+      if (ninfo < ncount)
+        ncount = ninfo;
+      for (VmbUint32_t n=0; n<ncount; n++) {
+        if (transport == tls[n].transportLayerHandle) {
+          memcpy(info, &tls[n], sizeof *tls);
+          return true;
+        }
+      }
+    } else {
+      fprintf(stderr, "Failed to retrieve transport layer info: %s\n", ErrorCodes::desc(err));
+    }
+  } else {
+    fprintf(stderr, "Failed to retrieve number of available transport layers: %s\n", ErrorCodes::desc(err));
   }
 
   return false;
@@ -1165,8 +1278,9 @@ VmbInt64_t Camera::getInt(const char* name) const
 
 VmbInt64_t Camera::getIntStep(const char* name) const
 {
+  VmbHandle_t handle = lookupHandle(name);
   VmbInt64_t step = 0;
-  VmbError_t err = VmbFeatureIntIncrementQuery(_cam, name, &step);
+  VmbError_t err = VmbFeatureIntIncrementQuery(handle, name, &step);
   if (err == VmbErrorSuccess) {
     return step;
   } else {
@@ -1208,7 +1322,7 @@ VmbBool_t Camera::isWritable(const char* name) const
   VmbBool_t readable = VmbBoolFalse;
   VmbBool_t writeable = VmbBoolFalse;
 
-  err = VmbFeatureAccessQuery(_cam, name, &readable, &writeable);
+  err = VmbFeatureAccessQuery(lookupHandle(name), name, &readable, &writeable);
   if (err != VmbErrorSuccess) {
     fprintf(stderr, "Failed to query read/write status of feature %s: %s\n", name, ErrorCodes::desc(err)); 
   }
@@ -1268,7 +1382,7 @@ bool Camera::runCommand(const char* name)
 {
   VmbError_t err = VmbErrorSuccess;
     
-  err = VmbFeatureCommandRun(_cam, name);
+  err = VmbFeatureCommandRun(lookupHandle(name), name);
   if (err != VmbErrorSuccess) {
     fprintf(stderr, "%s command failed: %s\n", name, ErrorCodes::desc(err));
   }
@@ -1278,53 +1392,54 @@ bool Camera::runCommand(const char* name)
 
 VmbError_t Camera::getBoolFeature(const char* name, VmbBool_t* value) const
 {
-  return VmbFeatureBoolGet(_cam, name, value);
+  return VmbFeatureBoolGet(lookupHandle(name), name, value);
 }
 
 VmbError_t Camera::setBoolFeature(const char* name, VmbBool_t value)
 {
-  return VmbFeatureBoolSet(_cam, name, value);
+  return VmbFeatureBoolSet(lookupHandle(name), name, value);
 }
 
 VmbError_t Camera::getEnumFeature(const char* name, const char** value) const
 {
-  return VmbFeatureEnumGet(_cam, name, value);
+  return VmbFeatureEnumGet(lookupHandle(name), name, value);
 }
 
 VmbError_t Camera::setEnumFeature(const char* name, const char* value)
 {
-  return VmbFeatureEnumSet(_cam, name, value);
+  return VmbFeatureEnumSet(lookupHandle(name), name, value);
 }
 
 VmbError_t Camera::getIntFeature(const char* name, VmbInt64_t* value) const
 {
-  return VmbFeatureIntGet(_cam, name, value);
+  return VmbFeatureIntGet(lookupHandle(name), name, value);
 }
 
 VmbError_t Camera::setIntFeature(const char* name, VmbInt64_t value)
 {
-  return VmbFeatureIntSet(_cam, name, value);
+  return VmbFeatureIntSet(lookupHandle(name), name, value);
 }
 
 VmbError_t Camera::getFloatFeature(const char* name, double* value) const
 {
-  return VmbFeatureFloatGet(_cam, name, value);
+  return VmbFeatureFloatGet(lookupHandle(name), name, value);
 }
 
 VmbError_t Camera::setFloatFeature(const char* name, double value)
 {
-  return VmbFeatureFloatSet(_cam, name, value);
+  return VmbFeatureFloatSet(lookupHandle(name), name, value);
 }
 
 VmbError_t Camera::getStringFeature(const char* name, std::string& value) const
 {
   VmbError_t err = VmbErrorSuccess;
+  VmbHandle_t handle = lookupHandle(name);
   VmbUint32_t size = 0;
   char* buffer = NULL;
-  err = VmbFeatureStringGet(_cam, name, NULL, 0, &size);
+  err = VmbFeatureStringGet(handle, name, NULL, 0, &size);
   if (err == VmbErrorSuccess) {
     buffer = new char[size];
-    err = VmbFeatureStringGet(_cam, name, buffer, size, NULL);
+    err = VmbFeatureStringGet(handle, name, buffer, size, NULL);
     if (err == VmbErrorSuccess) {
       value.assign(buffer); 
     }
@@ -1336,17 +1451,17 @@ VmbError_t Camera::getStringFeature(const char* name, std::string& value) const
 
 VmbError_t Camera::setStringFeature(const char* name, std::string value)
 {
-  return VmbFeatureStringSet(_cam, name, value.c_str());
+  return VmbFeatureStringSet(lookupHandle(name), name, value.c_str());
 }
 
 VmbError_t Camera::getStringFeature(const char* name, char* value, VmbUint32_t size) const
 {
-  return VmbFeatureStringGet(_cam, name, value, size, NULL);
+  return VmbFeatureStringGet(lookupHandle(name), name, value, size, NULL);
 }
 
 VmbError_t Camera::setStringFeature(const char* name, const char* value)
 {
-  return VmbFeatureStringSet(_cam, name, value);
+  return VmbFeatureStringSet(lookupHandle(name), name, value);
 }
 
 

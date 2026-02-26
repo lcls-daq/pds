@@ -1,10 +1,11 @@
 #ifndef Pds_Vimba_Driver_hh
 #define Pds_Vimba_Driver_hh
 
-#include "vimba/include/VimbaC.h"
+#include "VmbC/VmbC.h"
 
 #include <stdexcept>
 #include <string>
+#include <map>
 
 namespace Pds {
   namespace Vimba {
@@ -38,9 +39,10 @@ namespace Pds {
         VmbBool_t reverseY() const;
         VmbBool_t contrastEnable() const;
         VmbBool_t acquisitionFrameRateEnable() const;
+        VmbBool_t streamIsGrabbing() const;
         TriggerMode triggerModeEnum() const;
         PixelFormat pixelFormatEnum() const;
-        VmbInt64_t payloadSize() const;
+        VmbUint32_t payloadSize() const;
         VmbInt64_t deviceLinkThroughputLimit() const;
         VmbInt64_t deviceGenCPMajorVersion() const;
         VmbInt64_t deviceGenCPMinorVersion() const;
@@ -88,6 +90,7 @@ namespace Pds {
         std::string deviceVersion() const;
         std::string deviceSerialNumber() const;
         std::string deviceUserID() const;
+        std::string streamID() const;
         const char* triggerMode() const;
         const char* exposureMode() const;
         const char* deviceTemperatureSelector() const;
@@ -106,6 +109,7 @@ namespace Pds {
         const char* correctionSelector() const;
         const char* correctionSet() const;
         const char* correctionSetDefault() const;
+        const char* streamType() const;
 
         bool unsetImageRoi();
         bool setImageRoi(VmbInt64_t offset_x, VmbInt64_t offset_y, VmbInt64_t width, VmbInt64_t height);
@@ -162,7 +166,11 @@ namespace Pds {
         VmbError_t setStringFeature(const char* name, std::string value);
         VmbError_t getStringFeature(const char* name, char* value, VmbUint32_t size) const;
         VmbError_t setStringFeature(const char* name, const char* value);
+
+        VmbHandle_t lookupHandle(const char* name) const;
       private:
+        void addNumFeatures(VmbHandle_t handle);
+        void addFeatures(VmbHandle_t handle);
         void listAccess(const char* name) const;
         void listEnumRange(const char* name) const;
         bool checkImageRoi(VmbInt64_t offset_x, VmbInt64_t offset_y, VmbInt64_t width, VmbInt64_t height) const;
@@ -172,13 +180,17 @@ namespace Pds {
       public:
         static std::string getGeniCamPath();
         static bool getVersionInfo(VmbVersionInfo_t* info);
+        static bool getCameraInfo (VmbCameraInfo_t* info, VmbHandle_t handle);
         static bool getCameraInfo (VmbCameraInfo_t* info, VmbUint32_t index, const char* serial_id);
+        static bool getTransportLayerInfo (VmbTransportLayerInfo_t* info, VmbHandle_t transport);
       private:
         VmbHandle_t       _cam;
         VmbCameraInfo_t   _info; 
         VmbUint32_t       _num_features;
+        VmbUint32_t       _max_features;
         VmbFeatureInfo_t* _features;
         bool              _capture;
+        std::map<std::string, VmbHandle_t> _lookup;
     };
   }
 }

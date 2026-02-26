@@ -1,7 +1,7 @@
 #ifndef Pds_Vimba_FrameBuffer_hh
 #define Pds_Vimba_FrameBuffer_hh
 
-#include "vimba/include/VimbaC.h"
+#include "VmbC/VmbC.h"
 
 namespace Pds {
   namespace Vimba {
@@ -9,7 +9,7 @@ namespace Pds {
     class Server;
     class FrameBuffer {
       public:
-        FrameBuffer(unsigned nbuffers, Camera* cam, Server* srv);
+        FrameBuffer(size_t nbuffers, Camera* cam, Server* srv);
         virtual ~FrameBuffer();
 
         void configure();
@@ -20,17 +20,17 @@ namespace Pds {
 
         static VmbUint32_t sizeAs16Bit(VmbFrame_t* frame);
         static bool copyAs16Bit(VmbFrame_t* frame, void* buffer);
-        static void VMB_CALL frameCallBack(const VmbHandle_t hcam, VmbFrame_t* ptr);
+        static void VMB_CALL frameCallBack(const VmbHandle_t hcam, const VmbHandle_t hstream, VmbFrame_t* ptr);
       protected:
         static bool copyAs16BitVmb(VmbFrame_t* frame, void* buffer);
         static bool copyAs16BitStd(VmbFrame_t* frame, void* buffer);
       private:
-        unsigned    _nbuffers;
-        Camera*     _cam;
-        Server*     _srv;
-        VmbFrame_t* _frames;
-        char*       _buffer;
-        VmbInt64_t  _buffer_sz;
+        size_t       _nbuffers;
+        Camera*      _cam;
+        Server*      _srv;
+        VmbFrame_t*  _frames;
+        char*        _buffer;
+        size_t       _buffer_sz;
     };
   }
 }

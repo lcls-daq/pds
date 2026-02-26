@@ -1,22 +1,18 @@
 #include "Errors.hh"
 
-#define VIMBA_BOOL(x)  case x: return #x
-
 const char *Pds::Vimba::Bool::name(VmbBool_t value) {
-  switch (value) {
-    VIMBA_BOOL(VmbBoolFalse);
-    VIMBA_BOOL(VmbBoolTrue);
-    default: return "Unknown bool value";
+  if (value) {
+    return "VmbBoolTrue";
+  } else {
+    return "VmbBoolFalse";
   }
 }
 
-#undef VIMBA_BOOL
-
 const char *Pds::Vimba::Bool::desc(VmbBool_t value) {
-  switch (value) {
-    case VmbBoolFalse:  return "False";
-    case VmbBoolTrue:   return "True";
-    default:            return "Unknown";
+  if (value) {
+    return "True";
+  } else {
+    return "False";
   }
 }
 
@@ -43,6 +39,29 @@ const char *Pds::Vimba::ErrorCodes::name(VmbError_t err) {
     VIMBA_ERROR(VmbErrorNoTL);
     VIMBA_ERROR(VmbErrorNotImplemented);
     VIMBA_ERROR(VmbErrorNotSupported);
+    VIMBA_ERROR(VmbErrorIncomplete);
+    VIMBA_ERROR(VmbErrorIO);
+    VIMBA_ERROR(VmbErrorValidValueSetNotPresent);
+    VIMBA_ERROR(VmbErrorGenTLUnspecified);
+    VIMBA_ERROR(VmbErrorUnspecified);
+    VIMBA_ERROR(VmbErrorBusy);
+    VIMBA_ERROR(VmbErrorNoData);
+    VIMBA_ERROR(VmbErrorParsingChunkData);
+    VIMBA_ERROR(VmbErrorInUse);
+    VIMBA_ERROR(VmbErrorUnknown);
+    VIMBA_ERROR(VmbErrorXml);
+    VIMBA_ERROR(VmbErrorNotAvailable);
+    VIMBA_ERROR(VmbErrorNotInitialized);
+    VIMBA_ERROR(VmbErrorInvalidAddress);
+    VIMBA_ERROR(VmbErrorAlready);
+    VIMBA_ERROR(VmbErrorNoChunkData);
+    VIMBA_ERROR(VmbErrorUserCallbackException);
+    VIMBA_ERROR(VmbErrorFeaturesUnavailable);
+    VIMBA_ERROR(VmbErrorTLNotFound);
+    VIMBA_ERROR(VmbErrorAmbiguous);
+    VIMBA_ERROR(VmbErrorRetriesExceeded);
+    VIMBA_ERROR(VmbErrorInsufficientBufferCount);
+    VIMBA_ERROR(VmbErrorCustom);
     default: return "Unknown error";
   }
 }
@@ -51,26 +70,49 @@ const char *Pds::Vimba::ErrorCodes::name(VmbError_t err) {
 
 const char *Pds::Vimba::ErrorCodes::desc(VmbError_t err) {
   switch (err) {
-    case VmbErrorSuccess:           return "Success";
-    case VmbErrorInternalFault:     return "Unexpected fault in VmbApi or driver";
-    case VmbErrorApiNotStarted:     return "API not started";
-    case VmbErrorNotFound:          return "Not found";
-    case VmbErrorBadHandle:         return "Invalid handle";
-    case VmbErrorDeviceNotOpen:     return "Device not open";
-    case VmbErrorInvalidAccess:     return "Invalid access";
-    case VmbErrorBadParameter:      return "Bad parameter";
-    case VmbErrorStructSize:        return "Wrong library version";
-    case VmbErrorMoreData:          return "More data returned than memory provided";
-    case VmbErrorWrongType:         return "Wrong type";
-    case VmbErrorInvalidValue:      return "Invalid value";
-    case VmbErrorTimeout:           return "Timeout";
-    case VmbErrorOther:             return "TL error";
-    case VmbErrorResources:         return "Resource not available";
-    case VmbErrorInvalidCall:       return "Invalid call";
-    case VmbErrorNoTL:              return "TL not loaded";
-    case VmbErrorNotImplemented:    return "Not implemented";
-    case VmbErrorNotSupported:      return "Not supported";
-    default:                        return "Unknown";
+    case VmbErrorSuccess:                 return "Success";
+    case VmbErrorInternalFault:           return "Unexpected fault in VmbApi or driver";
+    case VmbErrorApiNotStarted:           return "API not started";
+    case VmbErrorNotFound:                return "Not found";
+    case VmbErrorBadHandle:               return "Invalid handle";
+    case VmbErrorDeviceNotOpen:           return "Device not open";
+    case VmbErrorInvalidAccess:           return "Invalid access";
+    case VmbErrorBadParameter:            return "Bad parameter";
+    case VmbErrorStructSize:              return "Wrong library version";
+    case VmbErrorMoreData:                return "More data returned than memory provided";
+    case VmbErrorWrongType:               return "Wrong type";
+    case VmbErrorInvalidValue:            return "Invalid value";
+    case VmbErrorTimeout:                 return "Timeout";
+    case VmbErrorOther:                   return "TL error";
+    case VmbErrorResources:               return "Resource not available";
+    case VmbErrorInvalidCall:             return "Invalid call";
+    case VmbErrorNoTL:                    return "TL not loaded";
+    case VmbErrorNotImplemented:          return "Not implemented";
+    case VmbErrorNotSupported:            return "Not supported";
+    case VmbErrorIncomplete:              return "Incomplete";
+    case VmbErrorIO:                      return "I/O";
+    case VmbErrorValidValueSetNotPresent: return "Valid value set not present";
+    case VmbErrorGenTLUnspecified:        return "GenTL unspecified";
+    case VmbErrorUnspecified:             return "Unspecified";
+    case VmbErrorBusy:                    return "Busy";
+    case VmbErrorNoData:                  return "No data";
+    case VmbErrorParsingChunkData:        return "Failed to Parse chunk data";
+    case VmbErrorInUse:                   return "In use";
+    case VmbErrorUnknown:                 return "Unknown";
+    case VmbErrorXml:                     return "Xml";
+    case VmbErrorNotAvailable:            return "Not Available";
+    case VmbErrorNotInitialized:          return "Not Initialized";
+    case VmbErrorInvalidAddress:          return "Invalid Address";
+    case VmbErrorAlready:                 return "Already";
+    case VmbErrorNoChunkData:             return "No chunk data";
+    case VmbErrorUserCallbackException:   return "User callback exception";
+    case VmbErrorFeaturesUnavailable:     return "Features unavailable";
+    case VmbErrorTLNotFound:              return "TL not found";
+    case VmbErrorAmbiguous:               return "Ambiguous";
+    case VmbErrorRetriesExceeded:         return "Retries exceeded";
+    case VmbErrorInsufficientBufferCount: return "Insufficient buffer count";
+    case VmbErrorCustom:                  return "Custom";
+    default:                              return "Unknown error";
   }
 }
 
@@ -240,3 +282,46 @@ const char *Pds::Vimba::PixelFormatTypes::desc(VmbPixelFormat_t format) {
 }
 
 #undef VIMBA_PIXEL_FORMAT_DESC
+
+#define VIMBA_TRANSPORT_TYPES(x) case x: return #x
+
+const char *Pds::Vimba::TransportTypes::name(VmbTransportLayerType_t type) {
+  switch (static_cast<VmbTransportLayerType>(type)) {
+    VIMBA_TRANSPORT_TYPES(VmbTransportLayerTypeUnknown);
+    VIMBA_TRANSPORT_TYPES(VmbTransportLayerTypeGEV);
+    VIMBA_TRANSPORT_TYPES(VmbTransportLayerTypeCL);
+    VIMBA_TRANSPORT_TYPES(VmbTransportLayerTypeIIDC);
+    VIMBA_TRANSPORT_TYPES(VmbTransportLayerTypeUVC);
+    VIMBA_TRANSPORT_TYPES(VmbTransportLayerTypeCXP);
+    VIMBA_TRANSPORT_TYPES(VmbTransportLayerTypeCLHS);
+    VIMBA_TRANSPORT_TYPES(VmbTransportLayerTypeU3V);
+    VIMBA_TRANSPORT_TYPES(VmbTransportLayerTypeEthernet);
+    VIMBA_TRANSPORT_TYPES(VmbTransportLayerTypePCI);
+    VIMBA_TRANSPORT_TYPES(VmbTransportLayerTypeCustom);
+    VIMBA_TRANSPORT_TYPES(VmbTransportLayerTypeMixed);
+    default: return "Unknown type";
+  }
+}
+
+#undef VIMBA_TRANSPORT_TYPES
+
+#define VIMBA_TRANSPORT_TYPES_DESC(name) case VmbTransportLayerType##name: return #name
+const char *Pds::Vimba::TransportTypes::desc(VmbTransportLayerType_t type) {
+  switch (type) {
+    VIMBA_TRANSPORT_TYPES_DESC(Unknown);
+    VIMBA_TRANSPORT_TYPES_DESC(GEV);
+    VIMBA_TRANSPORT_TYPES_DESC(CL);
+    VIMBA_TRANSPORT_TYPES_DESC(IIDC);
+    VIMBA_TRANSPORT_TYPES_DESC(UVC);
+    VIMBA_TRANSPORT_TYPES_DESC(CXP);
+    VIMBA_TRANSPORT_TYPES_DESC(CLHS);
+    VIMBA_TRANSPORT_TYPES_DESC(U3V);
+    VIMBA_TRANSPORT_TYPES_DESC(Ethernet);
+    VIMBA_TRANSPORT_TYPES_DESC(PCI);
+    VIMBA_TRANSPORT_TYPES_DESC(Custom);
+    VIMBA_TRANSPORT_TYPES_DESC(Mixed);
+    default: return "Unknown";
+  }
+}
+
+#undef VIMBA_TRANSPORT_TYPES_DESC

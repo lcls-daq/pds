@@ -44,11 +44,11 @@ int Server::fetch( char* payload, int flags )
   VimbaDataType* data = new (xtc.alloc(sizeof(VimbaDataType))) VimbaDataType(frame->frameID, frame->timestamp);
 
   // Check that the frame buffer is the expected size
-  if (frame->imageSize != cam->payloadSize()) {
+  if (frame->bufferSize != cam->payloadSize()) {
     fprintf(stderr,
-            "Error: frame %llu is size %u instead of the expected %llu\n",
+            "Error: frame %llu is size %u instead of the expected %u\n",
             frame->frameID,
-            frame->imageSize,
+            frame->bufferSize,
             cam->payloadSize());
     xtc.damage.increase(Pds::Damage::UserDefined);
     xtc.damage.userBits(0x1);

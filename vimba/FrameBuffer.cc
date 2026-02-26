@@ -3,14 +3,14 @@
 #include "Server.hh"
 #include "Errors.hh"
 
-#include "vimba/include/VmbTransform.h"
+#include "VmbImageTransform/VmbTransform.h"
 
 #include <algorithm>
 #include <cstdio>
 
 using namespace Pds::Vimba;
 
-FrameBuffer::FrameBuffer(unsigned nbuffers, Camera* cam, Server* srv):
+FrameBuffer::FrameBuffer(size_t nbuffers, Camera* cam, Server* srv):
   _nbuffers(nbuffers),
   _cam(cam),
   _srv(srv),
@@ -32,17 +32,17 @@ FrameBuffer::~FrameBuffer()
 void FrameBuffer::configure()
 {
   if (_cam) {
-    VmbInt64_t payloadSize = _cam->payloadSize();
+    VmbUint32_t payloadSize = _cam->payloadSize();
 
     // allocate memory for buffers if needed
-    if (_buffer_sz < (_nbuffers * payloadSize)) {
+    if (_buffer_sz < _nbuffers * payloadSize) {
       if (_buffer) delete[] _buffer;
       _buffer = new char[_nbuffers * payloadSize];
       _buffer_sz = _nbuffers * payloadSize;
     }
 
     // initialize the frames with buffer info
-    for (unsigned n=0; n<_nbuffers; n++) {
+    for (size_t n=0; n<_nbuffers; n++) {
       _frames[n].buffer = _buffer + (payloadSize * n);
       _frames[n].bufferSize = payloadSize;
       _frames[n].context[0] = _cam;
@@ -156,7 +156,7 @@ bool FrameBuffer::copyAs16BitVmb(VmbFrame_t* frame, void* buffer)
 bool FrameBuffer::copyAs16BitStd(VmbFrame_t* frame, void* buffer)
 {
   char* frame_start = (char*) frame->buffer;
-  char* frame_end = frame_start + frame->imageSize;
+  char* frame_end = frame_start + frame->bufferSize;
   if (frame->pixelFormat & VmbPixelOccupy16Bit) {
     std::copy((uint16_t*) frame_start, (uint16_t*) frame_end, (uint16_t*) buffer);
     return true;
@@ -169,7 +169,7 @@ bool FrameBuffer::copyAs16BitStd(VmbFrame_t* frame, void* buffer)
   }
 }
 
-void VMB_CALL FrameBuffer::frameCallBack(const VmbHandle_t hcam, VmbFrame_t* ptr)
+void VMB_CALL FrameBuffer::frameCallBack(const VmbHandle_t hcam, const VmbHandle_t hstream, VmbFrame_t* ptr)
 {
   Server* srv = reinterpret_cast<Server*>(ptr->context[1]);
   if (srv->post(ptr)) {

@@ -83,6 +83,9 @@ namespace Pds {
     static const char* VMB_TIMESTAMP_LATCH        = "TimestampLatch";
     static const char* VMB_TIMESTAMP_VALUE        = "TimestampLatchValue";
     static const char* VMB_MAX_DRV_BUFFER_COUNT   = "MaxDriverBuffersCount";
+    static const char* VMB_STREAM_ID              = "StreamID";
+    static const char* VMB_STREAM_TYPE            = "StreamType";
+    static const char* VMB_STREAM_IS_GRABBING     = "StreamIsGrabbing";
     static const char* VMB_STREAM_BUFFER_MIN      = "StreamAnnounceBufferMinimum";
     static const char* VMB_STREAM_BUFFER_COUNT    = "StreamAnnouncedBufferCount";
     static const char* VMB_STREAM_BUFFER_MODE     = "StreamBufferHandlingMode";

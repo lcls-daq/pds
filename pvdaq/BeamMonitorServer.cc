@@ -53,6 +53,7 @@ BeamMonitorServer::BeamMonitorServer(const char*         pvbase,
                                      const Pds::DetInfo& info) :
   _pvbase     (pvbase),
   _iocbase    (iocbase ? iocbase : ""),
+  _raw        (NULL),
   _exp_nord   (0),
   _config_pvs (NCHANNELS),
   _offset_pvs (NCHANNELS),
@@ -248,14 +249,14 @@ void BeamMonitorServer::updated()
 #endif
     inp +=14; //skip event header
     for(unsigned i=0; i<NCHANNELS/2; i++) {
-      if ((_chan_mask&&(1<<i))==0) continue;
+      if ((_chan_mask & (1<<i))==0) continue;
       inp ++; //skip channel header
       for(unsigned j=0; j<_Length[i]/2; j++) {
         *p32++ = unsigned(*inp++);
       }
     }
     for(unsigned i=NCHANNELS/2; i<NCHANNELS; i++) {
-      if ((_chan_mask&&(1<<i))==0) continue;
+      if ((_chan_mask & (1<<i))==0) continue;
       inp ++; //skip channel header
       for(unsigned j=0; j<_Length[i]; j++) {
         *p32++ = unsigned(*inp++);

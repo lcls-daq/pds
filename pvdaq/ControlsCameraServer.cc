@@ -3,6 +3,7 @@
 #include "pds/pvdaq/CamPvServer.hh"
 #include "pds/config/RayonixConfigType.hh"
 #include "pds/config/StreakConfigType.hh"
+#include "pds/config/ArchonConfigType.hh"
 #include "pds/config/EpicsCamConfigType.hh"
 #include "pds/config/EpicsCamDataType.hh"
 #include "pds/config/FrameFexConfigType.hh"
@@ -86,6 +87,22 @@ ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
   _strk_trig  (0),
   _strk_fto   (0),
   _strk_path  (0),
+  _arch_psweep(0),
+  _arch_isweep(0),
+  _arch_skip  (0),
+  _arch_st    (0),
+  _arch_stm1  (0),
+  _arch_at    (0),
+  _arch_pixels(0),
+  _arch_lines (0),
+  _arch_taps  (0),
+  _arch_nonint(0),
+  _arch_volt  (0),
+  _arch_pwr   (0),
+  _arch_chan  (0),
+  _arch_bias  (0),
+  _arch_lsmode(0),
+  _arch_batch (0),
   _rnx_bin_val(0),
   _rnx_trig_val(0),
   _rnx_mode_val(0),
@@ -101,10 +118,22 @@ ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
   _roi_y_org  (0),
   _roi_y_len  (0),
   _roi_y_end  (0),
+  _arch_psweep_val(0),
+  _arch_isweep_val(0),
+  _arch_skip_val  (0),
+  _arch_st_val    (0),
+  _arch_stm1_val  (0),
+  _arch_at_val    (0),
+  _arch_pixels_val(0),
+  _arch_lines_val (0),
+  _arch_taps_val  (0),
+  _arch_batch_val (0),
   _exposure_val (0.0),
   _gain_val     (0.0),
   _xscale_val   (1.0),
   _yscale_val   (1.0),
+  _arch_nonint_val(0.0),
+  _arch_volt_val(0.0),
   _manufacturer_str (new char[EpicsCamConfigType::DESC_CHAR_MAX]),
   _model_str        (new char[EpicsCamConfigType::DESC_CHAR_MAX]),
   _image_pvname     (new char[PV_LEN]),
@@ -114,6 +143,22 @@ ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
   _strk_shut_str    (new char[PV_LEN]),
   _strk_trig_str    (new char[PV_LEN]),
   _strk_path_str    (new char[STRK_FPATH_LEN]),
+  _arch_psweep_str  (new char[PV_LEN]),
+  _arch_isweep_str  (new char[PV_LEN]),
+  _arch_skip_str    (new char[PV_LEN]),
+  _arch_st_str      (new char[PV_LEN]),
+  _arch_stm1_str    (new char[PV_LEN]),
+  _arch_at_str      (new char[PV_LEN]),
+  _arch_pixels_str  (new char[PV_LEN]),
+  _arch_lines_str   (new char[PV_LEN]),
+  _arch_taps_str    (new char[PV_LEN]),
+  _arch_nonint_str  (new char[PV_LEN]),
+  _arch_volt_str    (new char[PV_LEN]),
+  _arch_pwr_str     (new char[PV_LEN]),
+  _arch_chan_str    (new char[PV_LEN]),
+  _arch_bias_str    (new char[PV_LEN]),
+  _arch_lsmode_str  (new char[PV_LEN]),
+  _arch_batch_str   (new char[PV_LEN]),
   _enabled    (false),
   _configured (false),
   _scale      (flags & (1<<SCALEPV)),
@@ -214,6 +259,75 @@ ControlsCameraServer::ControlsCameraServer(const char*          pvbase,
       CREATE_PV(_strk_fto, "%s:FocusTimeOver_RBV");
       // Streak camera configuration filepath pv
       CREATE_PV(_strk_path, "%s:ScalingFilePath");
+    } else if (info.device() == Pds::DetInfo::Archon) {
+      // Archon pre-frame clear count
+      CREATE_PV(_arch_psweep, "%s:ArchonPreFrameClear_RBV");
+      // Archon idle clear count
+      CREATE_PV(_arch_isweep, "%s:ArchonIdleClear_RBV");
+      // Archon pre frame skip lines count
+      CREATE_PV(_arch_skip, "%s:ArchonPreFrameSkip_RBV");
+      // Archon clock st
+      CREATE_PV(_arch_st, "%s:ArchonClockST_RBV");
+      // Archon clock stm1
+      CREATE_PV(_arch_stm1, "%s:ArchonClockSTM1_RBV");
+      // Archon clock at
+      CREATE_PV(_arch_at, "%s:ArchonClockAT_RBV");
+      // Archon max pixels
+      CREATE_PV(_arch_pixels, "%s:MaxSizeX_RBV");
+      // Archon max lines
+      CREATE_PV(_arch_lines, "%s:MaxSizeY_RBV");
+      // Archon num tap lines
+      CREATE_PV(_arch_taps, "%s:ArchonActiveTaplines_RBV");
+      // Archon non-integration time
+      CREATE_PV(_arch_nonint, "%s:ArchonNonIntTime_RBV");
+      // Archon ccd power
+      CREATE_ENUM_PV(_arch_pwr, "%s:ArchonPowerMode_RBV");
+      // Archon linescan mode
+      CREATE_ENUM_PV(_arch_lsmode, "%s:ArchonLineScanMode_RBV");
+      // Archon number of batches per frame
+      CREATE_PV(_arch_batch, "%s:ArchonNumBatchFrames_RBV");
+      // Archon bias channel
+      CREATE_ENUM_PV(_arch_chan, "%s:ArchonBiasChan_RBV");
+      // try waiting for pv to connect to read bias chan
+      int tries = 100;
+      while(!_arch_chan->connected() && tries > 0) {
+        usleep(10000);
+        tries--;
+      }
+      if (_arch_chan->connected()) {
+        if (_arch_chan->fetch_str(_arch_chan_str, PV_LEN) < 0) {
+          printf("Error: failed to read value of bias channel pv: %s\n", _arch_chan_str);
+        } else {
+          const char* chan_name = NULL;
+          if (!strcmp(_arch_chan_str, "NV4")) {
+            chan_name = "XVBN4";
+          } else if (!strcmp(_arch_chan_str, "NV3")) {
+            chan_name = "XVBN3";
+          } else if (!strcmp(_arch_chan_str, "NV2")) {
+            chan_name = "XVBN2";
+          } else if (!strcmp(_arch_chan_str, "NV1")) {
+            chan_name = "XVBN1";
+          } else if (!strcmp(_arch_chan_str, "PV1")) {
+            chan_name = "XVBP1";
+          } else if (!strcmp(_arch_chan_str, "PV2")) {
+            chan_name = "XVBP2";
+          } else if (!strcmp(_arch_chan_str, "PV3")) {
+            chan_name = "XVBP3";
+          } else if (!strcmp(_arch_chan_str, "PV4")) {
+            chan_name = "XVBP4";
+          }
+          if (chan_name) {
+            // Archon bias voltage
+            CREATE_PV(_arch_volt, "%s:%s:ArchonBiasSetpoint_RBV", chan_name);
+            // Archon bias state
+            CREATE_ENUM_PV(_arch_bias, "%s:%s:ArchonBiasSwitch_RBV", chan_name);
+          } else {
+            printf("Error: failed to parse archon bias channel enum value: %s\n", _arch_chan_str);
+          }
+        }
+      } else {
+        printf("Error: failed to connect to bias channel pv: %s\n", _arch_chan_str);
+      }
     }
 
     if (_scale) {
@@ -243,6 +357,22 @@ ControlsCameraServer::~ControlsCameraServer()
   delete[] _strk_gate_str;
   delete[] _strk_shut_str;
   delete[] _strk_trig_str;
+  delete[] _arch_psweep_str;
+  delete[] _arch_isweep_str;
+  delete[] _arch_skip_str;
+  delete[] _arch_st_str;
+  delete[] _arch_stm1_str;
+  delete[] _arch_at_str;
+  delete[] _arch_pixels_str;
+  delete[] _arch_lines_str;
+  delete[] _arch_taps_str;
+  delete[] _arch_nonint_str;
+  delete[] _arch_volt_str;
+  delete[] _arch_pwr_str;
+  delete[] _arch_chan_str;
+  delete[] _arch_bias_str;
+  delete[] _arch_lsmode_str;
+  delete[] _arch_batch_str;
   if (_image)
     delete _image;
   if (_nrows)
@@ -289,6 +419,38 @@ ControlsCameraServer::~ControlsCameraServer()
     delete _strk_fto;
   if (_strk_path)
     delete _strk_path;
+  if (_arch_psweep)
+    delete _arch_psweep;
+  if (_arch_isweep)
+    delete _arch_isweep;
+  if (_arch_skip)
+    delete _arch_skip;
+  if (_arch_st)
+    delete _arch_st;
+  if (_arch_stm1)
+    delete _arch_stm1;
+  if (_arch_at)
+    delete _arch_at;
+  if (_arch_pixels)
+    delete _arch_pixels;
+  if (_arch_lines)
+    delete _arch_lines;
+  if (_arch_taps)
+    delete _arch_taps;
+  if (_arch_nonint)
+    delete _arch_nonint;
+  if (_arch_volt)
+    delete _arch_volt;
+  if (_arch_pwr)
+    delete _arch_pwr;
+  if (_arch_chan)
+    delete _arch_chan;
+  if (_arch_bias)
+    delete _arch_bias;
+  if (_arch_lsmode)
+    delete _arch_lsmode;
+  if (_arch_batch)
+    delete _arch_batch;
   for(unsigned i=0; i<_pool.size(); i++) {
     if (_pool[i])
       delete[] _pool[i];
@@ -412,6 +574,7 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
       reinterpret_cast<Dgram*>(_pool[i])->seq = Sequence(ClockTime(0,0),
                                                          TimeStamp(0,0,0,0));
     bool error = false;
+    bool arch_is_batched = false;
     uint32_t rnx_trig_ddl = 0;
     uint64_t strk_time_ddl = 0;
     double calib[StreakConfigType::NumCalibConstants];
@@ -422,6 +585,9 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
     StreakConfigType::ShutterMode strk_shut_ddl = StreakConfigType::Closed;
     StreakConfigType::TriggerMode strk_trig_ddl = StreakConfigType::Single;
     StreakConfigType::CalibScale strk_scale_ddl = StreakConfigType::Seconds;
+    ArchonConfigType::Switch arch_pwr_ddl = ArchonConfigType::Off;
+    ArchonConfigType::BiasChannelId arch_chan_ddl = ArchonConfigType::NV1;
+    ArchonConfigType::Switch arch_bias_ddl = ArchonConfigType::Off;
     printf("Retrieving camera configuration information from epics...\n");
     CHECK_PV(_ncols,    _width);
     CHECK_PV(_nrows,    _height);
@@ -473,7 +639,7 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
       }
     }
     if (_strk_time) { // Not all cameras have this!
-      CHECK_STR_PV(_strk_time, _strk_time_str, EpicsCamConfigType::DESC_CHAR_MAX);
+      CHECK_STR_PV(_strk_time, _strk_time_str, PV_LEN);
       char* unit;
       double time_val = strtod(_strk_time_str, &unit);
       if (unit) {
@@ -496,7 +662,7 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
       }
     }
     if (_strk_mode) { // Not all cameras have this!
-      CHECK_STR_PV(_strk_mode, _strk_mode_str, EpicsCamConfigType::DESC_CHAR_MAX);
+      CHECK_STR_PV(_strk_mode, _strk_mode_str, PV_LEN);
       // Convert to DDL value scheme
       if (!strcmp(_strk_mode_str, "Focus")) {
         strk_mode_ddl = StreakConfigType::Focus;
@@ -508,7 +674,7 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
       }
     }
     if (_strk_gate) { // Not all cameras have this!
-      CHECK_STR_PV(_strk_gate, _strk_gate_str, EpicsCamConfigType::DESC_CHAR_MAX);
+      CHECK_STR_PV(_strk_gate, _strk_gate_str, PV_LEN);
       // Convert to DDL value scheme
       if (!strcmp(_strk_gate_str, "Normal")) {
         strk_gate_ddl = StreakConfigType::Normal;
@@ -522,7 +688,7 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
       }
     }
     if (_strk_shut) { // Not all cameras have this!
-      CHECK_STR_PV(_strk_shut, _strk_shut_str, EpicsCamConfigType::DESC_CHAR_MAX);
+      CHECK_STR_PV(_strk_shut, _strk_shut_str, PV_LEN);
       // Convert to DDL value scheme
       if (!strcmp(_strk_shut_str, "Closed")) {
         strk_shut_ddl = StreakConfigType::Closed;
@@ -534,7 +700,7 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
       }
     }
     if (_strk_trig) { // Not all cameras have this!
-      CHECK_STR_PV(_strk_trig, _strk_trig_str, EpicsCamConfigType::DESC_CHAR_MAX);
+      CHECK_STR_PV(_strk_trig, _strk_trig_str, PV_LEN);
       // Convert to DDL value scheme
       if (!strcmp(_strk_trig_str, "Single")) {
         strk_trig_ddl = StreakConfigType::Single;
@@ -596,6 +762,101 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
         printf("Error: failed to open streak camera calibration file: %s\n", _strk_path_str);
         error = true;
       }
+    }
+    if (_arch_psweep) { // Not all cameras have this!
+      CHECK_PV(_arch_psweep, _arch_psweep_val);
+    }
+    if (_arch_isweep) { // Not all cameras have this!
+      CHECK_PV(_arch_isweep, _arch_isweep_val);
+    }
+    if (_arch_skip) { // Not all cameras have this!
+      CHECK_PV(_arch_skip, _arch_skip_val);
+    }
+    if (_arch_st) { // Not all cameras have this!
+      CHECK_PV(_arch_st, _arch_st_val);
+    }
+    if (_arch_stm1) { // Not all cameras have this!
+      CHECK_PV(_arch_stm1, _arch_stm1_val);
+    }
+    if (_arch_at) { // Not all cameras have this!
+      CHECK_PV(_arch_at, _arch_at_val);
+    }
+    if (_arch_pixels) { // Not all cameras have this!
+      CHECK_PV(_arch_pixels, _arch_pixels_val);
+    }
+    if (_arch_lines) { // Not all cameras have this!
+      CHECK_PV(_arch_lines, _arch_lines_val);
+    }
+    if (_arch_taps) { // Not all cameras have this!
+      CHECK_PV(_arch_taps, _arch_taps_val);
+    }
+    if (_arch_nonint) { // Not all cameras have this!
+      CHECK_PV(_arch_nonint, _arch_nonint_val);
+    }
+    if (_arch_volt) { // Not all cameras have this!
+      CHECK_PV(_arch_volt, _arch_volt_val);
+    }
+    if (_arch_pwr) { // Not all cameras have this!
+      CHECK_STR_PV(_arch_pwr, _arch_pwr_str, PV_LEN);
+      // Convert to DDL value scheme
+      if (!strcmp(_arch_pwr_str, "Off")) {
+        arch_pwr_ddl = ArchonConfigType::Off;
+      } else if (!strcmp(_arch_pwr_str, "On")) {
+        arch_pwr_ddl = ArchonConfigType::On;
+      } else {
+        printf("Error: failed to parse archon power enum value: %s\n", _arch_pwr_str);
+        error = true;
+      }
+    }
+    if (_arch_chan) { // Not all cameras have this!
+      CHECK_STR_PV(_arch_chan, _arch_chan_str, PV_LEN);
+      // Convert to DDL value scheme
+      if (!strcmp(_arch_chan_str, "NV4")) {
+        arch_chan_ddl = ArchonConfigType::NV4;
+      } else if (!strcmp(_arch_chan_str, "NV3")) {
+        arch_chan_ddl = ArchonConfigType::NV3;
+      } else if (!strcmp(_arch_chan_str, "NV2")) {
+        arch_chan_ddl = ArchonConfigType::NV2;
+      } else if (!strcmp(_arch_chan_str, "NV1")) {
+        arch_chan_ddl = ArchonConfigType::NV1;
+      } else if (!strcmp(_arch_chan_str, "PV1")) {
+        arch_chan_ddl = ArchonConfigType::PV1;
+      } else if (!strcmp(_arch_chan_str, "PV2")) {
+        arch_chan_ddl = ArchonConfigType::PV2;
+      } else if (!strcmp(_arch_chan_str, "PV3")) {
+        arch_chan_ddl = ArchonConfigType::PV3;
+      } else if (!strcmp(_arch_chan_str, "PV4")) {
+        arch_chan_ddl = ArchonConfigType::PV4;
+      } else {
+        printf("Error: failed to parse archon bias channel enum value: %s\n", _arch_chan_str);
+        error = true;
+      }
+    }
+    if (_arch_bias) { // Not all cameras have this!
+      CHECK_STR_PV(_arch_bias, _arch_bias_str, PV_LEN);
+      // Convert to DDL value scheme
+      if (!strcmp(_arch_bias_str, "Off")) {
+        arch_bias_ddl = ArchonConfigType::Off;
+      } else if (!strcmp(_arch_bias_str, "On")) {
+        arch_bias_ddl = ArchonConfigType::On;
+      } else {
+        printf("Error: failed to parse archon bias enum value: %s\n", _arch_bias_str);
+        error = true;
+      }
+    }
+    if (_arch_lsmode) { // Not all cameras have this!
+      CHECK_STR_PV(_arch_lsmode, _arch_lsmode_str, PV_LEN);
+      if (!strcmp(_arch_lsmode_str, "Disable")) {
+        arch_is_batched = false;
+      } else if (!strcmp(_arch_lsmode_str, "Enable")) {
+        arch_is_batched = true;
+      } else {
+        printf("Error: failed to parse archon linescan enum value: %s\n", _arch_lsmode_str);
+        error = true;
+      }
+    }
+    if (_arch_batch) { // Not all cameras have this!
+      CHECK_PV(_arch_batch, _arch_batch_val);
     }
 
     CHECK_STR_PV(_model,        _model_str,         EpicsCamConfigType::DESC_CHAR_MAX);
@@ -662,6 +923,33 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
       }
       printf("\n");
     }
+    if (_info.device() == Pds::DetInfo::Archon) {
+      printf("  ccd power:        %s\n"
+             "  ccd bias:         %s\n"
+             "  ccd bias chan:    %s\n"
+             "  ccd bias volt:    %f\n"
+             "  non-int time:     %f\n"
+             "  pre-frame clear:  %u\n"
+             "  idle clear:       %u\n"
+             "  pre-frame skip:   %u\n"
+             "  clock at:         %u\n"
+             "  clock st:         %u\n"
+             "  clock stm1:       %u\n"
+             "  sensor pixels:    %u\n"
+             "  sensor lines:     %u\n"
+             "  sensor taps:      %u\n"
+             "  linescan mode:    %s\n"
+             "  num batches:      %u\n",
+             _arch_pwr_str, _arch_bias_str,
+             _arch_chan_str, _arch_volt_val,
+             _arch_nonint_val,
+             _arch_psweep_val, _arch_isweep_val,
+             _arch_skip_val, _arch_at_val,
+             _arch_st_val, _arch_stm1_val,
+             _arch_pixels_val, _arch_lines_val,
+             _arch_taps_val, _arch_lsmode_str,
+             arch_is_batched ? _arch_batch_val : 0);
+    }
 
     Pds::Camera::FrameCoord roi_beg(_roi_x_org, _roi_x_end);
     Pds::Camera::FrameCoord roi_end(_roi_y_org, _roi_y_end);
@@ -679,6 +967,36 @@ Pds::InDatagram* ControlsCameraServer::fire(Pds::InDatagram* dg)
         Pds::Xtc(_streakConfigType, _xtc.src );
       new (xtc->alloc(sizeof(StreakConfigType)))
         StreakConfigType(strk_time_ddl, strk_mode_ddl, strk_gate_ddl, (uint32_t) _gain_val, strk_shut_ddl, strk_trig_ddl, _strk_fto_val, _exposure_val, strk_scale_ddl, calib);
+      dg->xtc.alloc(xtc->extent);
+    } else if (_info.device() == Pds::DetInfo::Archon) {
+      xtc = new ((char*)dg->xtc.next())
+        Pds::Xtc(_archonConfigType, _xtc.src );
+      new (xtc->alloc(sizeof(ArchonConfigType)))
+        ArchonConfigType(ArchonConfigType::Triggered,
+                         arch_pwr_ddl,
+                         0, // exposure event code - don't use
+                         0, // config size - don't attach acf so this is zero
+                         _arch_psweep_val,
+                         _arch_isweep_val,
+                         _arch_skip_val,
+                         (uint32_t) (_exposure_val*1000), // needs to be in ms as int
+                         (uint32_t) (_arch_nonint_val*1000), // needs to be in ms as int
+                         arch_is_batched ? _arch_batch_val : 0,
+                         _width / _arch_taps_val,
+                         _height,
+                         _arch_pixels_val / _width,
+                         _arch_lines_val / _height,
+                         _arch_pixels_val / _arch_taps_val,
+                         _arch_lines_val,
+                         _arch_taps_val,
+                         _arch_st_val,
+                         _arch_stm1_val,
+                         _arch_at_val,
+                         arch_bias_ddl,
+                         arch_chan_ddl,
+                         _arch_volt_val,
+                         0, // config version - don't use
+                         NULL);
       dg->xtc.alloc(xtc->extent);
     } else {
       xtc = new ((char*)dg->xtc.next())

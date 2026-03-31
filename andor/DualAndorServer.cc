@@ -2090,9 +2090,10 @@ int DualAndorServer::getDataInBeamRateMode(InDatagram* in, InDatagram*& out)
   if (vecReadoutTimeSlave.size() < 20)
     vecReadoutTimeSlave.push_back(make_pair(_fReadoutTime, numAcqNewSlave));
   static int iSlowThreshold = 1;
-  if ( _fReadoutTime > 1.0 )
+  if ( _fReadoutTime > 1.0 ) {
     printf("  *** get %d / %d master cam image out, time = %f sec\n", _iNumAcq, (int) numAcqNewMaster, _fReadoutTime);
     printf("  *** get %d / %d slave cam  image out, time = %f sec\n", _iNumAcq, (int) numAcqNewSlave, _fReadoutTime);
+  }
   if (numAcqNewMaster > _iNumAcq+iSlowThreshold || numAcqNewSlave > _iNumAcq+iSlowThreshold) {
     printf("  ^^^ get %d / %d master cam image out, time = %f sec\n", _iNumAcq, (int) numAcqNewMaster, _fReadoutTime);
     printf("  ^^^ get %d / %d slave cam  image out, time = %f sec\n", _iNumAcq, (int) numAcqNewSlave, _fReadoutTime);

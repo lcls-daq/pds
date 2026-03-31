@@ -209,7 +209,7 @@ namespace Pds {
         sprintf(path,"%s/%s",home, name);
         f = fopen (path, "r");
         if (!f) {
-          char s[200];
+          char s[sizeof(path)+17];
           sprintf(s, "Could not open %s ", path);
           perror(s);
         } else {

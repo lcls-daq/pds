@@ -259,7 +259,7 @@ Manager::Manager( Server* server, unsigned d) :
 
   unsigned ports = (d >> 4) & 0xf;
   char devName[128];
-  char err[128];
+  char err[256];
   if (ports == 0) {
     ports = 15;
     sprintf(devName, "/dev/pgpcard%u", d);

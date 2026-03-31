@@ -346,7 +346,7 @@ unsigned Pgp::Pgp::stopPolling() {
 
     p->cmd   = IOCTL_Clear_Polling;
     p->data  = 0;
-    return(write(_fd, &p, sizeof(PgpCardTx)));
+    return(write(_fd, p, sizeof(PgpCardTx)));
   } else {
     return 0;
   }

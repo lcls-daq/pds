@@ -1946,6 +1946,8 @@ int AndorServer::updateTemperatureData()
   int iError;
   int iTemperature = 999;
   iError = GetTemperature(&iTemperature);
+  if (!isAndorFuncOk(iError))
+    printf("AndorServer::updateTemperatureData():GetTemperature(): %s\n", AndorErrorCodes::name(iError));
 
   /*
    * Set Info object

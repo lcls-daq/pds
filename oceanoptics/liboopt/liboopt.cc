@@ -607,7 +607,7 @@ int getNumRegisters()
   return iNumRegisters;
 }
 
-const struct { int iAddr; char* sRegisterName; } lRegisterInfo[] =
+const struct { int iAddr; const char* sRegisterName; } lRegisterInfo[] =
 {
   {0x00, "*Set Master Clock Counter Divisor. Master Clock freq = 48MHz/Divisor.\n"
          "  Def: 12"},

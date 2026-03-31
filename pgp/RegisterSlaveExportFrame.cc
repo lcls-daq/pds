@@ -81,7 +81,7 @@ namespace Pds {
         pgpCardTx.data   = (__u64)this;
 
         if (pf) {
-          printf("RSEF::post: dest 0x%x, size 0x%x, data 0x%"PRIx64"\n",
+          printf("RSEF::post: dest 0x%x, size 0x%x, data 0x%" PRIx64 "\n",
             pgpCardTx.dest,
             pgpCardTx.size,
             pgpCardTx.data);

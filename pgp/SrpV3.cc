@@ -99,7 +99,7 @@ Pds::Pgp::RegisterSlaveImportFrame* Protocol::read(unsigned size)
             // Sometimes we are missing the trailing word
             if (pgpCardRx.ret != int(size*sizeof(uint32_t))) {
               printf("SrpV3::read read returned %u, we were looking for %u uint32s\n", pgpCardRx.ret, size);
-              printf("\tDmaReadData: data(%"PRIx64")  dest(%x)  flags(%x)  index(%x)  error(%x)  size(%x)  is32(%x)\n",
+              printf("\tDmaReadData: data(%" PRIx64 ")  dest(%x)  flags(%x)  index(%x)  error(%x)  size(%x)  is32(%x)\n",
                      pgpCardRx.data, pgpCardRx.dest, pgpCardRx.flags, pgpCardRx.index, pgpCardRx.error, pgpCardRx.size, pgpCardRx.is32);
               rsf->print();
             } else {

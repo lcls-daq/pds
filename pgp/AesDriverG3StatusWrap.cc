@@ -96,7 +96,7 @@ namespace Pds {
       struct DmaRegisterData reg;
       reg.data = r;
       reg.address = (unsigned)offsetof(PgpCardG3Regs, fiducials[0]) + (lane*sizeof(unsigned));
-      printf("AesDriverG3StatusWrap::setFiducialTarget 0x%x at 0x%"PRIx64"\n", reg.data, reg.address);
+      printf("AesDriverG3StatusWrap::setFiducialTarget 0x%x at 0x%" PRIx64 "\n", reg.data, reg.address);
       ioctl(fd,DMA_Write_Register,&reg);
       return (0);
     }

@@ -23,6 +23,8 @@ int main(int argc, char* argv[])
   while(1)
     sleep(1);
 
+  delete ca;
+
   ca_context_destroy();
 
   return 0;

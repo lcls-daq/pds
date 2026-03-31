@@ -40,6 +40,7 @@ namespace Pds_Epics {
     void get            ();
     void put            ();
     void put_cb         ();
+    void shutdown       ();
   public:
     void getDataCallback   (struct event_handler_args ehArgs);
     void putDataCallback   (struct event_handler_args ehArgs);

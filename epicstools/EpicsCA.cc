@@ -67,6 +67,9 @@ EpicsCA::EpicsCA(const char*   channelName,
 
 EpicsCA::~EpicsCA()
 {
+  // end monitors before freeing memory
+  _channel.shutdown();
+
   delete[] _pvdata; 
 }
 
@@ -156,10 +159,18 @@ EpicsCAChannel::EpicsCAChannel(const char* channelName,
 
 EpicsCAChannel::~EpicsCAChannel()
 {
+  // Normally EpicsCA calls this before freeing resources - do it here incase it has not
+  shutdown();
+
+  ca_clear_channel(_epicsChanID);
+}
+
+void EpicsCAChannel::shutdown()
+{
   if (_connected != NotConnected && _monitor)
     ca_clear_subscription(_event);
 
-  ca_clear_channel(_epicsChanID);
+  _monitor = false;
 }
 
 void EpicsCAChannel::get()

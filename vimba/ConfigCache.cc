@@ -4,11 +4,14 @@
 
 #include "pds/config/VimbaConfigType.hh"
 #include "pds/utility/Appliance.hh"
+#include "pds/utility/ToEventWireScheduler.hh"
 #include "pdsdata/xtc/DetInfo.hh"
 
 using namespace Pds;
 
 enum {NumberOfConfigurationsForScanning=100};
+
+static const VmbUint32_t LARGE_PAYLOAD_THRESHOLD = 0x1800000;
 
 static TypeId __type(const Src& src)
 {
@@ -68,6 +71,15 @@ bool Vimba::ConfigCache::configure(bool apply)
       _configtc.damage.userBits(0x1);
       return false;
     } else {
+      // override the default traffic shaping for very large images
+      if (_cam.payloadSize() > LARGE_PAYLOAD_THRESHOLD) {
+        printf("Large image size of %u [%u] bytes - overriding traffic shaping!\n",
+               _cam.payloadSize(),
+               LARGE_PAYLOAD_THRESHOLD);
+        ToEventWireScheduler::setOverride(3);
+      } else {
+        ToEventWireScheduler::setOverride(0);
+      }
       return true;
     }
   } catch(VimbaException& e) {

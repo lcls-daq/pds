@@ -40,10 +40,12 @@ namespace Pds {
     void routine();
   public:
     static void setMaximum (unsigned);
+    static void setOverride(unsigned);
     static void setPhase   (unsigned);
     static void setInterval(unsigned); // microseconds
     static void shapeTmo   (bool);
   private:
+    static void calcMaximum();
     void _flush(InDatagram*);
     void _flush();
   public:

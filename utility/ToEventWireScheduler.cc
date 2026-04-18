@@ -89,13 +89,24 @@ static int      _idol_timeout  = 150;  // idol time [ms] which forces flush of q
 static int      _disable_buffer = 100; // time [ms] inserted between flushed L1 and Disable transition
 static unsigned _phase = 0;
 static unsigned _interval = 8000;  // time interval [us] for traffic shaping
+static unsigned _overriden_max = 0;  // overridden maxschedule
+static unsigned _non_overriden_max = _maxscheduled; // non overridden maxschedule
 
 static bool _shape_tmo = false;
 
-void ToEventWireScheduler::setMaximum (unsigned m) { _maxscheduled = m; }
+void ToEventWireScheduler::setMaximum (unsigned m) { _non_overriden_max = m; calcMaximum(); }
+void ToEventWireScheduler::setOverride(unsigned m) { _overriden_max = m; calcMaximum(); }
 void ToEventWireScheduler::setPhase   (unsigned m) { _phase = m; }
 void ToEventWireScheduler::setInterval(unsigned m) { _interval = m; }
 void ToEventWireScheduler::shapeTmo   (bool v) { _shape_tmo = v; }
+void ToEventWireScheduler::calcMaximum() {
+  if ((_overriden_max > 0) && (_overriden_max < _non_overriden_max)) {
+    _maxscheduled = _overriden_max;
+  } else {
+    _maxscheduled = _non_overriden_max;
+  }
+}
+
 
 ToEventWireScheduler::ToEventWireScheduler(Outlet& outlet,
              CollectionManager& collection,

@@ -45,7 +45,8 @@ void FrameBuffer::configure()
     for (size_t n=0; n<_nbuffers; n++) {
       _frames[n].buffer = _buffer + (payloadSize * n);
       _frames[n].bufferSize = payloadSize;
-      _frames[n].context[0] = this;
+      _frames[n].context[0] = _cam;
+      _frames[n].context[1] = this;
     }
 
     // register allocated frames
@@ -163,7 +164,7 @@ bool FrameBuffer::copyAs16BitStd(VmbFrame_t* frame, void* buffer)
 
 void VMB_CALL FrameBuffer::frameCallBack(const VmbHandle_t hcam, const VmbHandle_t hstream, VmbFrame_t* ptr)
 {
-  FrameBuffer* framebuf = reinterpret_cast<FrameBuffer*>(ptr->context[0]);
+  FrameBuffer* framebuf = reinterpret_cast<FrameBuffer*>(ptr->context[1]);
   // process the frame
   framebuf->process(ptr);
   // requeue frame

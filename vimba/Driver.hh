@@ -33,6 +33,7 @@ namespace Pds {
         void close();
         bool isOpen() const;
         bool isAcquiring() const;
+        bool imageCorrectionAvailable() const;
         bool imageCorrectionEnabled() const;
         void listFeatures() const;
         VmbBool_t reverseX() const;
@@ -145,7 +146,9 @@ namespace Pds {
         VmbInt64_t getIntStep(const char* name) const;
         double getDouble(const char* name) const;
         std::string getString(const char* name) const;
+        VmbBool_t isReadable(const char* name) const;
         VmbBool_t isWritable(const char* name) const;
+        VmbBool_t isAvailable(const char* name) const;
 
         bool setEnum(const char* name, const char* value);
         bool setBool(const char* name, VmbBool_t value);

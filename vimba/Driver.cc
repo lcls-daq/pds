@@ -99,17 +99,26 @@ bool Camera::isAcquiring() const
   }
 }
 
+bool Camera::imageCorrectionAvailable() const
+{
+  return isAvailable(VMB_CORRECTION_MODE);
+}
+
 bool Camera::imageCorrectionEnabled() const
 {
-  const char* mode = correctionMode();
-  if (strcmp(mode, VMB_MODE_ON) == 0) {
-    return true;
-  } else if (strcmp(mode, VMB_MODE_OFF) == 0) {
-    return false;
+  if (imageCorrectionAvailable()) {
+    const char* mode = correctionMode();
+    if (strcmp(mode, VMB_MODE_ON) == 0) {
+      return true;
+    } else if (strcmp(mode, VMB_MODE_OFF) == 0) {
+      return false;
+    } else {
+      std::stringstream desc;
+      desc << "Invalid correction mode: " << mode;
+      throw VimbaException(VmbErrorOther, desc.str());
+    }
   } else {
-    std::stringstream desc;
-    desc << "Invalid correction mode: " << mode;
-    throw VimbaException(VmbErrorOther, desc.str());
+    return false;
   }
 }
 
@@ -594,7 +603,7 @@ bool Camera::setImageFlip(VmbBool_t flipX, VmbBool_t flipY)
 
 bool Camera::setImageCorrections(VmbBool_t enabled, CorrectionType corr_type, CorrectionSet corr_set)
 {
-  if (isWritable(VMB_CORRECTION_MODE)) {
+  if (imageCorrectionAvailable()) {
     return setCorrectionsEnabled(enabled) && setCorrectionsType(corr_type) && setCorrectionsSet(corr_set);
   } else {
     return enabled == imageCorrectionEnabled();
@@ -1316,6 +1325,20 @@ std::string Camera::getString(const char* name) const
   }
 }
 
+VmbBool_t Camera::isReadable(const char* name) const
+{
+  VmbError_t err = VmbErrorSuccess;
+  VmbBool_t readable = VmbBoolFalse;
+  VmbBool_t writeable = VmbBoolFalse;
+
+  err = VmbFeatureAccessQuery(lookupHandle(name), name, &readable, &writeable);
+  if (err != VmbErrorSuccess) {
+    fprintf(stderr, "Failed to query read/write status of feature %s: %s\n", name, ErrorCodes::desc(err));
+  }
+
+  return readable;
+}
+
 VmbBool_t Camera::isWritable(const char* name) const
 {
   VmbError_t err = VmbErrorSuccess;
@@ -1328,6 +1351,20 @@ VmbBool_t Camera::isWritable(const char* name) const
   }
 
   return writeable;
+}
+
+VmbBool_t Camera::isAvailable(const char* name) const
+{
+  VmbError_t err = VmbErrorSuccess;
+  VmbBool_t readable = VmbBoolFalse;
+  VmbBool_t writeable = VmbBoolFalse;
+
+  err = VmbFeatureAccessQuery(lookupHandle(name), name, &readable, &writeable);
+  if (err != VmbErrorSuccess) {
+    fprintf(stderr, "Failed to query read/write status of feature %s: %s\n", name, ErrorCodes::desc(err));
+  }
+
+  return readable && writeable;
 }
 
 bool Camera::setEnum(const char* name, const char* value)

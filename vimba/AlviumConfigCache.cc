@@ -231,13 +231,15 @@ bool AlviumConfigCache::_configure(bool apply)
     printf("  Gain Selector:          %s\n", _cam.gainSelector());
     printf("  Gamma:                  %f\n", _cam.gamma());
     // show image correction information
-    printf("Correction information:\n");
-    printf("  Correction Mode:        %s\n", _cam.correctionMode());
-    printf("  Correction Selector:    %s\n", _cam.correctionSelector());
-    printf("  Correction Set:         %s\n", _cam.correctionSet());
-    printf("  Correction Set Default: %s\n", _cam.correctionSetDefault());
-    printf("  Correction Data Size:   %lld\n", _cam.correctionDataSize());
-    printf("  Correction Entry Type:  %lld\n", _cam.correctionEntryType());
+    if (_cam.imageCorrectionAvailable()) {
+      printf("Correction information:\n");
+      printf("  Correction Mode:        %s\n", _cam.correctionMode());
+      printf("  Correction Selector:    %s\n", _cam.correctionSelector());
+      printf("  Correction Set:         %s\n", _cam.correctionSet());
+      printf("  Correction Set Default: %s\n", _cam.correctionSetDefault());
+      printf("  Correction Data Size:   %lld\n", _cam.correctionDataSize());
+      printf("  Correction Entry Type:  %lld\n", _cam.correctionEntryType());
+    }
     // show device information
     printf("Device information:\n");
     printf("  Vendor name:            %s\n", _cam.deviceVendorName().c_str());

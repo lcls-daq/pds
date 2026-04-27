@@ -59,6 +59,7 @@ void Server::post(const void* p)
 
 #include "pds/pvdaq/BeamMonitorServer.hh"
 #include "pds/pvdaq/ControlsCameraServer.hh"
+#include "pds/pvdaq/VimbaCameraServer.hh"
 #include "pds/pvdaq/QuadAdcServer.hh"
 #include "pds/pvdaq/AcqirisServer.hh"
 
@@ -83,14 +84,23 @@ Server* Server::lookup(const char*    pvbase,
   case Pds::DetInfo::OrcaFl40:
   case Pds::DetInfo::TM6740:
   case Pds::DetInfo::Quartz4A150:
-  case Pds::DetInfo::Rayonix:
   case Pds::DetInfo::ControlsCamera:
+    s = new ControlsCamServer(pvbase,pvbase_alt,info,max_event_size,flags);
+    break;
+  case Pds::DetInfo::Rayonix:
+    s = new RayonixCamServer(pvbase,pvbase_alt,info,max_event_size,flags);
+    break;
   case Pds::DetInfo::StreakC7700:
+    s = new StreakCamServer(pvbase,pvbase_alt,info,max_event_size,flags);
+    break;
   case Pds::DetInfo::Archon:
-    s = new ControlsCameraServer(pvbase,pvbase_alt,info,max_event_size,flags);
+    s = new ArchonCamServer(pvbase,pvbase_alt,info,max_event_size,flags);
     break;
   case Pds::DetInfo::QuadAdc:
     s = new QuadAdcServer(pvbase,pvbase_alt,info,max_event_size,flags);
+    break;
+  case Pds::DetInfo::Alvium:
+    s = new AlviumCamServer(pvbase,pvbase_alt,info,max_event_size,flags);
     break;
   default:
     break;

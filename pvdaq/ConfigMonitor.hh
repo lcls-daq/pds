@@ -19,16 +19,27 @@ namespace Pds {
 
     class ConfigServer: public Pds_Epics::EpicsCA {
     public:
-      ConfigServer(const char*, ConfigMonitor*);
-      ConfigServer(const char*, ConfigMonitor*, bool);
+      enum Type { NUMERIC = 0, STR = 1, LONGSTR = 2, NONE = 3 };
+      ConfigServer(const char* name, ConfigMonitor* cfgmon);
+      ConfigServer(const char* name, ConfigMonitor* cfgmon, bool is_enum);
+      ConfigServer(const char* name, ConfigMonitor* cfgmon, bool is_enum,
+                   void* copyTo, size_t len);
+      ConfigServer(const char* name, ConfigMonitor* cfgmon, bool is_enum,
+                   void* copyTo, size_t len, Type type);
+
       ~ConfigServer();
     public:
       const char* name() const;
       int  fetch      (void* copyTo, size_t len);
       int  fetch_str  (void* copyTo, size_t len);
+      int  fetch      ();
+      bool check_fetch();
       void update     ();
     private:
-      char* _name;
+      char*  _name;
+      void*  _copyTo;
+      size_t _len;
+      Type   _type;
     };
   }
 }

@@ -30,14 +30,42 @@ void ConfigMonitor::updated()
 
 ConfigServer::ConfigServer(const char* name, ConfigMonitor* cfgmon) :
   Pds_Epics::EpicsCA (name, cfgmon),
-  _name(new char[strlen(name)+1])
+  _name(new char[strlen(name)+1]),
+  _copyTo(NULL),
+  _len(0),
+  _type(NONE)
 {
   strcpy(_name, name);
 }
 
 ConfigServer::ConfigServer(const char* name, ConfigMonitor* cfgmon, bool is_enum) :
   Pds_Epics::EpicsCA (name, cfgmon, 0, is_enum),
-  _name(new char[strlen(name)+1])
+  _name(new char[strlen(name)+1]),
+  _copyTo(NULL),
+  _len(0),
+  _type(NONE)
+{
+  strcpy(_name, name);
+}
+
+ConfigServer::ConfigServer(const char* name, ConfigMonitor* cfgmon, bool is_enum,
+                           void* copyTo, size_t len) :
+  Pds_Epics::EpicsCA (name, cfgmon, 0, is_enum),
+  _name(new char[strlen(name)+1]),
+  _copyTo(copyTo),
+  _len(len),
+  _type(NUMERIC)
+{
+  strcpy(_name, name);
+}
+
+ConfigServer::ConfigServer(const char* name, ConfigMonitor* cfgmon, bool is_enum,
+                           void* copyTo, size_t len, Type type) :
+  Pds_Epics::EpicsCA (name, cfgmon, 0, is_enum),
+  _name(new char[strlen(name)+1]),
+  _copyTo(copyTo),
+  _len(len),
+  _type(type)
 {
   strcpy(_name, name);
 }
@@ -95,6 +123,42 @@ int ConfigServer::fetch(void* payload, size_t len)
   default: printf("Unknown type %d\n", int(_channel.type())); result=-1; break;
   }
   return result;
+}
+
+int ConfigServer::fetch()
+{
+  int result = 0;
+  switch (_type) {
+    case NUMERIC:
+    case LONGSTR:
+      result = fetch(_copyTo, _len);
+      break;
+    case STR:
+      result = fetch_str(_copyTo, _len);
+      break;
+    case NONE:
+      printf("ConfigServer[%s] fetch: No storage address!\n", _channel.epicsName());
+      result = -1;
+      break;
+    default:
+      printf("ConfigServer[%s] fetch: Unknown type %d\n", _channel.epicsName(), _type);
+      result = -1;
+      break;
+    }
+
+  return result;
+}
+
+bool ConfigServer::check_fetch()
+{
+  if ((!connected()) || (fetch() < 0)) {
+    if (_type == STR || _type == LONGSTR) {
+      ((char*) _copyTo)[0] = '\0';
+    }
+    return true;
+  } else {
+    return false;
+  }
 }
 
 void ConfigServer::update() { _channel.get(); }

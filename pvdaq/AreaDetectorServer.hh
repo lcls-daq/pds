@@ -43,6 +43,8 @@ namespace Pds {
       uint32_t                    _depth;
       uint32_t                    _bytes;
       uint32_t                    _offset;
+      uint32_t                    _bin_x;
+      uint32_t                    _bin_y;
       uint32_t                    _roi_x_org;
       uint32_t                    _roi_x_len;
       uint32_t                    _roi_x_end;
@@ -55,6 +57,7 @@ namespace Pds {
       double                      _gain;
       double                      _xscale;
       double                      _yscale;
+      char*                       _trigger_mode;
       char*                       _manufacturer;
       char*                       _model;
       char*                       _serial_num;

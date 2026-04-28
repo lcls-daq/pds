@@ -33,6 +33,8 @@ AreaDetectorServer::AreaDetectorServer(const char*          pvbase,
   _depth        (0),
   _bytes        (0),
   _offset       (0),
+  _bin_x        (0),
+  _bin_y        (0),
   _roi_x_org    (0),
   _roi_x_len    (0),
   _roi_x_end    (0),
@@ -45,6 +47,7 @@ AreaDetectorServer::AreaDetectorServer(const char*          pvbase,
   _gain         (0.0),
   _xscale       (1.0),
   _yscale       (1.0),
+  _trigger_mode (new char[ENUM_PV_LEN]),
   _manufacturer (new char[EpicsCamConfigType::DESC_CHAR_MAX]),
   _model        (new char[EpicsCamConfigType::DESC_CHAR_MAX]),
   _serial_num   (new char[EpicsCamConfigType::DESC_CHAR_MAX]),
@@ -62,6 +65,7 @@ AreaDetectorServer::AreaDetectorServer(const char*          pvbase,
   _pool         (8),
   _context      (ca_current_context())
 {
+  _trigger_mode[0] = '\0';
   _manufacturer[0] = '\0';
   _model[0]        = '\0';
   _serial_num[0]   = '\0';
@@ -113,6 +117,8 @@ AreaDetectorServer::AreaDetectorServer(const char*          pvbase,
     CREATE_PV("BitsPerPixel_RBV", _pvimage, _depth);
     // gain config pv
     CREATE_PV("Gain_RBV", NULL, _gain);
+    // trigger mode enum pv
+    CREATE_ENUM_PV("TriggerMode_RBV", NULL, _trigger_mode, ENUM_PV_LEN);
     // model config pv
     CREATE_STR_PV("Model_RBV", NULL, _model, EpicsCamConfigType::DESC_CHAR_MAX);
     // manufacturer config pv
@@ -123,6 +129,10 @@ AreaDetectorServer::AreaDetectorServer(const char*          pvbase,
     CREATE_STR_PV("FirmwareVersion_RBV", NULL, _firmware_ver, EpicsCamConfigType::DESC_CHAR_MAX);
     // exposure config pv
     CREATE_PV("AcquireTime_RBV", NULL, _exposure);
+    // bin x config pv
+    CREATE_PV("BinX_RBV", NULL, _bin_x);
+    // bin y config pv
+    CREATE_PV("BinY_RBV", NULL, _bin_y);
     // roi x begin config pv
     CREATE_PV("MinX_RBV", NULL, _roi_x_org);
     // roi x len config pv
@@ -154,6 +164,7 @@ AreaDetectorServer::AreaDetectorServer(const char*          pvbase,
 
 AreaDetectorServer::~AreaDetectorServer()
 {
+  delete[] _trigger_mode;
   delete[] _manufacturer;
   delete[] _model;
   delete[] _serial_num;
@@ -334,10 +345,11 @@ Pds::InDatagram* AreaDetectorServer::fire(Pds::InDatagram* dg)
            "  bytes per pixel:  %u\n"
            "  gain:             %f\n"
            "  exposure:         %f\n"
+           "  binning:          x: %u, y: %u\n"
            "  roi (org, end):   x: (%u, %u), y: (%u, %u)\n",
            _manufacturer, _model, _serial_num, _firmware_ver,
            _width, _height, _depth, _bytes,
-           _gain, _exposure,
+           _gain, _exposure, _bin_x, _bin_y,
            _roi_x_org, _roi_x_end, _roi_y_org, _roi_y_end);
     if (_scale) {
       printf("  xscale:           %f\n"

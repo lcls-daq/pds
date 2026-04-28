@@ -22,7 +22,6 @@ AlviumCamServer::AlviumCamServer(const char*    pvbase,
   _correction_type(new char[ENUM_PV_LEN]),
   _correction_set(new char[ENUM_PV_LEN]),
   _pixel_mode(new char[ENUM_PV_LEN]),
-  _trigger_mode(new char[ENUM_PV_LEN]),
   _contrast_dark_limit(0.),
   _contrast_bright_limit(0.),
   _contrast_shape(0.),
@@ -50,7 +49,6 @@ AlviumCamServer::AlviumCamServer(const char*    pvbase,
   _correction_type[0] = '\0';
   _correction_set[0] = '\0';
   _pixel_mode[0] = '\0';
-  _trigger_mode[0] = '\0';
   _family[0] = '\0';
   _manufacturer_id[0] = '\0';
   _dev_version[0] = '\0';
@@ -70,8 +68,6 @@ AlviumCamServer::AlviumCamServer(const char*    pvbase,
   CREATE_ENUM_PV("GC_CorrectionSet_RBV", NULL, _correction_set, ENUM_PV_LEN);
   // Alvium pixel mode/format
   CREATE_ENUM_PV("PixelFormat_RBV", NULL, _pixel_mode, ENUM_PV_LEN);
-  // Alvium trigger mode
-  CREATE_ENUM_PV("TriggerMode_RBV", NULL, _trigger_mode, ENUM_PV_LEN);
   // Alvium contrast dark limit
   CREATE_PV("GC_ContrastDarkLimit_RBV", NULL, _contrast_dark_limit);
   // Alvium contrast bright limit
@@ -101,7 +97,6 @@ AlviumCamServer::~AlviumCamServer()
   delete[] _correction_type;
   delete[] _correction_set;
   delete[] _pixel_mode;
-  delete[] _trigger_mode;
   delete[] _family;
   delete[] _manufacturer_id;
   delete[] _dev_version;
@@ -218,12 +213,23 @@ bool AlviumCamServer::configure()
 
 void AlviumCamServer::show_configuration()
 {
+  std::string reverse_x = enum_to_str<AlviumConfigType::VmbBool>(_reverse_x_ddl);
+  std::string reverse_y = enum_to_str<AlviumConfigType::VmbBool>(_reverse_y_ddl);
+  std::string contrast = enum_to_str<AlviumConfigType::VmbBool>(_contrast_ddl);
+  std::string correction = enum_to_str<AlviumConfigType::VmbBool>(_correction_ddl);
+  std::string correction_type = enum_to_str<AlviumConfigType::ImgCorrectionType>(_correction_type_ddl);
+  std::string correction_set = enum_to_str<AlviumConfigType::ImgCorrectionSet>(_correction_set_ddl);
+  std::string roi_mode = enum_to_str<AlviumConfigType::RoiMode>(_roi_mode_ddl);
+  std::string pixel_mode = enum_to_str<AlviumConfigType::PixelMode>(_pixel_mode_ddl);
+  std::string trigger_mode = enum_to_str<AlviumConfigType::TriggerMode>(_trigger_mode_ddl);
+
   printf("  reverse x:        %s\n"
          "  reverse y:        %s\n"
          "  contrast:         %s\n"
          "  correction:       %s\n"
          "  correction type:  %s\n"
          "  correction set:   %s\n"
+         "  roi mode:         %s\n"
          "  pixel format:     %s\n"
          "  trigger mode:     %s\n"
          "  con dark limit:   %u\n"
@@ -235,14 +241,15 @@ void AlviumCamServer::show_configuration()
          "  manufacturer id:  %s\n"
          "  device id:        %s\n"
          "  firmware id:      %s\n",
-         _reverse_x,
-         _reverse_y,
-         _contrast,
-         _correction,
-         _correction_type,
-         _correction_set,
-         _pixel_mode,
-         _trigger_mode,
+         reverse_x.c_str(),
+         reverse_y.c_str(),
+         contrast.c_str(),
+         correction.c_str(),
+         correction_type.c_str(),
+         correction_set.c_str(),
+         roi_mode.c_str(),
+         pixel_mode.c_str(),
+         trigger_mode.c_str(),
          (uint32_t) _contrast_dark_limit,
          (uint32_t) _contrast_bright_limit,
          (uint32_t) _contrast_shape,

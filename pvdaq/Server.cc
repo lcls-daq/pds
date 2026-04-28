@@ -62,6 +62,7 @@ void Server::post(const void* p)
 #include "pds/pvdaq/VimbaCameraServer.hh"
 #include "pds/pvdaq/QuadAdcServer.hh"
 #include "pds/pvdaq/AcqirisServer.hh"
+#include "pds/pvdaq/AndorCameraServer.hh"
 
 Server* Server::lookup(const char*    pvbase,
                        const char*    pvbase_alt,
@@ -101,6 +102,12 @@ Server* Server::lookup(const char*    pvbase,
     break;
   case Pds::DetInfo::Alvium:
     s = new AlviumCamServer(pvbase,pvbase_alt,info,max_event_size,flags);
+    break;
+  case Pds::DetInfo::Zyla:
+    s = new ZylaCamServer(pvbase,pvbase_alt,info,max_event_size,flags);
+    break;
+  case Pds::DetInfo::iStar:
+    s = new iStarCamServer(pvbase,pvbase_alt,info,max_event_size,flags);
     break;
   default:
     break;

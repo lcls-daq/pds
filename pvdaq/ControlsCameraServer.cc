@@ -113,12 +113,14 @@ bool RayonixCamServer::configure()
 
 void RayonixCamServer::show_configuration()
 {
+  std::string rnx_mode = enum_to_str<RayonixConfigType::ReadoutMode>(_rnx_mode_ddl);
+
   printf("  binning mode:     %s\n"
          "  trigger mode:     %s\n"
          "  readout mode:     %s\n",
          _rnx_bin,
          _rnx_trig,
-         _rnx_mode);
+         rnx_mode.c_str());
 }
 
 Pds::Xtc* RayonixCamServer::alloc_config_type(Pds::InDatagram* dg)
@@ -309,11 +311,25 @@ bool StreakCamServer::configure()
 
 void StreakCamServer::show_configuration()
 {
+  std::string strk_mode  = enum_to_str<StreakConfigType::DeviceMode>(_strk_mode_ddl);
+  std::string strk_gate  = enum_to_str<StreakConfigType::GateMode>(_strk_gate_ddl);
+  std::string strk_shut  = enum_to_str<StreakConfigType::ShutterMode>(_strk_shut_ddl);
+  std::string strk_trig  = enum_to_str<StreakConfigType::TriggerMode>(_strk_trig_ddl);
+  std::string strk_scale = enum_to_str<StreakConfigType::CalibScale>(_strk_scale_ddl);
+
   printf("  time range:       %s\n"
-         "  calib scale:      %d\n"
+         "  device mode:      %s\n"
+         "  gate mode:        %s\n"
+         "  shutter mode:     %s\n"
+         "  trigger mode:     %s\n"
+         "  calib scale:      %s\n"
          "  calib constants: ",
          _strk_time,
-         _strk_scale_ddl);
+         strk_mode.c_str(),
+         strk_gate.c_str(),
+         strk_shut.c_str(),
+         strk_trig.c_str(),
+         strk_scale.c_str());
   for (int i=0; i<StreakConfigType::NumCalibConstants; i++) {
     printf(" %g", _calib[i]);
   }
@@ -513,6 +529,10 @@ bool ArchonCamServer::configure()
 
 void ArchonCamServer::show_configuration()
 {
+  std::string arch_pwr = enum_to_str<ArchonConfigType::Switch>(_arch_pwr_ddl);
+  std::string arch_bias = enum_to_str<ArchonConfigType::Switch>(_arch_bias_ddl);
+  std::string arch_chan = enum_to_str<ArchonConfigType::BiasChannelId>(_arch_chan_ddl);
+
   printf("  ccd power:        %s\n"
          "  ccd bias:         %s\n"
          "  ccd bias chan:    %s\n"
@@ -529,8 +549,8 @@ void ArchonCamServer::show_configuration()
          "  sensor taps:      %u\n"
          "  linescan mode:    %s\n"
          "  num batches:      %u\n",
-         _arch_pwr, _arch_bias,
-         _arch_chan, _arch_volt,
+         arch_pwr.c_str(), arch_bias.c_str(),
+         arch_chan.c_str(), _arch_volt,
          _arch_nonint,
          _arch_psweep, _arch_isweep,
          _arch_skip, _arch_at,

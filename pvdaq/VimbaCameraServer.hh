@@ -23,7 +23,6 @@ namespace Pds {
       char* _correction_type;
       char* _correction_set;
       char* _pixel_mode;
-      char* _trigger_mode;
       double _contrast_dark_limit;
       double _contrast_bright_limit;
       double _contrast_shape;

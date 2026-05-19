@@ -121,7 +121,7 @@ void Gige::listDevices(unsigned long wait)
 }
 
 Gige::Gige(const std::string& host, unsigned short port, unsigned long timeout, unsigned long wait) :
-  Comm(host, port, timeout),
+  Comm(CommType::GIGE, host, port, timeout),
   info_(nullptr),
   conn_(nullptr)
 {
@@ -190,6 +190,7 @@ void Gige::info() const noexcept
   std::cout << " Serial Number:    " << info_->SerialNumber << std::endl;
   std::cout << " Firmware Version: " << info_->FirmwareVersion << std::endl;
   std::cout << " Hardware Version: " << info_->HardwareVersion << std::endl;
+  std::cout << std::endl;
 }
 
 uint32_t Gige::sendCmd(uint16_t cmd, uint16_t addr, uint32_t data)

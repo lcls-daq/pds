@@ -16,6 +16,15 @@ SubRegister::SubRegister(std::string r,
   maxV(5)
 {}
 
+/*SubRegister::SubRegister(SubRegister& other) :
+  regname(other.regname),
+  start_bit(other.start_bit),
+  width(other.width),
+  writable(other.writable),
+  minV(other.minV),
+  maxV(other.maxV)
+{}*/
+
 uint32_t SubRegister::maxValue() const
 {
   uint64_t value = 1;
@@ -29,9 +38,11 @@ double SubRegister::resolution() const
 
 Device::Device(std::shared_ptr<Comm> comm,
                const std::map<std::string, uint16_t>& regnames,
-               const std::map<std::string, SubRegister>& subregnames) :
+               const std::map<std::string, SubRegister>& subregnames,
+               const std::map<std::string, uint32_t> defaults) :
   regnames_(regnames),
   subregnames_(subregnames),
+  defaults_(defaults),
   comm_(comm)
 {}
 
@@ -81,6 +92,31 @@ void Device::setSubRegister(const SubRegister& subreg, uint32_t value)
   } else {
     throw ReadOnlyRegister(subreg.regname);
   }
+}
+
+CommType Device::commType() const
+{
+  return comm_->type();
+}
+
+std::string Device::commName() const
+{
+  return comm_->name();
+}
+
+void Device::addRegister(const std::string& regname, uint16_t address)
+{
+  regnames_.emplace(regname, address);
+}
+
+void Device::addSubRegister(const std::string& regname, const SubRegister& subreg)
+{
+  subregnames_.emplace(regname, subreg);
+}
+
+void Device::addDefault(const std::string& regname, uint32_t value)
+{
+  defaults_.emplace(regname, value);
 }
 
 uint16_t Device::lookupRegister(const std::string& regname) const

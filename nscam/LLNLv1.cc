@@ -143,10 +143,13 @@ static std::map<std::string, Pds::NsCam::SubRegister> SUBREGNAMES = {
   {"MON_VRST", {"ADC5_DATA_4", 16, 16, false}},
 };
 
+static std::map<std::string, uint32_t> DEFAULTS = {
+};
+
 using namespace Pds::NsCam;
 
-LLNLv1::LLNLv1(std::shared_ptr<Comm> comm) :
-  Board(BoardType::LLNL_V1, comm, REG_NAMES, SUBREGNAMES)
+LLNLv1::LLNLv1(SensorType stype, std::shared_ptr<Comm> comm) :
+  Board(BoardType::LLNL_V1, stype, comm, REG_NAMES, SUBREGNAMES, DEFAULTS)
 {}
 
 void LLNLv1::initBoard()

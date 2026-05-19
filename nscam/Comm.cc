@@ -23,8 +23,19 @@ std::shared_ptr<Comm> Comm::create(const std::string& host, unsigned short port,
   }
 }
 
-Comm::Comm(const std::string& host, unsigned short port, unsigned long timeout) :
+Comm::Comm(CommType ctype, const std::string& host, unsigned short port, unsigned long timeout) :
+  ctype_(ctype),
   host_(host),
   port_(port),
   timeout_(timeout)
 {}
+
+CommType Comm::type() const
+{
+  return ctype_;
+}
+
+std::string Comm::name() const
+{
+  return toString(ctype_);
+}

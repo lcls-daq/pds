@@ -372,7 +372,7 @@ void SerialPacket::data(uint32_t data)
 using namespace Pds::NsCam;
 
 RS422::RS422(const std::string& device, speed_t baudrate, unsigned long timeout) :
-  Comm(device, 0, timeout/100),
+  Comm(CommType::RS422, device, 0, timeout/100),
   fd_(-1),
   baudrate_(baudrate)
 {
@@ -445,6 +445,7 @@ void RS422::info() const noexcept
     std::cout << " c_cflag:          0x" << tty.c_cflag << std::endl;
     std::cout << " c_lflag:          0x" << tty.c_lflag << std::endl;
   }
+  std::cout << std::endl;
   // restore i/o formatting
   std::cout.flags(fmt);
 }

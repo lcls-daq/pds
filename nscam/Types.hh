@@ -14,6 +14,11 @@
     } \
   }
 
+#define SENSORS(F) \
+  F(SensorType,DAEDALUS) \
+  F(SensorType,ICARUS) \
+  F(SensorType,ICARUS2)
+
 #define BOARDS(F) \
   F(BoardType,LLNL_V1) \
   F(BoardType,LLNL_V4)
@@ -24,6 +29,7 @@
 
 namespace Pds {
   namespace NsCam {
+    CREATE_ENUM(SENSORS, SensorType)
     CREATE_ENUM(BOARDS, BoardType)
     CREATE_ENUM(COMMS, CommType)
   }
@@ -32,6 +38,7 @@ namespace Pds {
 #undef AS_ENUM
 #undef AS_STRING_CASE
 #undef CREATE_ENUM
+#undef SENSORS
 #undef BOARDS
 #undef COMMS
 

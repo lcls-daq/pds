@@ -13,7 +13,7 @@ namespace Pds {
       static void listDevices();
       static std::shared_ptr<Comm> create(const std::string& host, unsigned short port, CommType ctype);
 
-      Comm(const std::string& host, unsigned short port, unsigned long timeout);
+      Comm(CommType ctype, const std::string& host, unsigned short port, unsigned long timeout);
       virtual ~Comm() = default;
 
       virtual uint32_t sendCmd(uint16_t cmd, uint16_t addr, uint32_t data=0) = 0;
@@ -21,7 +21,11 @@ namespace Pds {
       virtual bool closeDevice() noexcept = 0;
       virtual void info() const noexcept = 0;
 
+      virtual CommType type() const;
+      virtual std::string name() const;
+
     protected:
+      CommType       ctype_;
       std::string    host_;
       unsigned short port_;      
       unsigned long  timeout_;

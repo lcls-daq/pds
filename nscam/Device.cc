@@ -39,10 +39,24 @@ double SubRegister::resolution() const
 Device::Device(std::shared_ptr<Comm> comm,
                const std::map<std::string, uint16_t>& regnames,
                const std::map<std::string, SubRegister>& subregnames,
-               const std::map<std::string, uint32_t> defaults) :
+               const std::map<std::string, uint32_t>& defaults) :
   regnames_(regnames),
   subregnames_(subregnames),
   defaults_(defaults),
+  comm_(comm)
+{}
+
+Device::Device(std::shared_ptr<Comm> comm,
+               const std::map<std::string, uint16_t>& regnames,
+               const std::map<std::string, SubRegister>& subregnames,
+               const std::map<std::string, uint32_t>& defaults,
+               const std::map<std::string, std::string>& aliases,
+               const std::map<std::string, std::string>& monitors) :
+  regnames_(regnames),
+  subregnames_(subregnames),
+  defaults_(defaults),
+  aliases_(aliases),
+  monitors_(monitors),
   comm_(comm)
 {}
 
@@ -121,7 +135,8 @@ void Device::addDefault(const std::string& regname, uint32_t value)
 
 uint16_t Device::lookupRegister(const std::string& regname) const
 {
-  auto it = regnames_.find(regname);
+  auto alias = aliases_.find(regname);
+  auto it = regnames_.find(alias == aliases_.end() ? regname : alias->second);
   if (it == regnames_.end()) {
     throw InvalidRegister(regname);
   }
@@ -131,7 +146,8 @@ uint16_t Device::lookupRegister(const std::string& regname) const
 
 SubRegister& Device::lookupSubRegister(const std::string& subregname)
 {
-  auto it = subregnames_.find(subregname);
+  auto alias = aliases_.find(subregname);
+  auto it = subregnames_.find(alias == aliases_.end() ? subregname : alias->second);
   if (it == subregnames_.end()) {
     throw InvalidRegister(subregname);
   }

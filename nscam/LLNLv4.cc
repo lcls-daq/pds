@@ -137,10 +137,98 @@ static std::map<std::string, Pds::NsCam::SubRegister> SUBREGNAMES = {
 static std::map<std::string, uint32_t> DEFAULTS = {
 };
 
+static std::map<std::string, std::string> ICARUS_ALIASES = {
+  {"HST_A_PDELAY", "DACA"},
+  {"HST_A_NDELAY", "DACB"},
+  {"HST_B_PDELAY", "DACC"},
+  {"HST_B_NDELAY", "DACD"},
+  {"HST_RO_IBIAS", "DACE"},
+  {"HST_RO_NC_IBIAS", "DACE"},
+  {"HST_OSC_CTL", "DACF"},
+  {"VAB", "DACG"},
+  {"VRST", "DACH"},
+  {"MON_PRES_MINUS", "MON_CH1"},
+  {"MON_PRES_PLUS", "MON_CH2"},
+  {"MON_TEMP", "MON_CH3"},
+  {"MON_COL_TOP_IBIAS_IN", "MON_CH4"},
+  {"MON_HST_OSC_R_BIAS", "MON_CH5"},
+  {"MON_VAB", "MON_CH6"},
+  {"MON_HST_RO_IBIAS", "MON_CH7"},
+  {"MON_HST_RO_NC_IBIAS", "MON_CH7"},
+  {"MON_VRST", "MON_CH8"},
+  {"MON_COL_BOT_IBIAS_IN", "MON_CH9"},
+  {"MON_HST_A_PDELAY", "MON_CH10"},
+  {"MON_HST_B_NDELAY", "MON_CH11"},
+  {"DOSIMETER", "MON_CH12"},
+  {"MON_HST_OSC_VREF_IN", "MON_CH13"},
+  {"MON_HST_B_PDELAY", "MON_CH14"},
+  {"MON_HST_OSC_CTL", "MON_CH15"},
+  {"MON_HST_A_NDELAY", "MON_CH16"},
+  {"MON_CHA", "MON_CH10"},
+  {"MON_CHB", "MON_CH16"},
+  {"MON_CHC", "MON_CH14"},
+  {"MON_CHD", "MON_CH11"},
+  {"MON_CHE", "MON_CH7"},
+  {"MON_CHF", "MON_CH15"},
+  {"MON_CHG", "MON_CH6"},
+  {"MON_CHH", "MON_CH8"},
+};
+
+static std::map<std::string, std::string> DAEDALUS_ALIASES = {
+  {"HST_OSC_VREF_IN", "DACC"},
+  {"HST_OSC_CTL", "DACE"},
+  {"COL_TST_IN", "DACF"},
+  {"VAB", "DACG"},
+  {"VRST", "DACH"},
+  {"MON_PRES_MINUS", "MON_CH1"},
+  {"MON_PRES_PLUS", "MON_CH2"},
+  {"MON_TEMP", "MON_CH3"},
+  {"MON_VAB", "MON_CH6"},
+  {"MON_HST_OSC_CTL", "MON_CH7"},
+  {"MON_TSENSE_OUT", "MON_CH10"},
+  {"MON_BGREF", "MON_CH11"},
+  {"DOSIMETER", "MON_CH12"},
+  {"MON_HST_RO_NC_IBIAS", "MON_CH13"},
+  {"MON_HST_OSC_VREF_IN", "MON_CH14"},
+  {"MON_COL_TST_IN", "MON_CH15"},
+  {"MON_HST_OSC_PBIAS_PAD", "MON_CH16"},
+  {"MON_CHC", "MON_CH14"},
+  {"MON_CHE", "MON_CH7"},
+  {"MON_CHF", "MON_CH15"},
+  {"MON_CHG", "MON_CH6"},
+  {"MON_CHH", "MON_CH8"},
+};
+
+static std::map<std::string, std::string> ICARUS_MONITORS = {
+  {"MON_CH10", "DACA"},
+  {"MON_CH16", "DACB"},
+  {"MON_CH14", "DACC"},
+  {"MON_CH11", "DACD"},
+  {"MON_CH7", "DACE"},
+  {"MON_CH15", "DACF"},
+  {"MON_CH6", "DACG"},
+  {"MON_CH8", "DACH"},
+};
+
+static std::map<std::string, std::string> DAEDALUS_MONITORS = {
+  {"MON_CH14", "DACC"},
+  {"MON_CH7", "DACE"},
+  {"MON_CH15", "DACF"},
+  {"MON_CH6", "DACG"},
+  {"MON_CH8", "DACH"},
+};
+
 using namespace Pds::NsCam;
 
 LLNLv4::LLNLv4(SensorType stype, std::shared_ptr<Comm> comm) :
-  Board(BoardType::LLNL_V4, stype, comm, REG_NAMES, SUBREGNAMES, DEFAULTS)
+  Board(BoardType::LLNL_V4,
+        stype,
+        comm,
+        REG_NAMES,
+        SUBREGNAMES,
+        DEFAULTS,
+        stype == SensorType::DAEDALUS ? DAEDALUS_ALIASES : ICARUS_ALIASES,
+        stype == SensorType::DAEDALUS ? DAEDALUS_MONITORS : ICARUS_MONITORS)
 {}
 
 void LLNLv4::initBoard()
@@ -174,4 +262,9 @@ void LLNLv4::configADCs()
   setRegister("ADC2_CONFIG_DATA", 0x81A801FF);
   setRegister("ADC3_CONFIG_DATA", 0x81A801FF);
   setRegister("ADC4_CONFIG_DATA", 0x81A801FF);
+}
+
+void LLNLv4::initPots()
+{
+
 }

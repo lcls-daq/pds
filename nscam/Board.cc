@@ -25,8 +25,10 @@ Board::Board(BoardType btype,
              std::shared_ptr<Comm> comm,
              const std::map<std::string, uint16_t>& regnames,
              const std::map<std::string, SubRegister>& subregnames,
-             const std::map<std::string, uint32_t>& defaults) :
-  Device(comm, regnames, subregnames, defaults),
+             const std::map<std::string, uint32_t>& defaults,
+             const std::map<std::string, std::string>& aliases,
+             const std::map<std::string, std::string>& monitors) :
+  Device(comm, regnames, subregnames, defaults, aliases, monitors),
   btype_(btype),
   stype_(stype),
   vref_(0.),

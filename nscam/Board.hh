@@ -15,7 +15,9 @@ namespace Pds {
             std::shared_ptr<Comm> comm,
             const std::map<std::string, uint16_t>& regnames,
             const std::map<std::string, SubRegister>& subregnames,
-            const std::map<std::string, uint32_t>& defaults);
+            const std::map<std::string, uint32_t>& defaults,
+            const std::map<std::string, std::string>& aliases,
+            const std::map<std::string, std::string>& monitors);
       virtual ~Board() = default;
 
       virtual void info() const;
@@ -29,6 +31,7 @@ namespace Pds {
       virtual uint32_t adc5_mult() const;
 
       virtual void initBoard() = 0;
+      virtual void initPots() = 0;
 
       virtual void clearStatus() = 0;
       virtual void configADCs() = 0;

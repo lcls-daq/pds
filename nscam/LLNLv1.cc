@@ -146,10 +146,72 @@ static std::map<std::string, Pds::NsCam::SubRegister> SUBREGNAMES = {
 static std::map<std::string, uint32_t> DEFAULTS = {
 };
 
+static std::map<std::string, std::string> ICARUS_ALIASES = {
+  {"COL_BOT_IBIAS_IN", "POT1"},
+  {"HST_A_PDELAY", "POT2"},
+  {"HST_B_NDELAY", "POT3"},
+  {"HST_RO_IBIAS", "POT4"},
+  {"HST_OSC_VREF_IN", "POT5"},
+  {"HST_B_PDELAY", "POT6"},
+  {"HST_OSC_CTL", "POT7"},
+  {"HST_A_NDELAY", "POT8"},
+  {"COL_TOP_IBIAS_IN", "POT9"},
+  {"HST_OSC_R_BIAS", "POT10"},
+  {"VAB", "POT11"},
+  {"HST_RO_NC_IBIAS", "POT12"},
+  {"VRST", "POT13"},
+  {"MON_HST_A_PDELAY", "MON_CH2"},
+  {"MON_HST_B_NDELAY", "MON_CH3"},
+  {"MON_HST_RO_IBIAS", "MON_CH4"},
+  {"MON_HST_OSC_VREF_IN", "MON_CH5"},
+  {"MON_HST_B_PDELAY", "MON_CH6"},
+  {"MON_HST_OSC_CTL", "MON_CH7"},
+  {"MON_HST_A_NDELAY", "MON_CH8"},
+};
+
+static std::map<std::string, std::string> DAEDALUS_ALIASES = {
+  {"HST_OSC_CTL", "POT4"},
+  {"HST_RO_NC_IBIAS", "POT5"},
+  {"HST_OSC_VREF_IN", "POT6"},
+  {"VAB", "POT11"},
+  {"MON_TSENSEOUT", "MON_CH2"},
+  {"MON_BGREF", "MON_CH3"},
+  {"MON_HST_OSC_CTL", "MON_CH4"},
+  {"MON_HST_RO_NC_IBIAS", "MON_CH5"},
+  {"MON_HST_OSC_VREF_IN", "MON_CH6"},
+  {"MON_COL_TST_IN", "MON_CH7"},
+  {"MON_HST_OSC_PBIAS_PAD", "MON_CH8"},
+};
+
+static std::map<std::string, std::string> ICARUS_MONITORS = {
+  {"MON_CH2", "POT2"},
+  {"MON_CH3", "POT3"},
+  {"MON_CH4", "POT4"},
+  {"MON_CH5", "POT5"},
+  {"MON_CH6", "POT6"},
+  {"MON_CH7", "POT7"},
+  {"MON_CH8", "POT8"},
+  {"MON_VRST", "POT13"},
+};
+
+static std::map<std::string, std::string> DAEDALUS_MONITORS = {
+  {"MON_CH4", "POT4"},
+  {"MON_CH5", "POT5"},
+  {"MON_CH6", "POT6"},
+  {"MON_VRST", "POT13"},
+};
+
 using namespace Pds::NsCam;
 
 LLNLv1::LLNLv1(SensorType stype, std::shared_ptr<Comm> comm) :
-  Board(BoardType::LLNL_V1, stype, comm, REG_NAMES, SUBREGNAMES, DEFAULTS)
+  Board(BoardType::LLNL_V1,
+        stype,
+        comm,
+        REG_NAMES,
+        SUBREGNAMES,
+        DEFAULTS,
+        stype == SensorType::DAEDALUS ? DAEDALUS_ALIASES : ICARUS_ALIASES,
+        stype == SensorType::DAEDALUS ? DAEDALUS_MONITORS : ICARUS_MONITORS)
 {}
 
 void LLNLv1::initBoard()
@@ -196,4 +258,9 @@ void LLNLv1::configADCs()
   setRegister("ADC3_CONFIG_DATA", 0x81A801FF);
   setRegister("ADC4_CONFIG_DATA", 0x81A801FF);
   setRegister("ADC5_CONFIG_DATA", 0x81A883FF);
+}
+
+void LLNLv1::initPots()
+{
+
 }

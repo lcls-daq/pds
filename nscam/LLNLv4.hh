@@ -11,6 +11,7 @@ namespace Pds {
       virtual ~LLNLv4() = default;
 
       virtual void initBoard() override;
+      virtual void initPots() override;
 
       virtual void clearStatus() override;
       virtual void configADCs() override;

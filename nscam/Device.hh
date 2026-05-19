@@ -33,7 +33,13 @@ namespace Pds {
       Device(std::shared_ptr<Comm> comm,
              const std::map<std::string, uint16_t>& regnames,
              const std::map<std::string, SubRegister>& subregnames,
-             const std::map<std::string, uint32_t> defaults);
+             const std::map<std::string, uint32_t>& defaults);
+      Device(std::shared_ptr<Comm> comm,
+             const std::map<std::string, uint16_t>& regnames,
+             const std::map<std::string, SubRegister>& subregnames,
+             const std::map<std::string, uint32_t>& defaults,
+             const std::map<std::string, std::string>& aliases,
+             const std::map<std::string, std::string>& monitors);
       virtual ~Device() = default;
 
       virtual uint32_t getRegister(const std::string& regname);
@@ -60,6 +66,8 @@ namespace Pds {
       std::map<std::string, uint16_t> regnames_;
       std::map<std::string, SubRegister> subregnames_;
       std::map<std::string, uint32_t> defaults_;
+      std::map<std::string, std::string> aliases_;
+      std::map<std::string, std::string> monitors_;
       std::shared_ptr<Comm> comm_;
     };
   }

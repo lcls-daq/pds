@@ -62,6 +62,12 @@ namespace Pds {
       BoardError(const std::string& error);
       ~BoardError() noexcept;
     };
+
+    class PotError : public NsCamException {
+    public:
+      PotError(const std::string& potname, const std::string& error);
+      ~PotError() noexcept;
+    };
   }
 }
 

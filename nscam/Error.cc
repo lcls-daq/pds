@@ -104,3 +104,10 @@ BoardError::BoardError(const std::string& error) :
 
 BoardError::~BoardError() noexcept
 {}
+
+PotError::PotError(const std::string& potname, const std::string& error) :
+  NsCamException(error, "Problem with " + potname)
+{}
+
+PotError::~PotError() noexcept
+{}

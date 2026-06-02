@@ -3,7 +3,9 @@
 
 #include <iostream>
 #include <sstream>
+#include <vector>
 #include <arpa/inet.h>
+#include <unistd.h>
 
 #pragma pack(push)
 #pragma pack(2)
@@ -65,7 +67,7 @@ void GigePacket::data(uint32_t data)
   data_ = htonl(data);
 }
 
-static std::string ip2str(unsigned char (&ipaddr)[4])
+static std::string ip2str(const unsigned char (&ipaddr)[4])
 {
   std::stringstream ipsstr;
   ipsstr << int(ipaddr[0]) << ".";
@@ -76,7 +78,7 @@ static std::string ip2str(unsigned char (&ipaddr)[4])
   return ipsstr.str();
 }
 
-static std::string mac2str(unsigned char (&macaddr)[6])
+static std::string mac2str(const unsigned char (&macaddr)[6])
 {
   std::stringstream macstr;
   for (int m=0; m<6; m++) {
@@ -105,15 +107,18 @@ void Gige::listDevices(unsigned long wait)
       std::cout << "Found " << num_cards << " devices:" << std::endl;
       for (unsigned long n=0; n<num_cards; n++) {
         std::cout << "====================" << std::endl;
-        std::cout << " Ip Address:       " << ip2str(info->IPAddr) << std::endl;
-        std::cout << " Control Port:     " << info->ControlPort << std::endl;
-        std::cout << " Timeout:          " << info->Timeout << std::endl;
-        std::cout << " HTTP Port:        " << info->HTTPPort << std::endl;
-        std::cout << " MAC Address:      " << mac2str(info->MACAddr) << std::endl;
-        std::cout << " Netmask:          " << ip2str(info->SubNet) << std::endl;
-        std::cout << " Gateway:          " << ip2str(info->Gateway) << std::endl;
-        std::cout << " Serial Number:    " << info->SerialNumber << std::endl;
+        std::cout << " Ip Address:       " << ip2str(info[n].IPAddr) << std::endl;
+        std::cout << " Control Port:     " << info[n].ControlPort << std::endl;
+        std::cout << " Timeout:          " << info[n].Timeout << std::endl;
+        std::cout << " HTTP Port:        " << info[n].HTTPPort << std::endl;
+        std::cout << " MAC Address:      " << mac2str(info[n].MACAddr) << std::endl;
+        std::cout << " Netmask:          " << ip2str(info[n].SubNet) << std::endl;
+        std::cout << " Gateway:          " << ip2str(info[n].Gateway) << std::endl;
+        std::cout << " Serial Number:    " << info[n].SerialNumber << std::endl;
       }
+
+      // free the memory for info
+      ZestETM1FreeCards(info);
     }
   } else {
     std::cout << "Problem calling ZestETM1Init: " << GigeException::err2str(status) << std::endl;
@@ -122,7 +127,6 @@ void Gige::listDevices(unsigned long wait)
 
 Gige::Gige(const std::string& host, unsigned short port, unsigned long timeout, unsigned long wait) :
   Comm(CommType::GIGE, host, port, timeout),
-  info_(nullptr),
   conn_(nullptr)
 {
   ZESTETM1_STATUS status = ZestETM1Init();
@@ -130,23 +134,38 @@ Gige::Gige(const std::string& host, unsigned short port, unsigned long timeout, 
     throw GigeException(status, "Problem calling ZestETM1Init");
   }
 
-  unsigned long num_cards;
-  ZESTETM1_CARD_INFO* info;
-  status = ZestETM1CountCards(&num_cards, &info, wait);
-  if (status != ZESTETM1_SUCCESS) {
-    throw GigeException(status, "Problem calling ZestETM1CountCards");
-  }
+  bool found = false;
+  unsigned long attempt = 0;
+  do {
+    unsigned long num_cards = 0;
+    ZESTETM1_CARD_INFO* info = NULL;
+    status = ZestETM1CountCards(&num_cards, &info, 1000);
+    if (status != ZESTETM1_SUCCESS) {
+      throw GigeException(status, "Problem calling ZestETM1CountCards");
+    }
 
-  // look for cards with requested ip
-  for (unsigned long n=0; n<num_cards; n++) {
-    if (ip2str(info[n].IPAddr) == host_) {
-      info_ = &info[n];
+    // look for cards with requested ip
+    for (unsigned long n=0; n<num_cards; n++) {
+      if (ip2str(info[n].IPAddr) == host_) {
+        info_ = info[n];
+        found = true;
+        break;
+      }
+    }
+
+    // free the memory for info structs from ZestETM1CountCards
+    ZestETM1FreeCards(info);
+
+    // found the camera so break
+    if (found) {
       break;
     }
-  }
 
-  // if now gige was found this will be null
-  if (!info_) {
+    attempt++;
+  } while (attempt < wait);
+
+  // if no gige was found this will be null
+  if (!found) {
     throw GigeException(host_, "No camera found with requested hostname"); 
   }
 
@@ -180,16 +199,16 @@ void Gige::info() const noexcept
 {
   std::cout << "Gige Interface Info:" << std::endl; 
   std::cout << "=========================" << std::endl;
-  std::cout << " Ip Address:       " << ip2str(info_->IPAddr) << std::endl;
-  std::cout << " Control Port:     " << info_->ControlPort << std::endl;
-  std::cout << " Timeout:          " << info_->Timeout << std::endl;
-  std::cout << " HTTP Port:        " << info_->HTTPPort << std::endl;
-  std::cout << " MAC Address:      " << mac2str(info_->MACAddr) << std::endl;
-  std::cout << " Netmask:          " << ip2str(info_->SubNet) << std::endl;
-  std::cout << " Gateway:          " << ip2str(info_->Gateway) << std::endl;
-  std::cout << " Serial Number:    " << info_->SerialNumber << std::endl;
-  std::cout << " Firmware Version: " << info_->FirmwareVersion << std::endl;
-  std::cout << " Hardware Version: " << info_->HardwareVersion << std::endl;
+  std::cout << " Ip Address:       " << ip2str(info_.IPAddr) << std::endl;
+  std::cout << " Control Port:     " << info_.ControlPort << std::endl;
+  std::cout << " Timeout:          " << info_.Timeout << std::endl;
+  std::cout << " HTTP Port:        " << info_.HTTPPort << std::endl;
+  std::cout << " MAC Address:      " << mac2str(info_.MACAddr) << std::endl;
+  std::cout << " Netmask:          " << ip2str(info_.SubNet) << std::endl;
+  std::cout << " Gateway:          " << ip2str(info_.Gateway) << std::endl;
+  std::cout << " Serial Number:    " << info_.SerialNumber << std::endl;
+  std::cout << " Firmware Version: " << info_.FirmwareVersion << std::endl;
+  std::cout << " Hardware Version: " << info_.HardwareVersion << std::endl;
   std::cout << std::endl;
 }
 
@@ -224,7 +243,7 @@ ZESTETM1_STATUS Gige::connect() noexcept
 {
   ZESTETM1_STATUS status = ZESTETM1_SUCCESS;
   if (!isConnected()) {
-    status = ZestETM1OpenConnection(info_, ZESTETM1_TYPE_TCP, port_, 0, &conn_);
+    status = ZestETM1OpenConnection(&info_, ZESTETM1_TYPE_TCP, port_, 0, &conn_);
   }
   return status;
 }

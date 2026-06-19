@@ -102,6 +102,10 @@ BoardError::BoardError(const std::string& error) :
   NsCamException(error, "Board internal error")
 {}
 
+BoardError::BoardError(const std::string& boardname, const std::string& error) :
+  NsCamException(error, "Board internal error (" + boardname + ")")
+{}
+
 BoardError::~BoardError() noexcept
 {}
 
@@ -110,4 +114,11 @@ PotError::PotError(const std::string& potname, const std::string& error) :
 {}
 
 PotError::~PotError() noexcept
+{}
+
+InvalidTiming::InvalidTiming(const std::string& error) :
+  NsCamException(error, "Invalid timing parameter")
+{}
+
+InvalidTiming::~InvalidTiming() noexcept
 {}

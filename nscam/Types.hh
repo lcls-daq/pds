@@ -14,24 +14,44 @@
     } \
   }
 
-#define SENSORS(F) \
-  F(SensorType,DAEDALUS) \
-  F(SensorType,ICARUS) \
-  F(SensorType,ICARUS2)
+#define SENSORS(FUNC) \
+  FUNC(SensorType,DAEDALUS) \
+  FUNC(SensorType,ICARUS) \
+  FUNC(SensorType,ICARUS2)
 
-#define BOARDS(F) \
-  F(BoardType,LLNL_V1) \
-  F(BoardType,LLNL_V4)
+#define BOARDS(FUNC) \
+  FUNC(BoardType,LLNL_V1) \
+  FUNC(BoardType,LLNL_V4)
 
-#define COMMS(F) \
-  F(CommType,RS422) \
-  F(CommType,GIGE)
+#define COMMS(FUNC) \
+  FUNC(CommType,RS422) \
+  FUNC(CommType,GIGE)
+
+#define TEMPS(FUNC) \
+  FUNC(TempType,C) \
+  FUNC(TempType,F) \
+  FUNC(TempType,K)
+
+#define PRESSURES(FUNC) \
+  FUNC(PressureType,torr) \
+  FUNC(PressureType,psi) \
+  FUNC(PressureType,bar) \
+  FUNC(PressureType,atm) \
+  FUNC(PressureType,inHg)
+
+#define SIDES(FUNC) \
+  FUNC(SideType,AB) \
+  FUNC(SideType,A) \
+  FUNC(SideType,B)
 
 namespace Pds {
   namespace NsCam {
     CREATE_ENUM(SENSORS, SensorType)
     CREATE_ENUM(BOARDS, BoardType)
     CREATE_ENUM(COMMS, CommType)
+    CREATE_ENUM(TEMPS, TempType)
+    CREATE_ENUM(PRESSURES, PressureType)
+    CREATE_ENUM(SIDES, SideType)
   }
 }
 
@@ -41,5 +61,8 @@ namespace Pds {
 #undef SENSORS
 #undef BOARDS
 #undef COMMS
+#undef TEMPS
+#undef PRESSURES
+#undef SIDES
 
 #endif

@@ -450,6 +450,12 @@ void RS422::info() const noexcept
   std::cout.flags(fmt);
 }
 
+void RS422::reconnect()
+{
+  disconnect();
+  connect();
+}
+
 bool RS422::isConnected() const noexcept
 {
   return fd_ >= 0;
@@ -513,5 +519,7 @@ void RS422::disconnect()
 {
   if (close(fd_) < 0) {
     throw RS422Exception(errno, "Problem closing device");
+  } else {
+    fd_ = 0;
   }
 }

@@ -20,9 +20,12 @@ namespace Pds {
       virtual bool openDevice() noexcept = 0;
       virtual bool closeDevice() noexcept = 0;
       virtual void info() const noexcept = 0;
+      virtual void reconnect() = 0;
 
       virtual CommType type() const;
       virtual std::string name() const;
+      virtual std::string host() const;
+      virtual unsigned short port() const;
 
     protected:
       CommType       ctype_;

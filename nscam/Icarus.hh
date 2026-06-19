@@ -7,8 +7,10 @@ namespace Pds {
   namespace NsCam {
     class Icarus : public Sensor {
     public:
-      Icarus(BoardType btype, std::shared_ptr<Comm> comm);
+      Icarus(std::shared_ptr<Board> board);
       virtual ~Icarus() = default;
+
+      virtual bool checkSensorVoltStat();
     };
   }
 }

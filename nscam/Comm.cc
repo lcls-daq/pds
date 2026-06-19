@@ -39,3 +39,13 @@ std::string Comm::name() const
 {
   return toString(ctype_);
 }
+
+std::string Comm::host() const
+{
+  return host_;
+}
+
+unsigned short Comm::port() const
+{
+  return port_;
+}

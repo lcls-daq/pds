@@ -16,6 +16,7 @@ namespace Pds {
       virtual bool openDevice() noexcept override;
       virtual bool closeDevice() noexcept override;
       virtual void info() const noexcept override;
+      virtual void reconnect() override;
 
     private:
       bool isConnected() const noexcept;

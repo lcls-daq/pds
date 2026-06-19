@@ -127,6 +127,7 @@ void Gige::listDevices(unsigned long wait)
 
 Gige::Gige(const std::string& host, unsigned short port, unsigned long timeout, unsigned long wait) :
   Comm(CommType::GIGE, host, port, timeout),
+  wait_(wait),
   conn_(nullptr)
 {
   ZESTETM1_STATUS status = ZestETM1Init();
@@ -134,38 +135,8 @@ Gige::Gige(const std::string& host, unsigned short port, unsigned long timeout, 
     throw GigeException(status, "Problem calling ZestETM1Init");
   }
 
-  bool found = false;
-  unsigned long attempt = 0;
-  do {
-    unsigned long num_cards = 0;
-    ZESTETM1_CARD_INFO* info = NULL;
-    status = ZestETM1CountCards(&num_cards, &info, 1000);
-    if (status != ZESTETM1_SUCCESS) {
-      throw GigeException(status, "Problem calling ZestETM1CountCards");
-    }
-
-    // look for cards with requested ip
-    for (unsigned long n=0; n<num_cards; n++) {
-      if (ip2str(info[n].IPAddr) == host_) {
-        info_ = info[n];
-        found = true;
-        break;
-      }
-    }
-
-    // free the memory for info structs from ZestETM1CountCards
-    ZestETM1FreeCards(info);
-
-    // found the camera so break
-    if (found) {
-      break;
-    }
-
-    attempt++;
-  } while (attempt < wait);
-
-  // if no gige was found this will be null
-  if (!found) {
+  // if no gige was found this will return false
+  if (!discovery()) {
     throw GigeException(host_, "No camera found with requested hostname"); 
   }
 
@@ -212,6 +183,24 @@ void Gige::info() const noexcept
   std::cout << std::endl;
 }
 
+void Gige::reconnect()
+{
+  ZESTETM1_STATUS status = disconnect();
+  if (status !=  ZESTETM1_SUCCESS) {
+    throw GigeException(status, "Problem calling ZestETM1CloseConnection");
+  }
+
+  // discovery needs to be redone or connect will not work
+  if (!discovery()) {
+    throw GigeException(host_, "No camera found with requested hostname");
+  }
+
+  status = connect();
+  if (status !=  ZESTETM1_SUCCESS)  {
+    throw GigeException(status, "Problem calling ZestETM1OpenConnection");
+  }
+}
+
 uint32_t Gige::sendCmd(uint16_t cmd, uint16_t addr, uint32_t data)
 {
   GigePacket packet(cmd, addr, data);
@@ -234,9 +223,44 @@ uint32_t Gige::sendCmd(uint16_t cmd, uint16_t addr, uint32_t data)
   return packet.data();
 }
 
+bool Gige::discovery()
+{
+  bool found = false;
+  unsigned long attempt = 0;
+  do {
+    unsigned long num_cards = 0;
+    ZESTETM1_CARD_INFO* info = NULL;
+    ZESTETM1_STATUS status = ZestETM1CountCards(&num_cards, &info, 1000);
+    if (status != ZESTETM1_SUCCESS) {
+      throw GigeException(status, "Problem calling ZestETM1CountCards");
+    }
+
+    // look for cards with requested ip
+    for (unsigned long n=0; n<num_cards; n++) {
+      if (ip2str(info[n].IPAddr) == host_) {
+        info_ = info[n];
+        found = true;
+        break;
+      }
+    }
+
+    // free the memory for info structs from ZestETM1CountCards
+    ZestETM1FreeCards(info);
+
+    // found the camera so break
+    if (found) {
+      break;
+    }
+
+    attempt++;
+  } while (attempt < wait_);
+
+  return found;
+}
+
 bool Gige::isConnected() const noexcept
 {
-  return conn_ != NULL;
+  return conn_ != nullptr;
 }
 
 ZESTETM1_STATUS Gige::connect() noexcept
@@ -253,6 +277,7 @@ ZESTETM1_STATUS Gige::disconnect() noexcept
   ZESTETM1_STATUS status = ZESTETM1_SUCCESS;
   if (isConnected()) {
     status = ZestETM1CloseConnection(conn_);
+    conn_ = nullptr;
   }
   return status;
 }

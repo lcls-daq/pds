@@ -60,6 +60,7 @@ namespace Pds {
     class BoardError : public NsCamException {
     public:
       BoardError(const std::string& error);
+      BoardError(const std::string& boardname, const std::string& error);
       ~BoardError() noexcept;
     };
 
@@ -67,6 +68,12 @@ namespace Pds {
     public:
       PotError(const std::string& potname, const std::string& error);
       ~PotError() noexcept;
+    };
+
+    class InvalidTiming : public NsCamException {
+    public:
+      InvalidTiming(const std::string& error);
+      ~InvalidTiming() noexcept;
     };
   }
 }

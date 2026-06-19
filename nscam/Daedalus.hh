@@ -7,8 +7,10 @@ namespace Pds {
   namespace NsCam {
     class Daedalus : public Sensor {
     public:
-      Daedalus(BoardType btype, std::shared_ptr<Comm> comm);
+      Daedalus(std::shared_ptr<Board> board);
       virtual ~Daedalus() = default;
+
+      virtual bool checkSensorVoltStat();
     };
   }
 }

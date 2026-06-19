@@ -18,14 +18,17 @@ namespace Pds {
       virtual bool openDevice() noexcept override;
       virtual bool closeDevice() noexcept override;
       virtual void info() const noexcept override;
+      virtual void reconnect() override;
 
     private:
+      bool discovery();
       bool isConnected() const noexcept;
       ZESTETM1_STATUS connect() noexcept;
       ZESTETM1_STATUS disconnect() noexcept;
       ZESTETM1_STATUS readSerial(void* buffer, unsigned long len, unsigned long* nbytes) noexcept;
       ZESTETM1_STATUS writeSerial(void* buffer, unsigned long len, unsigned long* nbytes) noexcept;
 
+      unsigned long       wait_;
       ZESTETM1_CARD_INFO  info_;
       ZESTETM1_CONNECTION conn_;
     };

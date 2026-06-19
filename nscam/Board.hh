@@ -21,6 +21,7 @@ namespace Pds {
       virtual ~Board() = default;
 
       virtual void info() const;
+      virtual void status() const;
       virtual uint32_t fpgaNum() const;
       virtual uint32_t fpgaRev() const;
       virtual bool fpgaRad() const;
@@ -29,14 +30,33 @@ namespace Pds {
       virtual std::string name() const;
       virtual double vref() const;
       virtual uint32_t adc5_mult() const;
+      virtual bool adc5_bipolar() const;
 
+      virtual uint32_t getTimer() const;
+      virtual void resetTimer();
+
+      virtual double getTemp(TempType scale) const = 0;
+      virtual double getPressure(double offset, double sensitivity, PressureType scale) const;
+      virtual double getPressure(PressureType scale) const;
+      virtual double getPressure() const;
+
+      virtual void softReboot() = 0;
       virtual void initBoard() = 0;
       virtual void initPots() = 0;
+      virtual void initSensor() = 0;
+      virtual void latchPots() = 0;
 
-      virtual void clearStatus() = 0;
+      virtual void clearStatus();
+      virtual uint32_t checkStatus() const;
+      virtual uint32_t checkStatus2() const;
       virtual void configADCs() = 0;
 
+      virtual void enableLED(bool status) = 0;
+      virtual void setLED(uint32_t led, bool status) = 0;
+
     protected:
+      virtual double convertMonV(double fraction) const override;
+
       uint32_t fpgaNum_;
       uint32_t fpgaRev_;
       uint32_t fpgaRad_;
@@ -45,9 +65,7 @@ namespace Pds {
       SensorType stype_;
       double vref_;
       uint32_t adc5_mult_;
-      //virtual void initPots() = 0;
-      //virtual void latchPots() = 0;
-      //virtual void initSensor() = 0;
+      bool adc5_bipolar_;
     };
   }
 }

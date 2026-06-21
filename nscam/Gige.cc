@@ -67,6 +67,8 @@ void GigePacket::data(uint32_t data)
   data_ = htonl(data);
 }
 
+constexpr size_t DataHeaderSize = 2 * sizeof(GigePacket);
+
 static std::string ip2str(const unsigned char (&ipaddr)[4])
 {
   std::stringstream ipsstr;
@@ -199,6 +201,37 @@ void Gige::reconnect()
   if (status !=  ZESTETM1_SUCCESS)  {
     throw GigeException(status, "Problem calling ZestETM1OpenConnection");
   }
+}
+
+size_t Gige::readData(uint16_t addr, uint32_t data, size_t payloadSize)
+{
+  GigePacket packet(0, addr, data);
+
+  unsigned long nbytes = 0;
+  ZESTETM1_STATUS status = writeSerial(&packet, sizeof(packet), &nbytes);
+  if (status != ZESTETM1_SUCCESS) {
+    throw GigeException(status, "Problem calling ZestETM1WriteData");
+  } else if (nbytes != sizeof(packet)) {
+    throw GigeException("Unexpected packet size", "Problem calling ZestETM1WriteData");
+  }
+
+  if (!prepBuffer(payloadSize + DataHeaderSize)) {
+    throw GigeException("Unable to allocate buffer", "Problem calling prepBuffer");
+  }
+
+  status = readSerial(buffer_.get(), buffer_size_, &nbytes);
+  if (status != ZESTETM1_SUCCESS) {
+    throw GigeException(status, "Problem calling ZestETM1ReadData");
+  } else if (nbytes != buffer_size_) {
+    throw GigeException("Unexpected packet size", "Problem calling ZestETM1ReadData");
+  }
+
+  const GigePacket* payloadPacket = reinterpret_cast<const GigePacket*>(buffer_.get()) + 1;
+  if (payloadPacket->data() != payloadSize) {
+    throw GigeException("Unexpected packet size metadata", "Problem calling ZestETM1ReadData");
+  }
+
+  return DataHeaderSize;
 }
 
 uint32_t Gige::sendCmd(uint16_t cmd, uint16_t addr, uint32_t data)

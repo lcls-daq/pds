@@ -6,6 +6,7 @@
 
 #include <iostream>
 #include <iomanip>
+#include <chrono>
 
 using namespace Pds::NsCam;
 
@@ -34,7 +35,9 @@ Board::Board(BoardType btype,
   stype_(stype),
   vref_(0.),
   adc5_mult_(0),
-  adc5_bipolar_(false)
+  adc5_bipolar_(false),
+  armed_(false),
+  abort_{false}
 {
   fpgaNum_ = getRegister("FPGA_NUM");
   fpgaRev_ = getRegister("FPGA_REV");
@@ -45,13 +48,13 @@ Board::Board(BoardType btype,
     if ((type_byte == 1) || (type_byte == 4)) {
       BoardType fpga_btype = type_byte == 1 ? BoardType::LLNL_V1 : BoardType::LLNL_V4;
       if (btype_ != fpga_btype) {
-        LOG_EXCEPTION(BoardError(name(), "Inconsistent board type (fpga, config): " + std::string(toString(fpga_btype)) + ", " + name()));
+        LOG_EXCEPTION(DeviceError(name(), "Inconsistent board type (fpga, config): " + std::string(toString(fpga_btype)) + ", " + name()));
       }
     } else {
-      LOG_EXCEPTION(BoardError(name(), "Unsupported board type: " + std::to_string(type_byte)));
+      LOG_EXCEPTION(DeviceError(name(), "Unsupported board type: " + std::to_string(type_byte)));
     }
   } else {
-    LOG_EXCEPTION(BoardError(name(), "Unsupported board type: SNLrevC"));
+    LOG_EXCEPTION(DeviceError(name(), "Unsupported board type: SNLrevC"));
   }
 
   // check if the board is rad tolerant
@@ -66,10 +69,10 @@ Board::Board(BoardType btype,
   if ((sensor_byte == 1) || (sensor_byte == 2)) {
     SensorType fpga_stype = sensor_byte == 1 ? (stype_ == SensorType::ICARUS2 ? SensorType::ICARUS2 : SensorType::ICARUS) : SensorType::DAEDALUS;
     if (stype_ != fpga_stype) {
-      LOG_EXCEPTION(BoardError("Inconsistent sensor type (fpga, config): " + std::string(toString(fpga_stype)) + ", " + std::string(toString(stype_))));
+      LOG_EXCEPTION(DeviceError("Inconsistent sensor type (fpga, config): " + std::string(toString(fpga_stype)) + ", " + std::string(toString(stype_))));
     }
   } else {
-    LOG_EXCEPTION(BoardError("Unsupported sensor type: " + std::to_string(sensor_byte)));
+    LOG_EXCEPTION(DeviceError("Unsupported sensor type: " + std::to_string(sensor_byte)));
   }
 
   // check supported interface types
@@ -85,7 +88,7 @@ Board::Board(BoardType btype,
 void Board::info() const
 {
   // save the i/o formatting before changing...
-  std::ios_base::fmtflags fmt(std::cout.flags());
+  FormatBackup fmt(std::cout);
   std::cout << "Board Info:" << std::endl;
   std::cout << "=========================" << std::endl;
   std::cout << " Type:             " << name() << std::endl;
@@ -102,13 +105,11 @@ void Board::info() const
     std::cout << std::endl;
   }
   // remove hex formatting
-  std::cout.flags(fmt);
+  fmt.restore();
   std::cout << " Vref:             " << vref() << std::endl;
   std::cout << " ADC5 multiplier:  " << adc5_mult() << std::endl;
   std::cout << " ADC5 bipolar:     " << adc5_bipolar() << std::endl;
   std::cout << std::endl;
-  // restore i/o formatting
-  std::cout.flags(fmt);
 }
 
 void Board::status() const
@@ -116,7 +117,7 @@ void Board::status() const
   uint32_t statusbits = checkStatus();
   uint32_t statusbits2 = checkStatus2();
   // save the i/o formatting before changing...
-  std::ios_base::fmtflags fmt(std::cout.flags());
+  FormatBackup fmt(std::cout);
   std::cout << "Board Status:" << std::endl;
   std::cout << "=========================" << std::endl;
   std::cout << " Sensor Read:      " << getBit(statusbits, 0) << std::endl;
@@ -138,8 +139,6 @@ void Board::status() const
   std::cout << " UART_TX_TO_RST:   " << getBit(statusbits2, 3) << std::endl;
   std::cout << " UART_RX_TO_RST:   " << getBit(statusbits2, 4) << std::endl;
   std::cout << std::endl;
-  // restore i/o formatting
-  std::cout.flags(fmt);
 }
 
 uint32_t Board::fpgaNum() const
@@ -189,13 +188,13 @@ bool Board::adc5_bipolar() const
 
 uint32_t Board::getTimer() const
 {
-  LOG_INFO(__func__);
+  LOG_DEBUG(__func__);
   return getRegister("TIMER_VALUE");
 }
 
 void Board::resetTimer()
 {
-  LOG_INFO(__func__);
+  LOG_DEBUG(__func__);
   setSubRegister("RESET_TIMER", 1);
   setSubRegister("RESET_TIMER", 0);
 }
@@ -235,6 +234,85 @@ uint32_t Board::checkStatus2() const
 {
   LOG_DEBUG(__func__);
   return getRegister("STAT_REG2");
+}
+
+bool Board::armed() const
+{
+  return armed_;
+}
+
+void Board::arm(TriggerType mode)
+{
+  LOG_DEBUG(std::string(__func__) + " mode = " + toString(mode));
+  clearStatus();
+  latchPots();
+  startCapture(mode);
+  armed_ = true;
+}
+
+void Board::disarm()
+{
+  LOG_DEBUG(__func__);
+  clearStatus();
+  armed_ = false;
+  setSubRegister("HW_TRIG_EN", 0);
+  setSubRegister("SW_TRIG_EN", 0);
+}
+
+void Board::startCapture(TriggerType mode)
+{
+  LOG_DEBUG(__func__);
+  setRegister("ADC_CTL", 0x0000001F);
+  if (mode == TriggerType::SOFTWARE) {
+    setSubRegister("HW_TRIG_EN", 0);
+    setSubRegister("SW_TRIG_EN", 1);
+    setSubRegister("SW_TRIG_START", 1);
+  } else {
+    setSubRegister("SW_TRIG_EN", 0);
+    setSubRegister("HW_TRIG_EN", 1);
+  }
+}
+
+bool Board::waitForSRAM(uint32_t timeout_ms)
+{
+  LOG_DEBUG(__func__);
+  bool waiting = true;
+  bool timeout = false;
+  auto start = std::chrono::system_clock::now();
+
+  while (waiting) {
+    uint32_t sram = getSubRegister("SRAM_READY");
+    if (sram) {
+      waiting = false;
+      LOG_DEBUG(std::string(__func__) + " SRAM ready");
+    }
+
+    // check if acquisition has been aborted
+    if (abort_.exchange(false)) {
+      waiting = false;
+      LOG_DEBUG(std::string(__func__) + " readoff aborted by user");
+    }
+
+    // if timeout is enabled then check
+    if ((sram == 0) && (timeout_ms > 0)) {
+      auto current = std::chrono::system_clock::now();
+      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(current - start);
+      if (elapsed.count() > timeout_ms) {
+        waiting = false;
+        timeout = true;
+        LOG_ERROR(std::string(__func__) + " SRAM timeout");
+      }
+    }
+  }
+
+  return !timeout;
+}
+
+bool Board::abortReadoff(bool flag)
+{
+  LOG_DEBUG(__func__);
+  abort_.store(flag);
+  return false;
 }
 
 double Board::convertMonV(double fraction) const

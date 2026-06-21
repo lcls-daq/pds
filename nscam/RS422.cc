@@ -1,5 +1,6 @@
 #include "RS422.hh"
 #include "Error.hh"
+#include "Logger.hh"
 
 #include <iostream>
 #include <iomanip>
@@ -278,6 +279,8 @@ static uint16_t crc16_xmodem_update(uint16_t crc, const uint8_t *data, size_t le
     return crc;
 }
 
+constexpr size_t crcLength = sizeof(uint16_t) + sizeof(uint32_t);
+
 #pragma pack(push)
 #pragma pack(2)
 class SerialPacket {
@@ -287,25 +290,34 @@ class SerialPacket {
     uint16_t command() const;
     uint16_t address() const;
     uint32_t data() const;
-    uint16_t crc() const;
-    bool check() const;
+    uint16_t crc(size_t offset=0) const;
+    bool check(size_t offset=0) const;
 
     void command(uint16_t cmd);
     void address(uint16_t addr);
     void data(uint32_t data);
+
+    static constexpr size_t crcSize() {
+      return sizeof(SerialPacket::crc_);
+    }
+
   private:
-    uint16_t calculateCrc() const;
+    uint16_t calculateCrc(size_t offset=0) const;
     void updateCrc();
     uint16_t preamble_;
     uint16_t header_;
     uint32_t data_;
     uint16_t crc_;
 
-    static const uint16_t addr_msk = 0xfff;
-    static const uint16_t cmd_msk = 0xf;
-    static const uint16_t cmd_shft = 12;
+    static constexpr uint16_t addr_msk = 0xfff;
+    static constexpr uint16_t cmd_msk = 0xf;
+    static constexpr uint16_t cmd_shft = 12;
+    static constexpr size_t CrcLength = sizeof(SerialPacket::header_) + sizeof(SerialPacket::data_);
 };
 #pragma pack(pop)
+
+constexpr size_t DataHeaderSize = 2 * sizeof(SerialPacket);
+constexpr size_t DataPayloadOffset = DataHeaderSize - SerialPacket::crcSize();//SerialPacket::CrcSize;
 
 SerialPacket::SerialPacket(uint16_t cmd, uint16_t addr, uint32_t data) :
   preamble_(0xaaaa),
@@ -331,19 +343,23 @@ uint32_t SerialPacket::data() const
   return ntohl(data_);
 }
 
-uint16_t SerialPacket::crc() const
+uint16_t SerialPacket::crc(size_t offset) const
 {
-  return ntohs(crc_);
+  if (offset) {
+    return ntohs(*(reinterpret_cast<const uint8_t*>(&crc_) + offset));
+  } else {
+    return ntohs(crc_);
+  }
 }
 
-bool SerialPacket::check() const
+bool SerialPacket::check(size_t offset) const
 {
-  return crc() == calculateCrc();
+  return crc(offset) == calculateCrc(offset);
 }
 
-uint16_t SerialPacket::calculateCrc() const
+uint16_t SerialPacket::calculateCrc(size_t offset) const
 {
-  return crc16_xmodem_update(0, (uint8_t*) &header_, 6);
+  return crc16_xmodem_update(0, (uint8_t*) &header_, CrcLength + offset);
 }
 
 void SerialPacket::updateCrc()
@@ -383,6 +399,41 @@ RS422::~RS422()
 {
   // close connection to camera
   closeDevice();
+}
+
+size_t RS422::readData(uint16_t addr, uint32_t data, size_t payloadSize)
+{
+  SerialPacket packet(0, addr, data);
+
+  ssize_t nbytes = 0;
+
+  nbytes = write(fd_, &packet, sizeof(packet));
+  if (nbytes < 0) {
+    throw RS422Exception(errno, "Problem writing to device");
+  }
+
+  if (!prepBuffer(payloadSize + DataHeaderSize)) {
+    throw RS422Exception("Unable to allocate buffer", "Problem calling prepBuffer");
+  }
+
+  nbytes = read(fd_, buffer_.get(), buffer_size_);
+  if (nbytes < 0) {
+    throw RS422Exception(errno, "Problem reading data payload from device");
+  } else if (static_cast<size_t>(nbytes) != buffer_size_) {
+    throw RS422Exception("Unexpected packet size", "Problem reading from device");
+  }
+
+  // check the crc of both packets
+  const SerialPacket* readPackets = reinterpret_cast<const SerialPacket*>(buffer_.get());
+  if (!readPackets[0].check() || !readPackets[1].check(payloadSize)) {
+    throw RS422Exception("Corrupted packet", "Problem reading data payload from device");
+  }
+  // check that payload size field in second packet header matches expected
+  if (readPackets[1].data() != payloadSize) {
+    throw RS422Exception("Unexpected packet size metadata", "Problem reading data payload from device");
+  }
+
+  return DataPayloadOffset;
 }
 
 uint32_t RS422::sendCmd(uint16_t cmd, uint16_t addr, uint32_t data)
@@ -432,7 +483,7 @@ void RS422::info() const noexcept
 {
   struct termios tty;
   // save the i/o formatting before changing...
-  std::ios_base::fmtflags fmt(std::cout.flags());
+  FormatBackup fmt(std::cout);
   std::cout << "RS422 Interface Info:" << std::endl;
   std::cout << "=========================" << std::endl;
   std::cout << " Device:           " << host_ << std::endl;
@@ -446,8 +497,6 @@ void RS422::info() const noexcept
     std::cout << " c_lflag:          0x" << tty.c_lflag << std::endl;
   }
   std::cout << std::endl;
-  // restore i/o formatting
-  std::cout.flags(fmt);
 }
 
 void RS422::reconnect()

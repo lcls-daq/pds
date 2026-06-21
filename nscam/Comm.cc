@@ -3,6 +3,8 @@
 #include "RS422.hh"
 
 #include <sstream>
+#include <cstring>
+#include <arpa/inet.h>
 
 using namespace Pds::NsCam;
 
@@ -27,7 +29,9 @@ Comm::Comm(CommType ctype, const std::string& host, unsigned short port, unsigne
   ctype_(ctype),
   host_(host),
   port_(port),
-  timeout_(timeout)
+  timeout_(timeout),
+  buffer_size_(0),
+  buffer_(nullptr)
 {}
 
 CommType Comm::type() const
@@ -48,4 +52,43 @@ std::string Comm::host() const
 unsigned short Comm::port() const
 {
   return port_;
+}
+
+std::unique_ptr<uint8_t[]> Comm::readDataAsUInt8(uint16_t addr, uint32_t data, size_t len)
+{
+  size_t pos = readData(addr, data, len);
+  std::unique_ptr<uint8_t[]> conv(new uint8_t[len]);
+  std::memcpy(conv.get(), buffer_.get() + pos, len);
+  return conv;
+}
+
+std::unique_ptr<uint16_t[]> Comm::readDataAsUInt16(uint16_t addr, uint32_t data, size_t len)
+{
+  size_t pos = readData(addr, data, len * sizeof(uint16_t));
+  std::unique_ptr<uint16_t[]> conv(new uint16_t[len]);
+  uint16_t* raw = reinterpret_cast<uint16_t*>(buffer_.get() + pos);
+  for (size_t idx=0; idx<len; idx++) {
+    conv[idx] = ntohs(raw[idx]);
+  }
+  return conv;
+}
+
+std::unique_ptr<uint32_t[]> Comm::readDataAsUInt32(uint16_t addr, uint32_t data, size_t len)
+{
+  size_t pos = readData(addr, data, len * sizeof(uint32_t));
+  std::unique_ptr<uint32_t[]> conv(new uint32_t[len]);
+  uint32_t* raw = reinterpret_cast<uint32_t*>(buffer_.get() + pos);
+  for (size_t idx=0; idx<len; idx++) {
+    conv[idx] = ntohl(raw[idx]);
+  }
+  return conv;
+}
+
+bool Comm::prepBuffer(size_t size)
+{
+  if (size > buffer_size_) {
+    buffer_.reset(new uint8_t[size]);
+    buffer_size_ = size;
+  }
+  return buffer_ != nullptr;
 }

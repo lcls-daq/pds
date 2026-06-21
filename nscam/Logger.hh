@@ -8,6 +8,22 @@
 
 namespace Pds {
   namespace NsCam {
+    class FormatBackup {
+    public:
+      FormatBackup(std::ostream& ios);
+      ~FormatBackup();
+
+      void restore();
+
+      FormatBackup(const FormatBackup &rhs) = delete;
+      FormatBackup& operator= (const FormatBackup& rhs) = delete;
+
+    private:
+      char fill_ch_;
+      std::ostream& ios_;
+      std::ios::fmtflags fmt_;
+    };
+
     class Logger {
     public:
       enum class Level { DEBUG = 0, INFO = 1, WARN = 2, ERROR = 3 };

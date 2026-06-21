@@ -4,7 +4,7 @@
 using namespace Pds::NsCam;
 
 Icarus2::Icarus2(std::shared_ptr<Board> board) :
-  Sensor(SensorType::ICARUS2, board, 4)
+  Sensor(SensorType::ICARUS2, board, 4, 0, 3, 512, 1024, 2)
 {}
 
 bool Icarus2::checkSensorVoltStat()

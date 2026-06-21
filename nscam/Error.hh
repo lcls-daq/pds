@@ -57,11 +57,11 @@ namespace Pds {
       std::string regname() const noexcept;
     };
 
-    class BoardError : public NsCamException {
+    class DeviceError : public NsCamException {
     public:
-      BoardError(const std::string& error);
-      BoardError(const std::string& boardname, const std::string& error);
-      ~BoardError() noexcept;
+      DeviceError(const std::string& error);
+      DeviceError(const std::string& boardname, const std::string& error);
+      ~DeviceError() noexcept;
     };
 
     class PotError : public NsCamException {
@@ -74,6 +74,12 @@ namespace Pds {
     public:
       InvalidTiming(const std::string& error);
       ~InvalidTiming() noexcept;
+    };
+
+    class InvalidROI : public NsCamException {
+    public:
+      InvalidROI(uint32_t minroi, uint32_t maxroi, const std::string& error);
+      ~InvalidROI() noexcept;
     };
   }
 }

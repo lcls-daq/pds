@@ -98,15 +98,15 @@ std::string ReadOnlyRegister::regname() const noexcept
   return error_;
 }
 
-BoardError::BoardError(const std::string& error) :
+DeviceError::DeviceError(const std::string& error) :
   NsCamException(error, "Board internal error")
 {}
 
-BoardError::BoardError(const std::string& boardname, const std::string& error) :
+DeviceError::DeviceError(const std::string& boardname, const std::string& error) :
   NsCamException(error, "Board internal error (" + boardname + ")")
 {}
 
-BoardError::~BoardError() noexcept
+DeviceError::~DeviceError() noexcept
 {}
 
 PotError::PotError(const std::string& potname, const std::string& error) :
@@ -121,4 +121,11 @@ InvalidTiming::InvalidTiming(const std::string& error) :
 {}
 
 InvalidTiming::~InvalidTiming() noexcept
+{}
+
+InvalidROI::InvalidROI(uint32_t minroi, uint32_t maxroi, const std::string& error) :
+  NsCamException(error, "Invalid ROI (min " + std::to_string(minroi) + ", max " + std::to_string(maxroi) + ")")
+{}
+
+InvalidROI::~InvalidROI() noexcept
 {}

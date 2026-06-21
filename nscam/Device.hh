@@ -57,11 +57,27 @@ namespace Pds {
       virtual void setSubRegister(const std::string& subregname, uint32_t value);
       virtual void setSubRegister(const SubRegister& subreg, uint32_t value);
 
+      virtual std::unique_ptr<uint8_t[]> getDataRegisterAsUInt8(const std::string& regname, uint32_t value, size_t len);
+      virtual std::unique_ptr<uint8_t[]> getDataRegisterAsUInt8(uint16_t address, uint32_t value, size_t len);
+      virtual std::unique_ptr<uint8_t[]> getDataSubRegisterAsUInt8(const std::string& subregname, uint32_t value, size_t len);
+      virtual std::unique_ptr<uint8_t[]> getDataSubRegisterAsUInt8(const SubRegister& subreg, uint32_t value, size_t len);
+
+      virtual std::unique_ptr<uint16_t[]> getDataRegisterAsUInt16(const std::string& regname, uint32_t value, size_t len);
+      virtual std::unique_ptr<uint16_t[]> getDataRegisterAsUInt16(uint16_t address, uint32_t value, size_t len);
+      virtual std::unique_ptr<uint16_t[]> getDataSubRegisterAsUInt16(const std::string& subregname, uint32_t value, size_t len);
+      virtual std::unique_ptr<uint16_t[]> getDataSubRegisterAsUInt16(const SubRegister& subreg, uint32_t value, size_t len);
+
+      virtual std::unique_ptr<uint32_t[]> getDataRegisterAsUInt32(const std::string& regname, uint32_t value, size_t len);
+      virtual std::unique_ptr<uint32_t[]> getDataRegisterAsUInt32(uint16_t address, uint32_t value, size_t len);
+      virtual std::unique_ptr<uint32_t[]> getDataSubRegisterAsUInt32(const std::string& subregname, uint32_t value, size_t len);
+      virtual std::unique_ptr<uint32_t[]> getDataSubRegisterAsUInt32(const SubRegister& subreg, uint32_t value, size_t len);
+
       virtual double getPot(const std::string& potname) const;
       virtual double getPotV(const std::string& potname) const;
       virtual void setPot(const std::string& potname, double fraction=1.0);
       virtual void setPotV(const std::string& potname, double voltage, bool tune=false, double accuracy=0.01, int iterations=20, double approach=0.75, bool tuneErr=false);
       virtual double getMonV(const std::string& potname) const;
+      virtual void potInfo() const;
 
       virtual CommType commType() const;
       virtual std::string commName() const;

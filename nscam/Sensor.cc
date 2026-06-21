@@ -64,48 +64,24 @@ std::shared_ptr<Sensor> Sensor::create(SensorType stype, std::shared_ptr<Board> 
 
 Sensor::Sensor(SensorType stype,
                std::shared_ptr<Board> board,
-               uint32_t nframes) :
-  stype_(stype),
-  board_(board),
-  nseq_(nframes),
-  nframes_(nframes),
-  firstframe_(0),
-  ncols_(512),
-  nrows_(1024),
-  interlacing_{0, 0},
-  manualTiming_(false)
-{}
-
-Sensor::Sensor(SensorType stype,
-               std::shared_ptr<Board> board,
                uint32_t nseq,
-               uint32_t nframes,
-               uint32_t firstframe) :
+               uint32_t minframe,
+               uint32_t maxframe,
+               uint32_t maxwidth,
+               uint32_t maxheight,
+               uint32_t bytesperpixel) :
   stype_(stype),
   board_(board),
   nseq_(nseq),
-  nframes_(nframes),
-  firstframe_(firstframe),
-  ncols_(512),
-  nrows_(1024),
-  interlacing_{0, 0},
-  manualTiming_(false)
-{}
-
-Sensor::Sensor(SensorType stype,
-               std::shared_ptr<Board> board,
-               uint32_t nseq,
-               uint32_t nframes,
-               uint32_t firstframe,
-               uint32_t ncols,
-               uint32_t nrows) :
-  stype_(stype),
-  board_(board),
-  nseq_(nseq),
-  nframes_(nframes),
-  firstframe_(firstframe),
-  ncols_(ncols),
-  nrows_(nrows),
+  minframe_(minframe),
+  maxframe_(maxframe),
+  maxwidth_(maxwidth),
+  maxheight_(maxheight),
+  firstframe_(minframe),
+  lastframe_(maxframe),
+  firstrow_(0),
+  lastrow_(maxheight - 1),
+  bytesperpixel_(bytesperpixel),
   interlacing_{0, 0},
   manualTiming_(false)
 {}
@@ -113,13 +89,36 @@ Sensor::Sensor(SensorType stype,
 void Sensor::info() const
 {
   // save the i/o formatting before changing...
-  std::ios_base::fmtflags fmt(std::cout.flags());
+  FormatBackup fmt(std::cout);
   std::cout << "Sensor Info:" << std::endl;
   std::cout << "=========================" << std::endl;
   std::cout << " Type:             " << name() << std::endl;
+  std::cout << " Min Frame:        " << minframe_ << std::endl;
+  std::cout << " Max Frame:        " << maxframe_ << std::endl;
+  std::cout << " Max Width:        " << maxwidth_ << std::endl;
+  std::cout << " Max Height:       " << maxheight_ << std::endl;
+  std::cout << " Bytes Per Pixel:  " << bytesperpixel_ << std::endl;
+  std::cout << " First Frame:      " << firstframe_ << std::endl;
+  std::cout << " Last Frame:       " << lastframe_ << std::endl;
+  std::cout << " Num Frames:       " << nframes() << std::endl;
+  std::cout << " First Row:        " << firstrow_ << std::endl;
+  std::cout << " Last Row:         " << lastrow_ << std::endl;
+  std::cout << " Width:            " << width() << std::endl;
+  std::cout << " Height:           " << height() << std::endl;
+  std::cout << " Num Pixels:       " << npixels() << std::endl;
+  std::cout << " Frame Size:       " << payloadSize() << std::endl;
+  std::cout << " Manual Timing:    " << manualTiming_ << std::endl;
+  if (manualTiming_) {
+    std::cout << " Sequence Side A:  " << seq2str(getManualTiming(SideType::A)) << std::endl;
+    std::cout << " Sequence Side B:  " << seq2str(getManualTiming(SideType::B)) << std::endl;
+  } else {
+    std::cout << " Timing Side A:    " << timing2str(getTiming(SideType::A)) << std::endl;
+    std::cout << " Timing Side B:    " << timing2str(getTiming(SideType::B)) << std::endl;
+    std::cout << " Sequence Side A:  " << seq2str(getArbTiming(SideType::A)) << std::endl;
+    std::cout << " Sequence Side B:  " << seq2str(getArbTiming(SideType::B)) << std::endl;
+  }
+  std::cout << " Oscillator:       " << toString(getOscillator()) << std::endl;
   std::cout << std::endl;
-  // restore i/o formatting
-  std::cout.flags(fmt);
 }
 
 SensorType Sensor::type() const
@@ -132,9 +131,112 @@ std::string Sensor::name() const
   return toString(stype_);
 }
 
+uint32_t Sensor::minframe() const
+{
+  return minframe_;
+}
+
+uint32_t Sensor::maxframe() const
+{
+  return maxframe_;
+}
+
+uint32_t Sensor::maxwidth() const
+{
+  return maxwidth_;
+}
+
+uint32_t Sensor::maxheight() const
+{
+  return maxheight_;
+}
+
+uint32_t Sensor::bytesperpixel() const
+{
+  return bytesperpixel_;
+}
+
 uint32_t Sensor::nframes() const
 {
-  return nframes_;
+  return lastframe_ - firstframe_ + 1;
+}
+
+uint32_t Sensor::firstframe() const
+{
+  return firstframe_;
+}
+
+uint32_t Sensor::lastframe() const
+{
+  return lastframe_;
+}
+
+uint32_t Sensor::firstrow() const
+{
+  return firstrow_;
+}
+
+uint32_t Sensor::lastrow() const
+{
+  return lastrow_;
+}
+
+size_t Sensor::width() const
+{
+  return maxwidth_;
+}
+
+size_t Sensor::height() const
+{
+  return lastrow_ - firstrow_ + 1;
+}
+
+size_t Sensor::npixels() const
+{
+  return width() * height() * nframes();
+}
+
+size_t Sensor::payloadSize() const
+{
+  return npixels() * bytesperpixel_;
+}
+
+void Sensor::setRows()
+{
+  setRows(0, maxheight_ - 1);
+}
+
+void Sensor::setRows(uint32_t minrow, uint32_t maxrow)
+{
+  LOG_DEBUG(std::string(__func__) + " minrow " + std::to_string(minrow) + " maxrow " + std::to_string(maxrow));
+  if (minrow > maxrow || maxrow >= maxheight_) {
+    LOG_EXCEPTION(InvalidROI(minrow, maxrow, "ROI row bounds are out of range"));
+  }
+
+  board_->setRegister("FPA_ROW_INITIAL", minrow);
+  board_->setRegister("FPA_ROW_FINAL", maxrow);
+
+  firstrow_ = minrow;
+  lastrow_ = maxrow;
+}
+
+void Sensor::setFrames()
+{
+  setFrames(minframe_, maxframe_);
+}
+
+void Sensor::setFrames(uint32_t minframe, uint32_t maxframe)
+{
+  LOG_DEBUG(std::string(__func__) + " minframe " + std::to_string(minframe) + " maxframe " + std::to_string(maxframe));
+  if (minframe < minframe_ || minframe > maxframe || maxframe > maxframe_) {
+    LOG_EXCEPTION(InvalidROI(minframe, maxframe, "ROI frame bounds are out of range"));
+  }
+
+  board_->setRegister("FPA_FRAME_INITIAL", minframe);
+  board_->setRegister("FPA_FRAME_FINAL", maxframe);
+
+  firstframe_ = minframe;
+  lastframe_ = maxframe;
 }
 
 bool Sensor::manualTiming() const
@@ -144,12 +246,16 @@ bool Sensor::manualTiming() const
 
 void Sensor::initSensor()
 {
+  LOG_DEBUG(__func__);
   if (board_->type() == BoardType::LLNL_V1) {
     if (!checkSensorVoltStat()) {
-      LOG_EXCEPTION(BoardError(name(), "FPGA sensor select jumpers do not match with actual sensor"));
+      LOG_EXCEPTION(DeviceError(name(), "FPGA sensor select jumpers do not match with actual sensor"));
     }
   }
   board_->initSensor();
+  // initialize timing mode registers
+  board_->setSubRegister("HST_MODE", manualTiming_ ? 0 : 1);
+  board_->setSubRegister("MANSHUT_MODE", manualTiming_ ? 1 : 0);
 }
 
 Sequence Sensor::getArbTiming(SideType side) const
@@ -426,6 +532,56 @@ void Sensor::setManualTiming(SideType side, const Sequence& sequence)
   board_->setSubRegister("HST_MODE", 0);
   board_->setSubRegister("MANSHUT_MODE", 1);
 }
+
+void Sensor::setOscillator(OscillatorType osc)
+{
+  LOG_DEBUG(__func__);
+  board_->setSubRegister("OSC_SELECT", static_cast<unsigned>(osc));
+}
+
+OscillatorType Sensor::getOscillator() const
+{
+  LOG_DEBUG(__func__);
+  OscillatorType osc;
+  uint32_t oscval = board_->getSubRegister("OSC_SELECT");
+  switch (static_cast<OscillatorType>(oscval)) {
+    case OscillatorType::RELAXATION:
+    case OscillatorType::RING:
+    case OscillatorType::RINGNOOSC:
+    case OscillatorType::EXTERNAL:
+      osc = static_cast<OscillatorType>(oscval);
+      break;
+    default:
+      LOG_EXCEPTION(DeviceError(name(), std::string(__func__) + " invalid oscillator register value: " + std::to_string(oscval)));
+  }
+
+  return osc;
+}
+
+std::unique_ptr<uint8_t[]> Sensor::readFrame8()
+{
+  LOG_DEBUG(__func__);
+  return board_->getDataSubRegisterAsUInt8("READ_SRAM", 1, payloadSize());
+}
+
+std::unique_ptr<uint16_t[]> Sensor::readFrame16()
+{
+  LOG_DEBUG(__func__);
+  if (bytesperpixel_ != 2) {
+    LOG_EXCEPTION(DeviceError(name(), std::string(__func__) + " requested 2 bytes per pixel does not match the sensor: " + std::to_string(bytesperpixel_)));
+  }
+  return board_->getDataSubRegisterAsUInt16("READ_SRAM", 1, npixels());
+}
+
+std::unique_ptr<uint32_t[]> Sensor::readFrame32()
+{
+  LOG_DEBUG(__func__);
+  if (bytesperpixel_ != 4) {
+    LOG_EXCEPTION(DeviceError(name(), std::string(__func__) + " requested 4 bytes per pixel does not match the sensor: " + std::to_string(bytesperpixel_)));
+  }
+  return board_->getDataSubRegisterAsUInt32("READ_SRAM", 1, npixels());
+}
+
 
 void Sensor::restoreCachedTiming()
 {

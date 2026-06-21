@@ -4,6 +4,7 @@
 #include "pds/nscam/Device.hh"
 
 #include <vector>
+#include <atomic>
 
 namespace Pds {
   namespace NsCam {
@@ -54,6 +55,13 @@ namespace Pds {
       virtual void enableLED(bool status) = 0;
       virtual void setLED(uint32_t led, bool status) = 0;
 
+      virtual bool armed() const;
+      virtual void arm(TriggerType mode);
+      virtual void disarm();
+      virtual void startCapture(TriggerType mode);
+      virtual bool waitForSRAM(uint32_t timeout_ms);
+      virtual bool abortReadoff(bool flag);
+
     protected:
       virtual double convertMonV(double fraction) const override;
 
@@ -66,6 +74,8 @@ namespace Pds {
       double vref_;
       uint32_t adc5_mult_;
       bool adc5_bipolar_;
+      bool armed_;
+      std::atomic_bool abort_;
     };
   }
 }

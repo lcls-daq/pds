@@ -44,6 +44,17 @@
   FUNC(SideType,A) \
   FUNC(SideType,B)
 
+#define TRIGGERS(FUNC) \
+  FUNC(TriggerType,HARDWARE) \
+  FUNC(TriggerType,SOFTWARE) \
+  FUNC(TriggerType,DUAL)
+
+#define OSCILLATORS(FUNC) \
+  FUNC(OscillatorType,RELAXATION) \
+  FUNC(OscillatorType,RING) \
+  FUNC(OscillatorType,RINGNOOSC) \
+  FUNC(OscillatorType,EXTERNAL)
+
 namespace Pds {
   namespace NsCam {
     CREATE_ENUM(SENSORS, SensorType)
@@ -52,6 +63,8 @@ namespace Pds {
     CREATE_ENUM(TEMPS, TempType)
     CREATE_ENUM(PRESSURES, PressureType)
     CREATE_ENUM(SIDES, SideType)
+    CREATE_ENUM(TRIGGERS, TriggerType)
+    CREATE_ENUM(OSCILLATORS, OscillatorType)
   }
 }
 
@@ -64,5 +77,7 @@ namespace Pds {
 #undef TEMPS
 #undef PRESSURES
 #undef SIDES
+#undef TRIGGERS
+#undef OSCILLATORS
 
 #endif

@@ -20,6 +20,9 @@ namespace Pds {
       virtual void info() const noexcept override;
       virtual void reconnect() override;
 
+    protected:
+      virtual size_t readData(uint16_t addr, uint32_t data, size_t payloadSize) override;
+
     private:
       bool discovery();
       bool isConnected() const noexcept;

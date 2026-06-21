@@ -2,6 +2,22 @@
 
 using namespace Pds::NsCam;
 
+FormatBackup::FormatBackup(std::ostream& ios) :
+  fill_ch_(ios.fill()),
+  ios_(ios),
+  fmt_(ios.flags())
+{}
+
+FormatBackup::~FormatBackup()
+{
+  restore();
+}
+
+void FormatBackup::restore() {
+  ios_.fill(fill_ch_);
+  ios_.flags(fmt_);
+}
+
 Logger& Logger::instance()
 {
   static Logger inst;

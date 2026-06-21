@@ -587,6 +587,7 @@ LLNLv4::LLNLv4(SensorType stype, std::shared_ptr<Comm> comm) :
 
 void LLNLv4::softReboot()
 {
+  LOG_INFO(__func__);
   setSubRegister("RESET", 0);
 }
 
@@ -638,7 +639,7 @@ void LLNLv4::initSensor()
 
 void LLNLv4::latchPots()
 {
-  LOG_INFO(__func__);
+  LOG_DEBUG(__func__);
   // latches register settings for DACA
   setRegister("DAC_CTL", 0x00000001);
   // latches register settings for DACB

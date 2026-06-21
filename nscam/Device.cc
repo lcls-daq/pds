@@ -4,6 +4,8 @@
 #include "Logger.hh"
 
 #include <cmath>
+#include <iostream>
+#include <iomanip>
 
 static void msleep(long ms)
 {
@@ -127,6 +129,87 @@ void Device::setSubRegister(const SubRegister& subreg, uint32_t value)
   }
 }
 
+std::unique_ptr<uint8_t[]> Device::getDataRegisterAsUInt8(const std::string& regname, uint32_t value, size_t len)
+{
+  return getDataRegisterAsUInt8(lookupRegister(regname), value, len);
+}
+
+std::unique_ptr<uint8_t[]> Device::getDataRegisterAsUInt8(uint16_t address, uint32_t value, size_t len)
+{
+  return comm_->readDataAsUInt8(address, value, len);
+}
+
+std::unique_ptr<uint8_t[]> Device::getDataSubRegisterAsUInt8(const std::string& subregname, uint32_t value, size_t len)
+{
+  return getDataSubRegisterAsUInt8(lookupSubRegister(subregname), value, len);
+}
+
+std::unique_ptr<uint8_t[]> Device::getDataSubRegisterAsUInt8(const SubRegister& subreg, uint32_t value, size_t len)
+{
+  if (subreg.writable) {
+    uint32_t regval = getRegister(subreg.regname);
+    regval &= (~(subreg.maxValue() << subreg.start_bit));
+    regval |= ((value & subreg.maxValue()) << subreg.start_bit);
+    return getDataRegisterAsUInt8(subreg.regname, regval, len);
+  } else {
+    throw ReadOnlyRegister(subreg.regname);
+  }
+}
+
+std::unique_ptr<uint16_t[]> Device::getDataRegisterAsUInt16(const std::string& regname, uint32_t value, size_t len)
+{
+  return getDataRegisterAsUInt16(lookupRegister(regname), value, len);
+}
+
+std::unique_ptr<uint16_t[]> Device::getDataRegisterAsUInt16(uint16_t address, uint32_t value, size_t len)
+{
+  return comm_->readDataAsUInt16(address, value, len);
+}
+
+std::unique_ptr<uint16_t[]> Device::getDataSubRegisterAsUInt16(const std::string& subregname, uint32_t value, size_t len)
+{
+  return getDataSubRegisterAsUInt16(lookupSubRegister(subregname), value, len);
+}
+
+std::unique_ptr<uint16_t[]> Device::getDataSubRegisterAsUInt16(const SubRegister& subreg, uint32_t value, size_t len)
+{
+  if (subreg.writable) {
+    uint32_t regval = getRegister(subreg.regname);
+    regval &= (~(subreg.maxValue() << subreg.start_bit));
+    regval |= ((value & subreg.maxValue()) << subreg.start_bit);
+    return getDataRegisterAsUInt16(subreg.regname, regval, len);
+  } else {
+    throw ReadOnlyRegister(subreg.regname);
+  }
+}
+
+std::unique_ptr<uint32_t[]> Device::getDataRegisterAsUInt32(const std::string& regname, uint32_t value, size_t len)
+{
+  return getDataRegisterAsUInt32(lookupRegister(regname), value, len);
+}
+
+std::unique_ptr<uint32_t[]> Device::getDataRegisterAsUInt32(uint16_t address, uint32_t value, size_t len)
+{
+  return comm_->readDataAsUInt32(address, value, len);
+}
+
+std::unique_ptr<uint32_t[]> Device::getDataSubRegisterAsUInt32(const std::string& subregname, uint32_t value, size_t len)
+{
+  return getDataSubRegisterAsUInt32(lookupSubRegister(subregname), value, len);
+}
+
+std::unique_ptr<uint32_t[]> Device::getDataSubRegisterAsUInt32(const SubRegister& subreg, uint32_t value, size_t len)
+{
+  if (subreg.writable) {
+    uint32_t regval = getRegister(subreg.regname);
+    regval &= (~(subreg.maxValue() << subreg.start_bit));
+    regval |= ((value & subreg.maxValue()) << subreg.start_bit);
+    return getDataRegisterAsUInt32(subreg.regname, regval, len);
+  } else {
+    throw ReadOnlyRegister(subreg.regname);
+  }
+}
+
 double Device::getPot(const std::string& potname) const
 {
   const SubRegister& subreg = lookupSubRegister(potname);
@@ -211,6 +294,7 @@ void Device::setPotV(const std::string& potname, double voltage, bool tune, doub
       } else {
         LOG_WARN(potname + " monitor shows insufficient change with pot variation: " + std::to_string(potrange));
       }
+      return;
     }
 
     double potzero = 0.35 - (mon35 / potrange);
@@ -269,6 +353,26 @@ void Device::setPotV(const std::string& potname, double voltage, bool tune, doub
 double Device::getMonV(const std::string& potname) const
 {
   return convertMonV(getPot(lookupMonitor(potname)));
+}
+
+void Device::potInfo() const
+{
+  // save the i/o formatting before changing...
+  FormatBackup fmt(std::cout);
+  std::cout << "Pot Status:" << std::endl;
+  std::cout << "=========================" << std::endl;
+  std::cout << std::fixed << std::setprecision(3);
+  for (const auto& kv : aliases_) {
+    if ((kv.second.rfind("POT", 0) == 0) || (kv.second.rfind("DAC", 0) == 0)) {
+      std::cout << " " << std::left << std::setw(18) << kv.first + ":" << getPotV(kv.first) << " V";
+      if (hasMonitor(kv.first)) {
+        std::cout << ", mon = " << getMonV(kv.first) << " V" << std::endl;
+      } else {
+        std::cout << std::endl;
+      }
+    }
+  }
+  std::cout << std::endl;
 }
 
 CommType Device::commType() const

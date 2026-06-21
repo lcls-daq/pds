@@ -566,6 +566,7 @@ LLNLv1::LLNLv1(SensorType stype, std::shared_ptr<Comm> comm) :
 
 void LLNLv1::softReboot()
 {
+  LOG_INFO(__func__);
   setSubRegister("RESET", 1);
 }
 
@@ -590,7 +591,7 @@ void LLNLv1::initBoard()
   } else if (multmask == 0) {
     adc5_mult_ = 4;
   } else {
-    LOG_EXCEPTION(BoardError(name(), "inconsistent mode settings on ADC5")); 
+    LOG_EXCEPTION(DeviceError(name(), "inconsistent mode settings on ADC5"));
   }
 
   setSubRegister("LED_EN", 1);
@@ -647,7 +648,7 @@ void LLNLv1::initSensor()
 
 void LLNLv1::latchPots()
 {
-  LOG_INFO(__func__);
+  LOG_DEBUG(__func__);
   // latches register settings for pot 1
   setRegister("POT_CTL", 0x00000003);
   // latches register settings for pot 2
@@ -678,19 +679,19 @@ void LLNLv1::latchPots()
 
 void LLNLv1::enableLED(bool status)
 {
-  LOG_INFO(__func__);
+  LOG_DEBUG(__func__);
   setSubRegister("LED_EN", status ? 1 : 0);
 }
 
 void LLNLv1::setLED(uint32_t led, bool status)
 {
-  LOG_INFO(__func__);
+  LOG_DEBUG(__func__);
   setSubRegister("LED" + std::to_string(led), status ? 1 : 0);
 }
 
 double LLNLv1::getTemp(TempType scale) const
 {
-  LOG_DEBUG(std::string(__func__) + ": scale = " + toString(scale));
+  LOG_DEBUG(std::string(__func__) + " scale = " + toString(scale));
   uint32_t raw = getRegister("TEMP_SENSE_DATA");
 
   double temp = (0xfff & raw) / 16.0;

@@ -69,6 +69,20 @@ bool CmdLineTools::parseDetInfo(const char* args, DetInfo& info)
   return true;
 }
 
+bool CmdLineTools::parseBool  (const char* arg, bool& v, int base)
+{
+  if (strcasecmp(arg, "true") == 0) {
+    v = true;
+    return true;
+  } else if (strcasecmp(arg, "false") == 0) {
+    v = false;
+    return true;
+  } else {
+    char* endptr;
+    v = strtol(arg,&endptr,base) != 0;
+    return *endptr==0;
+  }
+}
 
 bool CmdLineTools::parseInt   (const char* arg, int& v, int base)
 {

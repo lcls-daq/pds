@@ -8,6 +8,7 @@ namespace Pds {
   class CmdLineTools {
   public:
     static bool parseDetInfo(const char* args, DetInfo& info);
+    static bool parseBool  (const char* arg, bool&, int base=0);
     static bool parseInt   (const char* arg, int&, int base=0);
     static bool parseUInt  (const char* arg, unsigned&, int base=0);
     static int  parseUInt  (      char* arg, unsigned&, unsigned&, unsigned&, int base=0, int delim=',');

@@ -41,20 +41,8 @@ void Logger::log(Level level, const std::string& message) {
 
   // DEBUG/INFO -> stdout, WARN/ERROR -> stderr
   std::ostream& out = (level >= Level::WARN) ? std::cerr : std::cout;
-  out << "[" << timestamp() << "] [" << levelStr(level) << "] "
-      << message << "\n";
-  // Flush stderr immediately so errors are never lost
-  if (level >= Level::WARN) out.flush();
-}
-
-void Logger::log(Level level, const std::string& prefix, const std::string& message) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  if (level < level_) return;
-
-  // DEBUG/INFO -> stdout, WARN/ERROR -> stderr
-  std::ostream& out = (level >= Level::WARN) ? std::cerr : std::cout;
-  out << "[" << timestamp() << "] [" << levelStr(level) << "] "
-      << prefix << ": " << message << "\n";
+  out << levelColor(level) << "[" << timestamp() << "] [" << levelStr(level) << "] "
+      << message << resetColor() << "\n";
   // Flush stderr immediately so errors are never lost
   if (level >= Level::WARN) out.flush();
 }
@@ -96,7 +84,8 @@ std::string Logger::timestamp() {
   return buf;
 }
 
-const char* Logger::levelStr(Level level) {
+const char* Logger::levelStr(Level level)
+{
   switch (level) {
     case Level::DEBUG: return "DEBUG";
     case Level::INFO:  return "INFO ";
@@ -104,4 +93,34 @@ const char* Logger::levelStr(Level level) {
     case Level::ERROR: return "ERROR";
     default:           return "?????";
   }
-};
+}
+
+const char* Logger::levelColor(Level level)
+{
+  switch (level) {
+    case Level::DEBUG: return "\033[34m";
+    case Level::INFO:  return "\033[32m";
+    case Level::WARN:  return "\033[33m";
+    case Level::ERROR: return "\033[31m";
+    default:           return resetColor();
+  }
+}
+
+const char* Logger::resetColor()
+{
+  return "\033[0m";
+}
+
+LogStream::LogStream(Logger::Level level) :
+  level_(level)
+{}
+
+LogStream::~LogStream()
+{
+  Logger::instance().log(level_, stream_.str());
+}
+
+std::string StreamHelper::str() const
+{
+  return stream_.str();
+}

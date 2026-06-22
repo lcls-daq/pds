@@ -587,13 +587,13 @@ LLNLv4::LLNLv4(SensorType stype, std::shared_ptr<Comm> comm) :
 
 void LLNLv4::softReboot()
 {
-  LOG_INFO(__func__);
+  LOG_INFO << __func__;
   setSubRegister("RESET", 0);
 }
 
 void LLNLv4::initBoard()
 {
-  LOG_INFO(__func__);
+  LOG_INFO << __func__;
   clearStatus();
   configADCs();
 
@@ -607,7 +607,7 @@ void LLNLv4::initBoard()
 
 void LLNLv4::configADCs()
 {
-  LOG_INFO(__func__);
+  LOG_INFO << __func__;
   // pull all adcs out of reset
   setRegister("ADC_RESET", 0x00000000);
   // workaround for uncertain behavior after previous readoff
@@ -624,13 +624,13 @@ void LLNLv4::configADCs()
 
 void LLNLv4::initPots()
 {
-  LOG_INFO(__func__);
+  LOG_INFO << __func__;
   // Dummy function; initial DAC values are set by firmware at startup
 }
 
 void LLNLv4::initSensor()
 {
-  LOG_INFO(__func__);
+  LOG_INFO << __func__;
   initDefaults();
   // ring w/caps=01, relax=00, ring w/o caps = 02
   setSubRegister("OSC_SELECT", 0x00);
@@ -639,7 +639,7 @@ void LLNLv4::initSensor()
 
 void LLNLv4::latchPots()
 {
-  LOG_DEBUG(__func__);
+  LOG_DEBUG << __func__;
   // latches register settings for DACA
   setRegister("DAC_CTL", 0x00000001);
   // latches register settings for DACB
@@ -660,17 +660,17 @@ void LLNLv4::latchPots()
 
 void LLNLv4::enableLED(bool status)
 {
-  LOG_WARN(std::string(__func__) + " is not implemented on " + name() + " board");
+  LOG_WARN << __func__ << " is not implemented on " << type() << " board";
 }
 
 void LLNLv4::setLED(uint32_t led, bool status)
 {
-  LOG_WARN(std::string(__func__) + " is not implemented on " + name() + " board");
+  LOG_WARN << __func__ << " is not implemented on " << type() << " board";
 }
 
 double LLNLv4::getTemp(TempType scale) const
 {
-  LOG_DEBUG(std::string(__func__) + ": scale = " + toString(scale));
+  LOG_DEBUG << __func__ << ": scale = " << scale;
   double raw = getMonV("MON_TEMP");
 
   double temp = raw * 1000;

@@ -1,17 +1,22 @@
 #ifndef Pds_NsCam_Types_hh
 #define Pds_NsCam_Types_hh
 
+#include <iostream>
+
 #define AS_ENUM(T,E) E,
 #define AS_STRING_CASE(T,E) case T::E: return #E;
 
 #define CREATE_ENUM(ENUMS, ETYPE) \
   enum class ETYPE : unsigned { ENUMS(AS_ENUM) }; \
-  inline char const* toString(const ETYPE etype) { \
+  inline char const* toString(const ETYPE& etype) { \
     switch (etype) { \
       ENUMS(AS_STRING_CASE) \
       default: \
         return nullptr; \
     } \
+  } \
+  inline std::ostream& operator<<(std::ostream& os, const ETYPE& etype) { \
+    return os << toString(etype); \
   }
 
 #define SENSORS(FUNC) \

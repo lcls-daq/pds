@@ -71,7 +71,7 @@ constexpr size_t DataHeaderSize = 2 * sizeof(GigePacket);
 
 static std::string ip2str(const unsigned char (&ipaddr)[4])
 {
-  std::stringstream ipsstr;
+  std::ostringstream ipsstr;
   ipsstr << int(ipaddr[0]) << ".";
   ipsstr << int(ipaddr[1]) << ".";
   ipsstr << int(ipaddr[2]) << ".";
@@ -82,7 +82,7 @@ static std::string ip2str(const unsigned char (&ipaddr)[4])
 
 static std::string mac2str(const unsigned char (&macaddr)[6])
 {
-  std::stringstream macstr;
+  std::ostringstream macstr;
   for (int m=0; m<6; m++) {
     if (m==0) {
       macstr << std::hex << int(macaddr[m]);

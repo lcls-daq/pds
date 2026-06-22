@@ -31,6 +31,8 @@ namespace Pds {
       void sensorInfo() const;
       void statusInfo() const;
       void potInfo() const;
+      BoardType boardType() const;
+      SensorType sensorType() const;
       std::string boardName() const;
       std::string sensorName() const;
       uint32_t boardFpgaNum() const;

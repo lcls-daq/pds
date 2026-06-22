@@ -48,13 +48,13 @@ Board::Board(BoardType btype,
     if ((type_byte == 1) || (type_byte == 4)) {
       BoardType fpga_btype = type_byte == 1 ? BoardType::LLNL_V1 : BoardType::LLNL_V4;
       if (btype_ != fpga_btype) {
-        LOG_EXCEPTION(DeviceError(name(), "Inconsistent board type (fpga, config): " + std::string(toString(fpga_btype)) + ", " + name()));
+        LOG_EXCEPTION(DeviceError, name(), LOG_STR("Inconsistent board type (fpga, config): " << fpga_btype << ", " << type()));
       }
     } else {
-      LOG_EXCEPTION(DeviceError(name(), "Unsupported board type: " + std::to_string(type_byte)));
+      LOG_EXCEPTION(DeviceError, name(), LOG_STR("Unsupported board type: " << type_byte));
     }
   } else {
-    LOG_EXCEPTION(DeviceError(name(), "Unsupported board type: SNLrevC"));
+    LOG_EXCEPTION(DeviceError, name(), "Unsupported board type: SNLrevC");
   }
 
   // check if the board is rad tolerant
@@ -69,10 +69,10 @@ Board::Board(BoardType btype,
   if ((sensor_byte == 1) || (sensor_byte == 2)) {
     SensorType fpga_stype = sensor_byte == 1 ? (stype_ == SensorType::ICARUS2 ? SensorType::ICARUS2 : SensorType::ICARUS) : SensorType::DAEDALUS;
     if (stype_ != fpga_stype) {
-      LOG_EXCEPTION(DeviceError("Inconsistent sensor type (fpga, config): " + std::string(toString(fpga_stype)) + ", " + std::string(toString(stype_))));
+      LOG_EXCEPTION(DeviceError, name(), LOG_STR("Inconsistent sensor type (fpga, config): " << fpga_stype << ", " << stype_));
     }
   } else {
-    LOG_EXCEPTION(DeviceError("Unsupported sensor type: " + std::to_string(sensor_byte)));
+    LOG_EXCEPTION(DeviceError, name(), LOG_STR("Unsupported sensor type: " << sensor_byte));
   }
 
   // check supported interface types
@@ -188,51 +188,51 @@ bool Board::adc5_bipolar() const
 
 uint32_t Board::getTimer() const
 {
-  LOG_DEBUG(__func__);
+  LOG_DEBUG << __func__;
   return getRegister("TIMER_VALUE");
 }
 
 void Board::resetTimer()
 {
-  LOG_DEBUG(__func__);
+  LOG_DEBUG << __func__;
   setSubRegister("RESET_TIMER", 1);
   setSubRegister("RESET_TIMER", 0);
 }
 
 double Board::getPressure(double offset, double sensitivity, PressureType scale) const
 {
-  LOG_WARN(std::string(__func__) + " is not implement on the " + name() + " board.");
+  LOG_WARN << __func__ << " is not implement on the " << name() << " board.";
   return 0.0;
 }
 
 double Board::getPressure(PressureType scale) const
 {
-  LOG_WARN(std::string(__func__) + " is not implement on the " + name() + " board.");
+  LOG_WARN << __func__ << " is not implement on the " << name() << " board.";
   return 0.0;
 }
 
 double Board::getPressure() const
 {
-  LOG_WARN(std::string(__func__) + " is not implement on the " + name() + " board.");
+  LOG_WARN << __func__ << " is not implement on the " << name() << " board.";
   return 0.0;
 }
 
 void Board::clearStatus()
 {
-  LOG_DEBUG(__func__);
+  LOG_DEBUG << __func__;
   getRegister("STAT_REG_SRC");
   getRegister("STAT_REG2_SRC");
 }
 
 uint32_t Board::checkStatus() const
 {
-  LOG_DEBUG(__func__);
+  LOG_DEBUG << __func__;
   return getRegister("STAT_REG");
 }
 
 uint32_t Board::checkStatus2() const
 {
-  LOG_DEBUG(__func__);
+  LOG_DEBUG << __func__;
   return getRegister("STAT_REG2");
 }
 
@@ -243,7 +243,7 @@ bool Board::armed() const
 
 void Board::arm(TriggerType mode)
 {
-  LOG_DEBUG(std::string(__func__) + " mode = " + toString(mode));
+  LOG_DEBUG << __func__ << " mode = " << mode;
   clearStatus();
   latchPots();
   startCapture(mode);
@@ -252,7 +252,7 @@ void Board::arm(TriggerType mode)
 
 void Board::disarm()
 {
-  LOG_DEBUG(__func__);
+  LOG_DEBUG << __func__;
   clearStatus();
   armed_ = false;
   setSubRegister("HW_TRIG_EN", 0);
@@ -261,7 +261,7 @@ void Board::disarm()
 
 void Board::startCapture(TriggerType mode)
 {
-  LOG_DEBUG(__func__);
+  LOG_DEBUG << __func__;
   setRegister("ADC_CTL", 0x0000001F);
   if (mode == TriggerType::SOFTWARE) {
     setSubRegister("HW_TRIG_EN", 0);
@@ -275,44 +275,44 @@ void Board::startCapture(TriggerType mode)
 
 bool Board::waitForSRAM(uint32_t timeout_ms)
 {
-  LOG_DEBUG(__func__);
+  LOG_DEBUG << __func__;
   bool waiting = true;
-  bool timeout = false;
+  bool ready = false;
   auto start = std::chrono::system_clock::now();
 
   while (waiting) {
     uint32_t sram = getSubRegister("SRAM_READY");
     if (sram) {
       waiting = false;
-      LOG_DEBUG(std::string(__func__) + " SRAM ready");
+      ready = true;
+      LOG_DEBUG << __func__ << " SRAM ready";
     }
 
     // check if acquisition has been aborted
     if (abort_.exchange(false)) {
       waiting = false;
-      LOG_DEBUG(std::string(__func__) + " readoff aborted by user");
+      LOG_DEBUG << __func__ << " readoff aborted by user";
     }
 
     // if timeout is enabled then check
-    if ((sram == 0) && (timeout_ms > 0)) {
+    if (!ready && (timeout_ms > 0)) {
       auto current = std::chrono::system_clock::now();
       auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(current - start);
       if (elapsed.count() > timeout_ms) {
         waiting = false;
-        timeout = true;
-        LOG_ERROR(std::string(__func__) + " SRAM timeout");
+        LOG_ERROR << __func__ << " SRAM timeout";
       }
     }
   }
 
-  return !timeout;
+  return ready;
 }
 
 bool Board::abortReadoff(bool flag)
 {
-  LOG_DEBUG(__func__);
+  LOG_DEBUG << __func__;
   abort_.store(flag);
-  return false;
+  return flag;
 }
 
 double Board::convertMonV(double fraction) const

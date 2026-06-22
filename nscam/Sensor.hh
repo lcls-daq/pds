@@ -11,10 +11,17 @@ namespace Pds {
       uint32_t open;
       uint32_t closed;
       uint32_t delay;
+      static std::string toString(const Timing& timing);
+      friend std::ostream& operator<<(std::ostream& os, const Timing& timing);
     };
 
     typedef std::vector<uint64_t> Sequence;
     typedef std::map<SideType, Sequence> TimingCache;
+
+    std::ostream& operator<<(std::ostream& os, const Timing& timing);
+    std::ostream& operator<<(std::ostream& os, const Sequence& sequence);
+
+    std::string toString(const Sequence& sequence);
 
     class Sensor {
     public:
@@ -29,9 +36,14 @@ namespace Pds {
              uint32_t bytesperpixel);
       virtual ~Sensor() = default;
 
+      /* sensor init */
+      virtual void initSensor();
+
+      /* sensor information */
       virtual void info() const;
       virtual SensorType type() const;
       virtual std::string name() const;
+      virtual bool checkSensorVoltStat() = 0;
 
       /* fixed sensor values */
       virtual uint32_t minframe() const;
@@ -58,21 +70,26 @@ namespace Pds {
       /* manual timing flag */
       virtual bool manualTiming() const;
 
-      virtual void initSensor();
-      virtual bool checkSensorVoltStat() = 0;
+      /* sensor timing functions */
       virtual Sequence getArbTiming(SideType side) const;
       virtual Timing getTiming(SideType side) const;
       virtual Sequence getManualTiming(SideType side) const;
       virtual void setArbTiming(SideType side, const Sequence& sequence);
       virtual void setTiming(SideType side, const Timing& timing);
       virtual void setManualTiming(SideType side, const Sequence& sequence);
+
+      /* misc sensor settings */
       virtual void setOscillator(OscillatorType osc);
       virtual OscillatorType getOscillator() const;
+      virtual void setInterlacing(uint32_t ifactor, SideType side);
+      virtual uint32_t getInterlacing(SideType side) const;
 
+      /* data access functions */
       virtual std::unique_ptr<uint8_t[]>  readFrame8();
       virtual std::unique_ptr<uint16_t[]> readFrame16();
       virtual std::unique_ptr<uint32_t[]> readFrame32();
 
+      /* restored cached timing setting to detector - used after reboot */
       virtual void restoreCachedTiming();
 
     protected:

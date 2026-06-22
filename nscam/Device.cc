@@ -250,7 +250,7 @@ void Device::setPot(const std::string& potname, double fraction)
     uint32_t potnumlatch = int(name[3] - 'A') * 2 + 1;
     setRegister("DAC_CTL", potnumlatch);
   } else {
-    LOG_EXCEPTION(PotError(name, "is not a valid pot/dac"));
+    LOG_EXCEPTION(PotError, name, "is not a valid pot/dac");
   }
 }
 
@@ -272,7 +272,7 @@ void Device::setPotV(const std::string& potname, double voltage, bool tune, doub
 
   if (tune) {
     if (!hasMonitor(potname)) {
-      LOG_EXCEPTION(PotError(potname, "does not have a monitor - cannot tune"));
+      LOG_EXCEPTION(PotError, potname, "does not have a monitor - cannot tune");
     }
 
     setPot(potname, 0.65);
@@ -290,9 +290,9 @@ void Device::setPotV(const std::string& potname, double voltage, bool tune, doub
       // restore the nominal value
       setPot(potname, fraction);
       if (tuneErr) {
-        LOG_EXCEPTION(PotError(potname, "monitor shows insufficient change with pot variation: " + std::to_string(potrange)));
+        LOG_EXCEPTION(PotError, potname, LOG_STR("monitor shows insufficient change with pot variation: " << potrange));
       } else {
-        LOG_WARN(potname + " monitor shows insufficient change with pot variation: " + std::to_string(potrange));
+        LOG_WARN << potname << " monitor shows insufficient change with pot variation: " << potrange;
       }
       return;
     }
@@ -342,9 +342,9 @@ void Device::setPotV(const std::string& potname, double voltage, bool tune, doub
     double diff = voltage - measured;
     if (diff > mindiff) {
       if (tuneErr) {
-        LOG_EXCEPTION(PotError(potname, "tuning failed: diff (" + std::to_string(diff) + ") is greater than mindiff (" + std::to_string(mindiff) + ")"));
+        LOG_EXCEPTION(PotError, potname, LOG_STR("tuning failed: diff (" << diff << ") is greater than mindiff (" << mindiff << ")"));
       } else {
-        LOG_WARN(potname + " tuning failed: diff (" + std::to_string(diff) + ") is greater than mindiff (" + std::to_string(mindiff) + ")");
+        LOG_WARN << potname << " tuning failed: diff (" << diff << ") is greater than mindiff (" << mindiff << ")";
       }
     }
   }

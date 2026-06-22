@@ -5,6 +5,7 @@
 #include <iostream>
 #include <mutex>
 #include <string>
+#include <sstream>
 
 namespace Pds {
   namespace NsCam {
@@ -26,7 +27,7 @@ namespace Pds {
 
     class Logger {
     public:
-      enum class Level { DEBUG = 0, INFO = 1, WARN = 2, ERROR = 3 };
+      enum class Level : unsigned { DEBUG = 0, INFO = 1, WARN = 2, ERROR = 3 };
 
       static Logger& instance();
 
@@ -35,9 +36,8 @@ namespace Pds {
       Level getLevel() const;
 
       void log(Level level, const std::string& message);
-      void log(Level level, const std::string& prefix, const std::string& message);
 
-      // Convenience wrappers
+      // Convenience wrappers for logging a throwing exception
       void debug(const std::string& msg);
       void info (const std::string& msg);
       void warn (const std::string& msg);
@@ -48,6 +48,7 @@ namespace Pds {
         log(Level::ERROR, exp.what());
         throw exp;
       }
+      static std::string toString(const std::ostringstream& oss);
 
       // Non-copyable
       Logger(const Logger&)            = delete;
@@ -62,17 +63,50 @@ namespace Pds {
       static std::string timestamp();
 
       static const char* levelStr(Level level);
+      static const char* levelColor(Level level);
+      static const char* resetColor();
+    };
+
+    class LogStream {
+    public:
+      LogStream(Logger::Level level);
+      ~LogStream();
+
+      template <typename T>
+      LogStream& operator<<(const T& value) {
+        stream_ << value;
+        return *this;
+      }
+
+    private:
+      std::ostringstream stream_;
+      Logger::Level level_;
+    };
+
+    class StreamHelper {
+    public:
+      template <typename T>
+      StreamHelper& operator<<(const T& value) {
+        stream_ << value;
+        return *this;
+      }
+
+      std::string str() const;
+
+    private:
+      std::ostringstream stream_;
     };
   }
 }
 
 // helper macros
 #ifndef _NOLOGGERMACROS
-#define LOG_DEBUG(msg) Pds::NsCam::Logger::instance().debug(msg)
-#define LOG_INFO(msg)  Pds::NsCam::Logger::instance().info(msg)
-#define LOG_WARN(msg)  Pds::NsCam::Logger::instance().warn(msg)
-#define LOG_ERROR(msg) Pds::NsCam::Logger::instance().error(msg)
-#define LOG_EXCEPTION(exp) Pds::NsCam::Logger::instance().exception(exp)
+#define LOG_DEBUG LogStream(Logger::Level::DEBUG)
+#define LOG_INFO  LogStream(Logger::Level::INFO)
+#define LOG_WARN  LogStream(Logger::Level::WARN)
+#define LOG_ERROR LogStream(Logger::Level::ERROR)
+#define LOG_EXCEPTION(exp, ...) Pds::NsCam::Logger::instance().exception(exp(__VA_ARGS__))
+#define LOG_STR(stream) (StreamHelper() << stream).str()
 #endif
 
 #endif

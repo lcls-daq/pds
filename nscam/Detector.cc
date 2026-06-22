@@ -37,7 +37,7 @@ void Detector::initialize()
 
 void Detector::reinitialize()
 {
-  LOG_INFO(__func__);
+  LOG_INFO << __func__;
   comm_->reconnect();
   initialize();
 
@@ -51,7 +51,7 @@ void Detector::reboot()
     board_->softReboot();
   } catch (const CommException& err) {
     // this is not unexcepted just log the error for debug
-    LOG_DEBUG(std::string(__func__) + " " + err.what());
+    LOG_DEBUG << __func__ << " " << err.what();
   }
   reinitialize();
 }
@@ -98,6 +98,16 @@ void Detector::potInfo() const
   board_->potInfo();
 }
 
+BoardType Detector::boardType() const
+{
+  return board_->type();
+}
+
+SensorType Detector::sensorType() const
+{
+  return sensor_->type();
+}
+
 std::string Detector::boardName() const
 {
   return board_->name();
@@ -130,7 +140,7 @@ bool Detector::powerCheck(uint32_t delta) const
 
   auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(cur_time - inittime_);
   uint32_t difference = std::abs(elapsed.count() - timer);
-  LOG_DEBUG(std::string(__func__) + " elapsed time = " + std::to_string(elapsed.count()) + ", difference = " + std::to_string(difference));
+  LOG_DEBUG << __func__ << " elapsed time = " << elapsed.count() << ", difference = " << difference;
 
   return difference < delta;
 }
@@ -416,7 +426,7 @@ bool Detector::abortReadoff(bool flag)
 
 void Detector::initPowerCheck()
 {
-  LOG_DEBUG(std::string(__func__) + " resetting timer for power check function");
+  LOG_DEBUG << __func__ << " resetting timer for power check function";
   inittime_ = std::chrono::system_clock::now();
   resetTimer();
 }

@@ -17,13 +17,35 @@ static constexpr uint64_t manual_seq_scale = UINT64_C(25);
 static constexpr uint64_t min_manual_timing = UINT64_C(0x4b);
 static constexpr uint64_t max_manual_timing = UINT64_C(0x640000000);
 
+std::ostream& Pds::NsCam::operator<<(std::ostream& os, const Timing& timing)
+{
+  os << "[";
+  os << " open = " << timing.open << ",";
+  os << " closed = " << timing.closed << ",";
+  os << " delay = " << timing.delay << " ]";
+  return os;
+}
 
-using namespace Pds::NsCam;
-
-static std::string seq2str(const Sequence& sequence)
+std::ostream& Pds::NsCam::operator<<(std::ostream& os, const Sequence& sequence)
 {
   bool first = true;
-  std::stringstream seqstr;
+  os << "[";
+  for (const auto& seq : sequence) {
+    if (first) {
+      os << " " << seq;
+      first = false;
+    } else {
+      os << ", " << seq;
+    }
+  }
+  os << " ]";
+  return os;
+}
+
+std::string Pds::NsCam::toString(const Sequence& sequence)
+{
+  bool first = true;
+  std::ostringstream seqstr;
   seqstr << "[";
   for (const auto& seq : sequence) {
     if (first) {
@@ -37,9 +59,11 @@ static std::string seq2str(const Sequence& sequence)
   return seqstr.str();
 }
 
-static std::string timing2str(const Timing& timing)
+using namespace Pds::NsCam;
+
+std::string Timing::toString(const Timing& timing)
 {
-  std::stringstream timingstr;
+  std::ostringstream timingstr;
   timingstr << "[";
   timingstr << " open = " << timing.open << ",";
   timingstr << " closed = " << timing.closed << ",";
@@ -109,15 +133,16 @@ void Sensor::info() const
   std::cout << " Frame Size:       " << payloadSize() << std::endl;
   std::cout << " Manual Timing:    " << manualTiming_ << std::endl;
   if (manualTiming_) {
-    std::cout << " Sequence Side A:  " << seq2str(getManualTiming(SideType::A)) << std::endl;
-    std::cout << " Sequence Side B:  " << seq2str(getManualTiming(SideType::B)) << std::endl;
+    std::cout << " Sequence Side A:  " << getManualTiming(SideType::A) << std::endl;
+    std::cout << " Sequence Side B:  " << getManualTiming(SideType::B) << std::endl;
   } else {
-    std::cout << " Timing Side A:    " << timing2str(getTiming(SideType::A)) << std::endl;
-    std::cout << " Timing Side B:    " << timing2str(getTiming(SideType::B)) << std::endl;
-    std::cout << " Sequence Side A:  " << seq2str(getArbTiming(SideType::A)) << std::endl;
-    std::cout << " Sequence Side B:  " << seq2str(getArbTiming(SideType::B)) << std::endl;
+    std::cout << " Timing Side A:    " << getTiming(SideType::A) << std::endl;
+    std::cout << " Timing Side B:    " << getTiming(SideType::B) << std::endl;
+    std::cout << " Sequence Side A:  " << getArbTiming(SideType::A) << std::endl;
+    std::cout << " Sequence Side B:  " << getArbTiming(SideType::B) << std::endl;
   }
-  std::cout << " Oscillator:       " << toString(getOscillator()) << std::endl;
+  std::cout << " Oscillator:       " << getOscillator() << std::endl;
+  std::cout << " Interlacing:      " << "[ " << getInterlacing(SideType::A) << ", " << getInterlacing(SideType::B) << " ]" << std::endl;
   std::cout << std::endl;
 }
 
@@ -208,9 +233,9 @@ void Sensor::setRows()
 
 void Sensor::setRows(uint32_t minrow, uint32_t maxrow)
 {
-  LOG_DEBUG(std::string(__func__) + " minrow " + std::to_string(minrow) + " maxrow " + std::to_string(maxrow));
+  LOG_DEBUG << __func__ << " minrow " << minrow << " maxrow " << maxrow;
   if (minrow > maxrow || maxrow >= maxheight_) {
-    LOG_EXCEPTION(InvalidROI(minrow, maxrow, "ROI row bounds are out of range"));
+    LOG_EXCEPTION(InvalidROI, minrow, maxrow, "ROI row bounds are out of range");
   }
 
   board_->setRegister("FPA_ROW_INITIAL", minrow);
@@ -227,9 +252,9 @@ void Sensor::setFrames()
 
 void Sensor::setFrames(uint32_t minframe, uint32_t maxframe)
 {
-  LOG_DEBUG(std::string(__func__) + " minframe " + std::to_string(minframe) + " maxframe " + std::to_string(maxframe));
+  LOG_DEBUG << __func__ << " minframe " << minframe << " maxframe " << maxframe;
   if (minframe < minframe_ || minframe > maxframe || maxframe > maxframe_) {
-    LOG_EXCEPTION(InvalidROI(minframe, maxframe, "ROI frame bounds are out of range"));
+    LOG_EXCEPTION(InvalidROI, minframe, maxframe, "ROI frame bounds are out of range");
   }
 
   board_->setRegister("FPA_FRAME_INITIAL", minframe);
@@ -246,10 +271,10 @@ bool Sensor::manualTiming() const
 
 void Sensor::initSensor()
 {
-  LOG_DEBUG(__func__);
+  LOG_DEBUG << __func__;
   if (board_->type() == BoardType::LLNL_V1) {
     if (!checkSensorVoltStat()) {
-      LOG_EXCEPTION(DeviceError(name(), "FPGA sensor select jumpers do not match with actual sensor"));
+      LOG_EXCEPTION(DeviceError, name(), "FPGA sensor select jumpers do not match with actual sensor");
     }
   }
   board_->initSensor();
@@ -260,7 +285,7 @@ void Sensor::initSensor()
 
 Sequence Sensor::getArbTiming(SideType side) const
 {
-  LOG_DEBUG(std::string(__func__) + " side " + toString(side));
+  LOG_DEBUG << __func__ << " side " << side;
   uint64_t timingreg = 0;
   Sequence sequence;
   if (side == SideType::A) {
@@ -268,7 +293,7 @@ Sequence Sensor::getArbTiming(SideType side) const
   } else if (side == SideType::B) {
     timingreg = Device::combineRegisters(board_->getRegister("HS_TIMING_DATA_BLO"), board_->getRegister("HS_TIMING_DATA_BHI")) & timing_bitmask;
   } else {
-    LOG_EXCEPTION(InvalidTiming("Invalid sensor side '" + std::string(toString(side)) + "' for getTiming"));
+    LOG_EXCEPTION(InvalidTiming, LOG_STR("Invalid sensor side '" << side << "' for getTiming"));
   }
 
   uint64_t last = 0;
@@ -295,7 +320,7 @@ Sequence Sensor::getArbTiming(SideType side) const
 Timing Sensor::getTiming(SideType side) const
 {
 
-  LOG_DEBUG(std::string(__func__) + " side " + toString(side));
+  LOG_DEBUG << __func__ << " side " << side;
   Timing timing{0,0,0};
   Sequence timingSeq = getArbTiming(side);
 
@@ -313,7 +338,7 @@ Timing Sensor::getTiming(SideType side) const
   // warn if there is extra effective delay from hidden pre-frames
   if (firstframe_ > 0) {
     uint32_t f0delay = timing.delay + firstframe_ * (timing.open + timing.closed);
-    LOG_WARN(std::string(__func__) + " actual effective delay for " + name() + " sensor is " + std::to_string(f0delay));
+    LOG_WARN << __func__ << " actual effective delay for " << type() << " sensor is " << f0delay;
   }
 
   return timing;
@@ -340,7 +365,7 @@ Sequence Sensor::getManualTiming(SideType side) const
     sequence[5] = board_->getRegister("W2_INTERFRAME_B")  * manual_seq_scale;
     sequence[6] = board_->getRegister("W3_INTEGRATION_B") * manual_seq_scale;
   } else {
-    LOG_EXCEPTION(InvalidTiming("Invalid sensor side '" + std::string(toString(side)) + "' for getManualTiming"));
+    LOG_EXCEPTION(InvalidTiming, LOG_STR("Invalid sensor side '" << side << "' for getManualTiming"));
   }
 
   return sequence;
@@ -348,7 +373,7 @@ Sequence Sensor::getManualTiming(SideType side) const
 
 void Sensor::setArbTiming(SideType side, const Sequence& sequence)
 {
-  LOG_DEBUG(std::string(__func__) + " side " + toString(side) + " sequence " + seq2str(sequence));
+  LOG_DEBUG << __func__ << " side " << side << " sequence " << toString(sequence);
   uint64_t timingreg = 0;
   uint64_t flag = 0;
   uint32_t count = 0;
@@ -397,7 +422,7 @@ void Sensor::setArbTiming(SideType side, const Sequence& sequence)
   }
 
   if (!wrote) {
-    LOG_EXCEPTION(InvalidTiming("Invalid sensor side '" + std::string(toString(side)) + "' for setArbTiming"));
+    LOG_EXCEPTION(InvalidTiming, LOG_STR("Invalid sensor side '" << side << "' for setArbTiming"));
   }
 
   board_->setSubRegister("MANSHUT_MODE", 0);
@@ -411,13 +436,13 @@ void Sensor::setArbTiming(SideType side, const Sequence& sequence)
   }
 
   if (actual != sequence) {
-    LOG_WARN(std::string(__func__) + " sequence truncated due to length, actual timing: " + seq2str(actual));
+    LOG_WARN << __func__ << " sequence truncated due to length, actual timing: " << actual;
   }
 }
 
 void Sensor::setTiming(SideType side, const Timing& timing)
 {
-  LOG_DEBUG(std::string(__func__) + " side " + toString(side) + " timing " + timing2str(timing));
+  LOG_DEBUG << __func__ << " side " << side << " timing " << timing;
   uint32_t count = 1;
   Sequence sequence;
 
@@ -452,7 +477,7 @@ void Sensor::setTiming(SideType side, const Timing& timing)
   }
 
   if (count > timing_bits) {
-    LOG_EXCEPTION(InvalidTiming("Timing sequence is too long to be implemented: " + std::to_string(count)));
+    LOG_EXCEPTION(InvalidTiming, LOG_STR("Timing sequence is too long to be implemented: " << count));
   }
 
   setArbTiming(side, sequence);
@@ -468,27 +493,27 @@ void Sensor::setTiming(SideType side, const Timing& timing)
   // warn if there is extra effective delay from hidden pre-frames
   if (firstframe_ > 0) {
     uint32_t f0delay = timing.delay + firstframe_ * (timing.open + timing.closed);
-    LOG_WARN(std::string(__func__) + " actual effective delay for " + name() + " sensor is " + std::to_string(f0delay));
+    LOG_WARN << __func__ << " actual effective delay for " << type() << " sensor is " << f0delay;
   }
 
   if (actual != sequence) {
-    LOG_WARN(std::string(__func__) + " sequence truncated due to length, actual timing: " + seq2str(actual));
+    LOG_WARN << __func__ << " sequence truncated due to length, actual timing: " << actual;
   }
 }
 
 void Sensor::setManualTiming(SideType side, const Sequence& sequence)
 {
-  LOG_DEBUG(std::string(__func__) + " side " + toString(side) + " sequence " + seq2str(sequence));
+  LOG_DEBUG << __func__ << " side " << side << " sequence " << sequence;
 
   // check the length of the sequence
   if (sequence.size() != manual_seq_len) {
-    LOG_EXCEPTION(InvalidTiming("Invalid manual shutter sequence length (actual vs. expected): " + std::to_string(sequence.size()) + " vs. " + std::to_string(manual_seq_len)));
+    LOG_EXCEPTION(InvalidTiming, LOG_STR("Invalid manual shutter sequence length (actual vs. expected): " << sequence.size() << " vs. " << manual_seq_len));
   }
 
   // check the values are in valid range
   for (const auto& seq : sequence) {
     if (seq < min_manual_timing || seq > max_manual_timing) {
-      LOG_EXCEPTION(InvalidTiming("Invalid manual shutter timing: " + std::to_string(seq)));
+      LOG_EXCEPTION(InvalidTiming, LOG_STR("Invalid manual shutter timing: " << seq));
     }
   }
 
@@ -526,7 +551,7 @@ void Sensor::setManualTiming(SideType side, const Sequence& sequence)
   }
 
   if (!wrote) {
-    LOG_EXCEPTION(InvalidTiming("Invalid sensor side '" + std::string(toString(side)) + "' for setManualTiming"));
+    LOG_EXCEPTION(InvalidTiming, LOG_STR("Invalid sensor side '" << side << "' for setManualTiming"));
   }
 
   board_->setSubRegister("HST_MODE", 0);
@@ -535,13 +560,13 @@ void Sensor::setManualTiming(SideType side, const Sequence& sequence)
 
 void Sensor::setOscillator(OscillatorType osc)
 {
-  LOG_DEBUG(__func__);
+  LOG_DEBUG << __func__;
   board_->setSubRegister("OSC_SELECT", static_cast<unsigned>(osc));
 }
 
 OscillatorType Sensor::getOscillator() const
 {
-  LOG_DEBUG(__func__);
+  LOG_DEBUG << __func__;
   OscillatorType osc;
   uint32_t oscval = board_->getSubRegister("OSC_SELECT");
   switch (static_cast<OscillatorType>(oscval)) {
@@ -552,32 +577,52 @@ OscillatorType Sensor::getOscillator() const
       osc = static_cast<OscillatorType>(oscval);
       break;
     default:
-      LOG_EXCEPTION(DeviceError(name(), std::string(__func__) + " invalid oscillator register value: " + std::to_string(oscval)));
+      LOG_EXCEPTION(DeviceError, name(), LOG_STR("Invalid oscillator register value: " << oscval));
   }
 
   return osc;
 }
 
+void Sensor::setInterlacing(uint32_t ifactor, SideType side)
+{
+  LOG_WARN << __func__ << " Interlacing is not supported by " << type() << " sensors";
+}
+
+uint32_t Sensor::getInterlacing(SideType side) const
+{
+  LOG_DEBUG << __func__;
+  uint32_t ifactor = 0;
+  if (side == SideType::A) {
+    ifactor = interlacing_[0];
+  } else if (side == SideType::B) {
+    ifactor = interlacing_[1];
+  } else {
+    LOG_EXCEPTION(InvalidTiming, LOG_STR("Invalid sensor side '"  << side << "' for getInterlacing"));
+  }
+
+  return ifactor;
+}
+
 std::unique_ptr<uint8_t[]> Sensor::readFrame8()
 {
-  LOG_DEBUG(__func__);
+  LOG_DEBUG << __func__;
   return board_->getDataSubRegisterAsUInt8("READ_SRAM", 1, payloadSize());
 }
 
 std::unique_ptr<uint16_t[]> Sensor::readFrame16()
 {
-  LOG_DEBUG(__func__);
+  LOG_DEBUG << __func__;
   if (bytesperpixel_ != 2) {
-    LOG_EXCEPTION(DeviceError(name(), std::string(__func__) + " requested 2 bytes per pixel does not match the sensor: " + std::to_string(bytesperpixel_)));
+    LOG_EXCEPTION(DeviceError, name(), LOG_STR(__func__ << " requested 2 bytes per pixel does not match the sensor: " << bytesperpixel_));
   }
   return board_->getDataSubRegisterAsUInt16("READ_SRAM", 1, npixels());
 }
 
 std::unique_ptr<uint32_t[]> Sensor::readFrame32()
 {
-  LOG_DEBUG(__func__);
+  LOG_DEBUG << __func__;
   if (bytesperpixel_ != 4) {
-    LOG_EXCEPTION(DeviceError(name(), std::string(__func__) + " requested 4 bytes per pixel does not match the sensor: " + std::to_string(bytesperpixel_)));
+    LOG_EXCEPTION(DeviceError, name(), LOG_STR(__func__ << " requested 4 bytes per pixel does not match the sensor: " << bytesperpixel_));
   }
   return board_->getDataSubRegisterAsUInt32("READ_SRAM", 1, npixels());
 }

@@ -583,6 +583,11 @@ OscillatorType Sensor::getOscillator() const
   return osc;
 }
 
+void Sensor::setInterlacing(SideType side)
+{
+  LOG_WARN << __func__ << " Interlacing is not supported by " << type() << " sensors";
+}
+
 void Sensor::setInterlacing(uint32_t ifactor, SideType side)
 {
   LOG_WARN << __func__ << " Interlacing is not supported by " << type() << " sensors";
@@ -601,6 +606,66 @@ uint32_t Sensor::getInterlacing(SideType side) const
   }
 
   return ifactor;
+}
+
+void Sensor::setHighFullWell(bool flag)
+{
+  LOG_WARN << __func__ << " HighFullWell mode is not supported by " << type() << " sensors";
+}
+
+bool Sensor::getHighFullWell() const
+{
+  return false;
+}
+
+void Sensor::setZeroDeadTime(bool flag, SideType side)
+{
+  LOG_WARN << __func__ << " ZeroDeadTime mode is not supported by " << type() << " sensors";
+}
+
+bool Sensor::getZeroDeadTime(SideType side) const
+{
+  return false;
+}
+
+void Sensor::setTriggerDelay()
+{
+  LOG_WARN << __func__ << " Trigger Delay is not supported by " << type() << " sensors";
+}
+
+void Sensor::setTriggerDelay(double delay)
+{
+  LOG_WARN << __func__ << " Trigger Delay is not supported by " << type() << " sensors";
+}
+
+double Sensor::getTriggerDelay() const
+{
+  return false;
+}
+
+void Sensor::setPhiDelay(SideType side)
+{
+  LOG_WARN << __func__ << " Phi Delay is not supported by " << type() << " sensors";
+}
+
+void Sensor::setPhiDelay(double delay, SideType side)
+{
+  LOG_WARN << __func__ << " Phi Delay is not supported by " << type() << " sensors";
+}
+
+double Sensor::getPhiDelay(SideType side)
+{
+  return 0.0;
+}
+
+void Sensor::setExtClk()
+{
+  LOG_WARN << __func__ << " External Phi Clock is not supported by " << type() << " sensors";
+}
+
+void Sensor::setExtClk(uint32_t dilation, double frequency)
+{
+  LOG_WARN << __func__ << " External Phi Clock is not supported by " << type() << " sensors";
 }
 
 std::unique_ptr<uint8_t[]> Sensor::readFrame8()

@@ -97,6 +97,21 @@ namespace Pds {
       void setManualTiming(SideType side, const Sequence& sequence);
       void setOscillator(OscillatorType osc=OscillatorType::RELAXATION);
       OscillatorType getOscillator() const;
+      void setInterlacing(SideType side);
+      void setInterlacing(uint32_t ifactor, SideType side);
+      uint32_t getInterlacing(SideType side) const;
+      void setHighFullWell(bool flag);
+      bool getHighFullWell() const;
+      void setZeroDeadTime(bool flag, SideType side);
+      bool getZeroDeadTime(SideType side) const;
+      void setTriggerDelay();
+      void setTriggerDelay(double delay);
+      double getTriggerDelay() const;
+      void setPhiDelay(SideType side);
+      void setPhiDelay(double delay, SideType side);
+      double getPhiDelay(SideType side);
+      void setExtClk();
+      void setExtClk(uint32_t dilation, double frequency);
 
       /* readout related functions */
       bool armed() const;

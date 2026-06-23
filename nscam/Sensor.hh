@@ -81,8 +81,21 @@ namespace Pds {
       /* misc sensor settings */
       virtual void setOscillator(OscillatorType osc);
       virtual OscillatorType getOscillator() const;
+      virtual void setInterlacing(SideType side);
       virtual void setInterlacing(uint32_t ifactor, SideType side);
       virtual uint32_t getInterlacing(SideType side) const;
+      virtual void setHighFullWell(bool flag);
+      virtual bool getHighFullWell() const;
+      virtual void setZeroDeadTime(bool flag, SideType side);
+      virtual bool getZeroDeadTime(SideType side) const;
+      virtual void setTriggerDelay();
+      virtual void setTriggerDelay(double delay);
+      virtual double getTriggerDelay() const;
+      virtual void setPhiDelay(SideType side);
+      virtual void setPhiDelay(double delay, SideType side);
+      virtual double getPhiDelay(SideType side);
+      virtual void setExtClk();
+      virtual void setExtClk(uint32_t dilation, double frequency);
 
       /* data access functions */
       virtual std::unique_ptr<uint8_t[]>  readFrame8();

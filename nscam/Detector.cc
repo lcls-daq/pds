@@ -370,6 +370,81 @@ OscillatorType Detector::getOscillator() const
   return sensor_->getOscillator();
 }
 
+void Detector::setInterlacing(SideType side)
+{
+  return sensor_->setInterlacing(side);
+}
+
+void Detector::setInterlacing(uint32_t ifactor, SideType side)
+{
+  return sensor_->setInterlacing(ifactor, side);
+}
+
+uint32_t Detector::getInterlacing(SideType side) const
+{
+  return sensor_->getInterlacing(side);
+}
+
+void Detector::setHighFullWell(bool flag)
+{
+  return sensor_->setHighFullWell(flag);
+}
+
+bool Detector::getHighFullWell() const
+{
+  return sensor_->getHighFullWell();
+}
+
+void Detector::setZeroDeadTime(bool flag, SideType side)
+{
+  return sensor_->setZeroDeadTime(flag, side);
+}
+
+bool Detector::getZeroDeadTime(SideType side) const
+{
+  return sensor_->getZeroDeadTime(side);
+}
+
+void Detector::setTriggerDelay()
+{
+  return sensor_->setTriggerDelay();
+}
+
+void Detector::setTriggerDelay(double delay)
+{
+  return sensor_->setTriggerDelay(delay);
+}
+
+double Detector::getTriggerDelay() const
+{
+  return sensor_->getTriggerDelay();
+}
+
+void Detector::setPhiDelay(SideType side)
+{
+  return sensor_->setPhiDelay(side);
+}
+
+void Detector::setPhiDelay(double delay, SideType side)
+{
+  return sensor_->setPhiDelay(delay, side);
+}
+
+double Detector::getPhiDelay(SideType side)
+{
+  return sensor_->getPhiDelay(side);
+}
+
+void Detector::setExtClk()
+{
+  return sensor_->setExtClk();
+}
+
+void Detector::setExtClk(uint32_t dilation, double frequency)
+{
+  return sensor_->setExtClk(dilation, frequency);
+}
+
 bool Detector::armed() const
 {
   return board_->armed();

@@ -32,6 +32,13 @@ static const char*    UxiConfigPotNames[] = {
   "HST_RO_NC_IBIAS",  // POT12
   "VRST",             // POT13
 };
+static const size_t NumUxiConfigPotNames = sizeof(UxiConfigPotNames) / sizeof(UxiConfigPotNames[0]);
+
+static const Pds::NsCam::SideType sideTypes[] = {
+  Pds::NsCam::SideType::A,
+  Pds::NsCam::SideType::B,
+};
+static const size_t numSideTypes = sizeof(sideTypes) / sizeof(sideTypes[0]);
 
 namespace Pds {
   namespace NsCam {
@@ -253,11 +260,37 @@ namespace Pds {
         } else {
           _cfgtc.extent = sizeof(Xtc) + sizeof(UxiConfigType);
 
+          // Check if the detector has be initialized
+          if (!_detector.isInitialized()) {
+            printf("Initializing the detector:\n");
+            printf("==========================\n");
+            printf(" Attempting to initialize the detector at %s:%hu\n", _detector.host().c_str(), _detector.port());
+            // time the startup time of the camera
+            auto init_start = std::chrono::steady_clock::now();
+            try {
+              _detector.initialize();
+            } catch (const NsCamException& err) {
+              printf("ConfigAction: failed to initialize detector: %s\n", err.what());
+              _error = true;
+              UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: failed to initialize detector!\n");
+              _mgr.appliance().post(msg);
+              return tr;
+            }
+            auto init_end = std::chrono::steady_clock::now();
+            std::chrono::duration<double> init_elapsed_seconds = init_end - init_start;
+            printf(" Initialized the detector in %f seconds\n\n", init_elapsed_seconds.count());
+          }
+
+          printf("Configuring the detector:\n");
+          printf("=========================\n");
+          auto config_start = std::chrono::steady_clock::now();
           try {
             if (_config.roiEnable()) {
               const Pds::Uxi::RoiCoord& roi_rows = _config.roiRows();
               const Pds::Uxi::RoiCoord& roi_frames = _config.roiFrames();
+              printf(" Setting ROI rows (first, last): %u %u\n", roi_rows.first(), roi_rows.last());
               _detector.setRows(roi_rows.first(), roi_rows.last());
+              printf(" Setting ROI frames (first, last): %u %u\n", roi_frames.first(), roi_frames.last());
               _detector.setFrames(roi_frames.first(), roi_frames.last());
             } else {
               _detector.setRows();
@@ -266,7 +299,7 @@ namespace Pds {
           } catch (const NsCamException& err) {
             printf("ConfigAction: failed to configure the ROI of the detector: %s\n", err.what());
             _error = true;
-            UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: failed to reset/configure the ROI of the detector!\n");
+            UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Erroar: failed to reset/configure the ROI of the detector!\n");
             _mgr.appliance().post(msg);
             return tr;
           }
@@ -277,10 +310,20 @@ namespace Pds {
             ndarray<const uint32_t, 1> time_off = _config.timeOff();
             ndarray<const uint32_t, 1> delay    = _config.delay();
 
+            if (numSideTypes != UxiConfigNumberOfSides) {
+              printf("ConfigAction: configuration contains an unexpected number of timing sides: %u instead of the expected %zu\n",
+                     UxiConfigNumberOfSides, numSideTypes);
+              _error = true;
+              UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: configuration contains an unexpected number of timing sides!\n");
+              _mgr.appliance().post(msg);
+              return tr;
+            }
+
             // Send the timing configuration to the detector
-            SideType side = SideType::AB;
             for (unsigned iside=0; iside<UxiConfigNumberOfSides; iside++) {
-              side = static_cast<SideType>(iside);
+              side = sideTypes[iside];
+              printf(" Setting timing for side %s to open %u, closed %u, delay %u\n",
+                     toString(side), time_on[iside], time_off[iside], delay[iside]);
               _detector.setTiming(side, {time_on[iside], time_off[iside], delay[iside]});
             }
           } catch (const NsCamException& err) {
@@ -295,9 +338,18 @@ namespace Pds {
           try {
             // Send the pot configuration (excluding the readonly pots)
             ndarray<const double, 1> pots = _config.pots();
+            if (NumUxiConfigPotNames != UxiConfigNumberOfPots) {
+              printf("ConfigAction: configuration contains an unexpected number of pots: %u instead of the expected %zu\n",
+                     UxiConfigNumberOfPots, NumUxiConfigPotNames);
+              _error = true;
+              UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: configuration contains an unexpected number of pots!\n");
+              _mgr.appliance().post(msg);
+              return tr;
+            }
             for (unsigned ipot=0; ipot<UxiConfigNumberOfPots; ipot++) {
               potname = UxiConfigPotNames[ipot];
               if (!_config.potIsReadOnly(ipot)) {
+                printf(" Setting %s to %.3f V%s\n", potname.c_str(), pots[ipot], _config.potIsTuned(ipot) ? " tuned" : "");
                 _detector.setPotV(potname, pots[ipot], _config.potIsTuned(ipot));
               }
             }
@@ -311,7 +363,9 @@ namespace Pds {
 
           try {
             // Send the oscillator configuration
-            _detector.setOscillator(static_cast<OscillatorType>(_config.oscillator()));
+            OscillatorType oscmode = static_cast<OscillatorType>(_config.oscillator());
+            printf(" Setting the oscillator to %s\n", toString(oscmode));
+            _detector.setOscillator(oscmode);
           } catch (const NsCamException& err) {
             printf("ConfigAction: failed to set oscillator mode of the detector to %u: %s\n", _config.oscillator(), err.what());
             _error = true;
@@ -319,22 +373,28 @@ namespace Pds {
             _mgr.appliance().post(msg);
             return tr;
           }
+          auto config_end = std::chrono::steady_clock::now();
+          std::chrono::duration<double> config_elapsed_seconds = config_end - config_start;
+          printf(" Configured the detector in %f seconds\n\n", config_elapsed_seconds.count());
 
+          // Dump some status information from the detector
           try {
+            _detector.interfaceInfo();
+            _detector.boardInfo();
+            _detector.sensorInfo();
+            _detector.statusInfo();
+            _detector.potInfo();
+
             double pots_rbv[UxiConfigNumberOfPots];
             uint32_t width_rbv = _detector.width();
             uint32_t height_rbv = _detector.height();
             uint32_t num_frames_rbv = _detector.nframes();
             uint32_t num_bytes_rbv = _detector.bytesperpixel();
-            BoardType board_type_rbv = _detector.boardType();
             SensorType sensor_type_rbv = _detector.sensorType();
             uint32_t first_row = _detector.firstrow();
             uint32_t last_row = _detector.lastrow();
             uint32_t first_frame = _detector.firstframe();
             uint32_t last_frame = _detector.lastframe();
-            Timing timing_a_rbv = _detector.getTiming(SideType::A);
-            Timing timing_b_rbv = _detector.getTiming(SideType::B);
-            OscillatorType osc_mode = _detector.getOscillator();
 
             if(num_frames_rbv > _max_num_frames) { // check that the number of frames does not exceed max_num_frames
               printf("configaction: the detector has %u frames, but the event builder is only configured for %u!\n", num_frames_rbv, _max_num_frames);
@@ -342,29 +402,6 @@ namespace Pds {
               UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: the detector has more frames than the maximum set in the event builder!\n");
               _mgr.appliance().post(msg);
               return tr;
-            }
-
-            printf("Detector info:\n");
-            printf(" Width is:      %u\n", width_rbv);
-            printf(" Height is:     %u\n", height_rbv);
-            printf(" Num frames is: %u\n", num_frames_rbv);
-            printf(" Num bytes is:  %u\n", num_bytes_rbv);
-            printf(" Board is:      %s\n", toString(board_type_rbv));
-            printf(" Sensor is:     %s\n", toString(sensor_type_rbv));
-            printf("ROI info:\n");
-            printf(" first row:     %u\n", first_row);
-            printf(" last row:      %u\n", last_row);
-            printf(" first frame:   %u\n", first_frame);
-            printf(" last frame:    %u\n", last_frame);
-            printf("Oscillator info:\n");
-            printf(" mode:          %s\n", toString(osc_mode));
-            printf("Timing info:\n");
-            printf(" side A:        %s\n", Timing::toString(timing_a_rbv).c_str());
-            printf(" side B:        %s\n", Timing::toString(timing_b_rbv).c_str());
-            printf("Pots info:\n");
-            for (unsigned i=0; i<UxiConfigNumberOfPots; i++) {
-              pots_rbv[i] = _detector.getPotV(UxiConfigPotNames[i]);
-              printf(" pot%02u:     %.2f\n", i, pots_rbv[i]);  
             }
 
             _server.resetCount();

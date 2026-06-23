@@ -16,10 +16,12 @@ namespace Pds {
                unsigned short port,
                CommType ctype,
                BoardType btype,
-               SensorType stype);
+               SensorType stype,
+               bool init=true);
       virtual ~Detector();
 
       /* init functions */
+      bool isInitialized() const;
       void initialize();
       void reinitialize();
       void reboot();
@@ -40,6 +42,8 @@ namespace Pds {
       bool boardFpgaRad() const;
       bool powerCheck(uint32_t delta=10) const;
       uint32_t getTimer() const;
+      std::string host() const;
+      unsigned short port() const;
 
       /* env sensor readback */
       double getTemp(TempType scale = TempType::C) const;
@@ -111,6 +115,7 @@ namespace Pds {
     private:
       void initPowerCheck();
 
+      bool initialized_;
       std::chrono::system_clock::time_point inittime_;
       std::shared_ptr<Comm> comm_;
       std::shared_ptr<Board> board_;

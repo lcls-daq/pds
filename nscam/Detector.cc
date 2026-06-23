@@ -16,16 +16,25 @@ Detector::Detector(const std::string& host,
                    unsigned short port,
                    CommType ctype,
                    BoardType btype,
-                   SensorType stype) :
+                   SensorType stype,
+                   bool init) :
+  initialized_(false),
   comm_(Comm::create(host, port, ctype)),
   board_(Board::create(btype, stype, comm_)),
   sensor_(Sensor::create(stype, board_))
 {
-  initialize();
+  if (init) {
+    initialize();
+  }
 }
 
 Detector::~Detector()
 {}
+
+bool Detector::isInitialized() const
+{
+  return initialized_;
+}
 
 void Detector::initialize()
 {
@@ -33,11 +42,13 @@ void Detector::initialize()
   board_->initPots();
   sensor_->initSensor();
   initPowerCheck();
+  initialized_ = true;
 }
 
 void Detector::reinitialize()
 {
   LOG_INFO << __func__;
+  initialized_ = false;
   comm_->reconnect();
   initialize();
 
@@ -148,6 +159,16 @@ bool Detector::powerCheck(uint32_t delta) const
 uint32_t Detector::getTimer() const
 {
   return board_->getTimer();
+}
+
+std::string Detector::host() const
+{
+  return comm_->host();
+}
+
+unsigned short Detector::port() const
+{
+  return comm_->port();
 }
 
 double Detector::getTemp(TempType scale) const

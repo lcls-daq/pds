@@ -39,6 +39,7 @@ namespace Pds {
       unsigned short port_;      
       unsigned long  timeout_;
       size_t         buffer_size_;
+      size_t         buffer_alloc_size_;
       std::unique_ptr<uint8_t[]> buffer_;
     };
   }

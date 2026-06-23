@@ -31,6 +31,7 @@ Comm::Comm(CommType ctype, const std::string& host, unsigned short port, unsigne
   port_(port),
   timeout_(timeout),
   buffer_size_(0),
+  buffer_alloc_size_(0),
   buffer_(nullptr)
 {}
 
@@ -86,9 +87,10 @@ std::unique_ptr<uint32_t[]> Comm::readDataAsUInt32(uint16_t addr, uint32_t data,
 
 bool Comm::prepBuffer(size_t size)
 {
-  if (size > buffer_size_) {
+  if (size > buffer_alloc_size_) {
     buffer_.reset(new uint8_t[size]);
-    buffer_size_ = size;
+    buffer_alloc_size_ = size;
   }
+  buffer_size_ = size;
   return buffer_ != nullptr;
 }

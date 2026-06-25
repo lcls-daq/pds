@@ -162,6 +162,8 @@ namespace Pds {
               printf("  timestep error for acq_count %u: fdelta %f  dfid %d  tds %u,%u [%d]\n",
                      data->acquisitionCount(), fdelta, _nfid, data->timestamp(), _data_ts, nfid);
               _synced = false;
+            } else {
+              _synced = true;
             }
 
             if (!_synced) {

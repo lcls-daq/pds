@@ -91,10 +91,13 @@ namespace Pds {
       bool manualTiming() const;
       Sequence getArbTiming(SideType side) const;
       Timing getTiming(SideType side) const;
+      Sequence getActualTiming(SideType side) const;
       Sequence getManualTiming(SideType side) const;
       void setArbTiming(SideType side, const Sequence& sequence);
       void setTiming(SideType side, const Timing& timing);
       void setManualTiming(SideType side, const Sequence& sequence);
+
+      /* misc sensor settings */
       void setOscillator(OscillatorType osc=OscillatorType::RELAXATION);
       OscillatorType getOscillator() const;
       void setInterlacing(SideType side);

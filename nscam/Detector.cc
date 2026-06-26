@@ -340,6 +340,11 @@ Timing Detector::getTiming(SideType side) const
   return sensor_->getTiming(side);
 }
 
+Sequence Detector::getActualTiming(SideType side) const
+{
+  return sensor_->getActualTiming(side);
+}
+
 Sequence Detector::getManualTiming(SideType side) const
 {
   return sensor_->getManualTiming(side);

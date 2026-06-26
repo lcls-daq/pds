@@ -91,6 +91,7 @@ const char* Logger::levelStr(Level level)
     case Level::INFO:  return "INFO ";
     case Level::WARN:  return "WARN ";
     case Level::ERROR: return "ERROR";
+    case Level::OFF:   return "OFF  ";
     default:           return "?????";
   }
 }

@@ -12,6 +12,8 @@ namespace Pds {
       uint32_t closed;
       uint32_t delay;
       static std::string toString(const Timing& timing);
+      bool operator==(const Timing& other) const;
+      bool operator!=(const Timing& other) const;
       friend std::ostream& operator<<(std::ostream& os, const Timing& timing);
     };
 
@@ -73,6 +75,7 @@ namespace Pds {
       /* sensor timing functions */
       virtual Sequence getArbTiming(SideType side) const;
       virtual Timing getTiming(SideType side) const;
+      virtual Sequence getActualTiming(SideType side) const;
       virtual Sequence getManualTiming(SideType side) const;
       virtual void setArbTiming(SideType side, const Sequence& sequence);
       virtual void setTiming(SideType side, const Timing& timing);

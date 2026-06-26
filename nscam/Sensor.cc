@@ -72,6 +72,16 @@ std::string Timing::toString(const Timing& timing)
   return timingstr.str();
 }
 
+bool Timing::operator==(const Timing& other) const
+{
+  return open == other.open && closed == other.closed && delay == other.delay;
+}
+
+bool Timing::operator!=(const Timing& other) const
+{
+  return !(*this == other);
+}
+
 std::shared_ptr<Sensor> Sensor::create(SensorType stype, std::shared_ptr<Board> board)
 {
   switch (stype) {
@@ -329,7 +339,7 @@ Timing Sensor::getTiming(SideType side) const
     timing.delay = timingSeq[0];
     timing.open = timingSeq[1];
     if (timingSeq.size() < 3) {
-      timing.closed = timing_bits - (timingSeq[1] + timingSeq[0]);
+      timing.closed = timing_bits - timingSeq[1];
     } else {
       timing.closed = timingSeq[2];
     }
@@ -342,6 +352,24 @@ Timing Sensor::getTiming(SideType side) const
   }
 
   return timing;
+}
+
+Sequence Sensor::getActualTiming(SideType side) const
+{
+  LOG_DEBUG << __func__ << " side " << side;
+  Sequence timingSeq = getArbTiming(side);
+  size_t actualLength = 2 * nframes();
+  Sequence actual(actualLength);
+  uint64_t total = 0;
+  for (size_t idx_act=0, idx_reg=0; idx_act<actualLength; idx_act++, idx_reg=idx_act%timingSeq.size()) {
+    actual[idx_act] = timingSeq[idx_reg];
+    if ((idx_reg == 0) && (idx_act / timingSeq.size() > 0)) {
+      actual[idx_act] += timing_bits - total;
+      total = 0;
+    }
+    total += timingSeq[idx_reg];
+  }
+  return actual;
 }
 
 Sequence Sensor::getManualTiming(SideType side) const
@@ -445,39 +473,38 @@ void Sensor::setTiming(SideType side, const Timing& timing)
   LOG_DEBUG << __func__ << " side " << side << " timing " << timing;
   uint32_t count = 1;
   Sequence sequence;
+  Sequence expected;
 
   // add the delay to the sequence
   sequence.push_back(timing.delay);
   count += timing.delay;
 
-  if (std::all_of(interlacing_.begin(), interlacing_.end(), [](uint32_t x) { return x == 0; })) {
-    // just fill 40bit register with needed number of sequences
-    for (uint32_t idx=1; idx<nseq_; idx++) {
-      sequence.push_back(timing.open);
-      count += timing.open;
-      sequence.push_back(timing.closed);
-      count += timing.closed;
-    }
+  // try to fill the whole 40bit register as closely as we can
+  while (count + timing.open <= timing_bits) {
     sequence.push_back(timing.open);
     count += timing.open;
-  } else {
-    // interlaced mode - try to fill the whole 40bit register as closely as we can
-    while (count + timing.open <= timing_bits) {
-      sequence.push_back(timing.open);
-      count += timing.open;
 
-      if (count + timing.closed + timing.open > timing_bits) {
-        // another open won't fit so explicit close at end not needed
-        break;
-      }
-
-      sequence.push_back(timing.closed);
-      count += timing.closed;
+    if (count + timing.closed + timing.open > timing_bits) {
+      // another open won't fit so explicit close at end not needed
+      break;
     }
+
+    sequence.push_back(timing.closed);
+    count += timing.closed;
   }
 
-  if (count > timing_bits) {
-    LOG_EXCEPTION(InvalidTiming, LOG_STR("Timing sequence is too long to be implemented: " << count));
+  // construct the expected full sequence
+  expected.push_back(timing.delay);
+  for(size_t i=0; i<nframes()-1; i++) {
+    expected.push_back(timing.open);
+    expected.push_back(timing.closed);
+  }
+  expected.push_back(timing.open);
+
+  // strictly check that all frames fit in the sequence if checkLength otherwise just check one frame fits
+  uint32_t min_seq_len = timing.open + timing.closed + timing.delay;
+  if (min_seq_len > timing_bits) {
+    LOG_EXCEPTION(InvalidTiming, LOG_STR("Timing sequence is too long to be implemented: " << min_seq_len));
   }
 
   setArbTiming(side, sequence);
@@ -485,9 +512,9 @@ void Sensor::setTiming(SideType side, const Timing& timing)
   // check the readback
   Sequence actual;
   if (side == SideType::AB || side == SideType::A) {
-    actual = getArbTiming(SideType::A);
+    actual = getActualTiming(SideType::A);
   } else {
-    actual = getArbTiming(SideType::B);
+    actual = getActualTiming(SideType::B);
   }
 
   // warn if there is extra effective delay from hidden pre-frames
@@ -496,7 +523,8 @@ void Sensor::setTiming(SideType side, const Timing& timing)
     LOG_WARN << __func__ << " actual effective delay for " << type() << " sensor is " << f0delay;
   }
 
-  if (actual != sequence) {
+  // check that enough of the sequence was written for the current frame roi
+  if (actual != expected) {
     LOG_WARN << __func__ << " sequence truncated due to length, actual timing: " << actual;
   }
 }

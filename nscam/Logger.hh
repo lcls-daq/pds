@@ -27,7 +27,7 @@ namespace Pds {
 
     class Logger {
     public:
-      enum class Level : unsigned { DEBUG = 0, INFO = 1, WARN = 2, ERROR = 3 };
+      enum class Level : unsigned { DEBUG = 0, INFO = 1, WARN = 2, ERROR = 3, OFF = 4 };
 
       static Logger& instance();
 

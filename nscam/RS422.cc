@@ -3,7 +3,6 @@
 #include "Logger.hh"
 
 #include <iostream>
-#include <iomanip>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -484,17 +483,15 @@ void RS422::info() const noexcept
   struct termios tty;
   // save the i/o formatting before changing...
   FormatBackup fmt(std::cout);
-  std::cout << "RS422 Interface Info:" << std::endl;
-  std::cout << "=========================" << std::endl;
-  std::cout << " Device:           " << host_ << std::endl;
+  std::cout << INFO_HEADER("RS422 Interface Info", 1) << std::endl;
+  std::cout << INFO_PAD("Device") << host_ << std::endl;
   if (tcgetattr(fd_, &tty) != 0) {
-    std::cout << " tcgetattr err:    " << strerror(errno) << std::endl;
+    std::cout << INFO_PAD("tcgetattr err") << strerror(errno) << std::endl;
   } else {
-    std::cout << std::hex << std::setfill('0') << std::setw(8);
-    std::cout << " c_iflag:          0x" << tty.c_iflag << std::endl;
-    std::cout << " c_oflag:          0x" << tty.c_oflag << std::endl;
-    std::cout << " c_cflag:          0x" << tty.c_cflag << std::endl;
-    std::cout << " c_lflag:          0x" << tty.c_lflag << std::endl;
+    std::cout << INFO_PAD("c_iflag") << "0x" << INFO_HEX(tty.c_iflag) << std::endl;
+    std::cout << INFO_PAD("c_oflag") << "0x" << INFO_HEX(tty.c_oflag) << std::endl;
+    std::cout << INFO_PAD("c_cflag") << "0x" << INFO_HEX(tty.c_cflag) << std::endl;
+    std::cout << INFO_PAD("c_lflag") << "0x" << INFO_HEX(tty.c_lflag) << std::endl;
   }
   std::cout << std::endl;
 }

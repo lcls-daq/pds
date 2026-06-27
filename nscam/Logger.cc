@@ -18,6 +18,34 @@ void FormatBackup::restore() {
   ios_.flags(fmt_);
 }
 
+std::ostream& FormatBackup::initFormat(std::ostream& ios)
+{
+  return ios << std::boolalpha;
+}
+
+std::ostream& FormatBackup::hexOn(std::ostream& ios)
+{
+  return ios << std::hex << std::setfill('0') << std::setw(8);
+}
+
+std::ostream& FormatBackup::hexOff(std::ostream& ios)
+{
+  return ios << std::dec << std::setfill(' ');
+}
+
+std::ostream& FormatBackup::pad(std::ostream& ios)
+{
+  return ios << FormatBackup::InfoLeftPad << std::left << std::setfill(' ') << std::setw(FormatBackup::InfoPrintWidth);
+}
+
+std::string FormatBackup::section(const std::string& title)
+{
+  return std::string(title.length() + InfoElemSeparator.length(), '=');
+}
+
+const std::string FormatBackup::InfoLeftPad(InfoPrintLeftPad, ' ');
+const std::string FormatBackup::InfoElemSeparator(":");
+
 Logger& Logger::instance()
 {
   static Logger inst;

@@ -3,7 +3,6 @@
 #include "Logger.hh"
 
 #include <iostream>
-#include <iomanip>
 
 using namespace Pds::NsCam;
 
@@ -91,11 +90,10 @@ void Detector::statusInfo() const
 {
   // save the i/o formatting before changing...
   FormatBackup fmt(std::cout);
-  std::cout << "Env Status:" << std::endl;
-  std::cout << "=========================" << std::endl;
-  std::cout << " Temp:             " << getTemp(TempType::C) << " " << toString(TempType::C) << std::endl;
+  std::cout << INFO_HEADER("Env Status", 1) << std::endl;
+  std::cout << INFO_PAD("Temp") << getTemp(TempType::C) << " " << toString(TempType::C) << std::endl;
   if (board_->type() != BoardType::LLNL_V1) {
-    std::cout << " Pressure:         " << getPressure(PressureType::torr) << " " << toString(PressureType::torr) << std::endl;
+    std::cout << INFO_PAD("Pressure") << getPressure(PressureType::torr) << " " << toString(PressureType::torr) << std::endl;
   }
   std::cout << std::endl;
   // restore i/o formatting

@@ -1,7 +1,9 @@
 #include "Gige.hh"
 #include "Error.hh"
+#include "Logger.hh"
 
 #include <iostream>
+#include <iomanip>
 #include <sstream>
 #include <vector>
 #include <arpa/inet.h>
@@ -108,15 +110,15 @@ void Gige::listDevices(unsigned long wait)
     if (status == ZESTETM1_SUCCESS) {
       std::cout << "Found " << num_cards << " devices:" << std::endl;
       for (unsigned long n=0; n<num_cards; n++) {
-        std::cout << "====================" << std::endl;
-        std::cout << " Ip Address:       " << ip2str(info[n].IPAddr) << std::endl;
-        std::cout << " Control Port:     " << info[n].ControlPort << std::endl;
-        std::cout << " Timeout:          " << info[n].Timeout << std::endl;
-        std::cout << " HTTP Port:        " << info[n].HTTPPort << std::endl;
-        std::cout << " MAC Address:      " << mac2str(info[n].MACAddr) << std::endl;
-        std::cout << " Netmask:          " << ip2str(info[n].SubNet) << std::endl;
-        std::cout << " Gateway:          " << ip2str(info[n].Gateway) << std::endl;
-        std::cout << " Serial Number:    " << info[n].SerialNumber << std::endl;
+        std::cout << "=========================" << std::endl;
+        std::cout << INFO_PAD("Ip Address")     << ip2str(info[n].IPAddr) << std::endl;
+        std::cout << INFO_PAD("Control Port")   << info[n].ControlPort << std::endl;
+        std::cout << INFO_PAD("Timeout")        << info[n].Timeout << std::endl;
+        std::cout << INFO_PAD("HTTP Port")      << info[n].HTTPPort << std::endl;
+        std::cout << INFO_PAD("MAC Address")    << mac2str(info[n].MACAddr) << std::endl;
+        std::cout << INFO_PAD("Netmask")        << ip2str(info[n].SubNet) << std::endl;
+        std::cout << INFO_PAD("Gateway")        << ip2str(info[n].Gateway) << std::endl;
+        std::cout << INFO_PAD("Serial Number")  << info[n].SerialNumber << std::endl;
       }
 
       // free the memory for info
@@ -170,18 +172,19 @@ bool Gige::closeDevice() noexcept
 
 void Gige::info() const noexcept
 {
-  std::cout << "Gige Interface Info:" << std::endl; 
-  std::cout << "=========================" << std::endl;
-  std::cout << " Ip Address:       " << ip2str(info_.IPAddr) << std::endl;
-  std::cout << " Control Port:     " << info_.ControlPort << std::endl;
-  std::cout << " Timeout:          " << info_.Timeout << std::endl;
-  std::cout << " HTTP Port:        " << info_.HTTPPort << std::endl;
-  std::cout << " MAC Address:      " << mac2str(info_.MACAddr) << std::endl;
-  std::cout << " Netmask:          " << ip2str(info_.SubNet) << std::endl;
-  std::cout << " Gateway:          " << ip2str(info_.Gateway) << std::endl;
-  std::cout << " Serial Number:    " << info_.SerialNumber << std::endl;
-  std::cout << " Firmware Version: " << info_.FirmwareVersion << std::endl;
-  std::cout << " Hardware Version: " << info_.HardwareVersion << std::endl;
+  // save the i/o formatting before changing...
+  FormatBackup fmt(std::cout);
+  std::cout << INFO_HEADER("Gige Interface Info", 1) << std::endl;
+  std::cout << INFO_PAD("Ip Address")       << ip2str(info_.IPAddr)   << std::endl;
+  std::cout << INFO_PAD("Control Port")     << info_.ControlPort      << std::endl;
+  std::cout << INFO_PAD("Timeout")          << info_.Timeout          << std::endl;
+  std::cout << INFO_PAD("HTTP Port")        << info_.HTTPPort         << std::endl;
+  std::cout << INFO_PAD("MAC Address")      << mac2str(info_.MACAddr) << std::endl;
+  std::cout << INFO_PAD("Netmask")          << ip2str(info_.SubNet)   << std::endl;
+  std::cout << INFO_PAD("Gateway")          << ip2str(info_.Gateway)  << std::endl;
+  std::cout << INFO_PAD("Serial Number")    << info_.SerialNumber     << std::endl;
+  std::cout << INFO_PAD("Firmware Version") << info_.FirmwareVersion  << std::endl;
+  std::cout << INFO_PAD("Hardware Version") << info_.HardwareVersion  << std::endl;
   std::cout << std::endl;
 }
 

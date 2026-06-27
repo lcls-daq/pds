@@ -6,7 +6,6 @@
 #include "Logger.hh"
 
 #include <iostream>
-#include <iomanip>
 #include <sstream>
 #include <algorithm>
 
@@ -124,35 +123,36 @@ void Sensor::info() const
 {
   // save the i/o formatting before changing...
   FormatBackup fmt(std::cout);
-  std::cout << "Sensor Info:" << std::endl;
-  std::cout << "=========================" << std::endl;
-  std::cout << " Type:             " << name() << std::endl;
-  std::cout << " Min Frame:        " << minframe_ << std::endl;
-  std::cout << " Max Frame:        " << maxframe_ << std::endl;
-  std::cout << " Max Width:        " << maxwidth_ << std::endl;
-  std::cout << " Max Height:       " << maxheight_ << std::endl;
-  std::cout << " Bytes Per Pixel:  " << bytesperpixel_ << std::endl;
-  std::cout << " First Frame:      " << firstframe_ << std::endl;
-  std::cout << " Last Frame:       " << lastframe_ << std::endl;
-  std::cout << " Num Frames:       " << nframes() << std::endl;
-  std::cout << " First Row:        " << firstrow_ << std::endl;
-  std::cout << " Last Row:         " << lastrow_ << std::endl;
-  std::cout << " Width:            " << width() << std::endl;
-  std::cout << " Height:           " << height() << std::endl;
-  std::cout << " Num Pixels:       " << npixels() << std::endl;
-  std::cout << " Frame Size:       " << payloadSize() << std::endl;
-  std::cout << " Manual Timing:    " << manualTiming_ << std::endl;
+  std::cout << INFO_HEADER("Board Info", 1) << std::endl;
+  std::cout << INFO_PAD("Type") << name() << std::endl;
+  std::cout << INFO_PAD("Min Frame") << minframe_ << std::endl;
+  std::cout << INFO_PAD("Max Frame") << maxframe_ << std::endl;
+  std::cout << INFO_PAD("Max Width") << maxwidth_ << std::endl;
+  std::cout << INFO_PAD("Max Height") << maxheight_ << std::endl;
+  std::cout << INFO_PAD("Bytes Per Pixel") << bytesperpixel_ << std::endl;
+  std::cout << INFO_PAD("First Frame") << firstframe_ << std::endl;
+  std::cout << INFO_PAD("Last Frame") << lastframe_ << std::endl;
+  std::cout << INFO_PAD("Num Frames") << nframes() << std::endl;
+  std::cout << INFO_PAD("First Row") << firstrow_ << std::endl;
+  std::cout << INFO_PAD("Last Row") << lastrow_ << std::endl;
+  std::cout << INFO_PAD("Width") << width() << std::endl;
+  std::cout << INFO_PAD("Height") << height() << std::endl;
+  std::cout << INFO_PAD("Num Pixels") << npixels() << std::endl;
+  std::cout << INFO_PAD("Frame Size") << payloadSize() << std::endl;
+  std::cout << INFO_PAD("Manual Timing") << manualTiming_ << std::endl;
   if (manualTiming_) {
-    std::cout << " Sequence Side A:  " << getManualTiming(SideType::A) << std::endl;
-    std::cout << " Sequence Side B:  " << getManualTiming(SideType::B) << std::endl;
+    std::cout << INFO_PAD("Manual Timing Side A") << getManualTiming(SideType::A) << std::endl;
+    std::cout << INFO_PAD("Manual Timing Side B") << getManualTiming(SideType::B) << std::endl;
   } else {
-    std::cout << " Timing Side A:    " << getTiming(SideType::A) << std::endl;
-    std::cout << " Timing Side B:    " << getTiming(SideType::B) << std::endl;
-    std::cout << " Sequence Side A:  " << getArbTiming(SideType::A) << std::endl;
-    std::cout << " Sequence Side B:  " << getArbTiming(SideType::B) << std::endl;
+    std::cout << INFO_PAD("Timing Side A") << getTiming(SideType::A) << std::endl;
+    std::cout << INFO_PAD("Timing Side B") << getTiming(SideType::B) << std::endl;
+    std::cout << INFO_PAD("Actual Timing Side A") << getActualTiming(SideType::A) << std::endl;
+    std::cout << INFO_PAD("Actual Timing Side B") << getActualTiming(SideType::B) << std::endl;
+    std::cout << INFO_PAD("Raw Sequence Side A") << getArbTiming(SideType::A) << std::endl;
+    std::cout << INFO_PAD("Raw Sequence Side B") << getArbTiming(SideType::B) << std::endl;
   }
-  std::cout << " Oscillator:       " << getOscillator() << std::endl;
-  std::cout << " Interlacing:      " << "[ " << getInterlacing(SideType::A) << ", " << getInterlacing(SideType::B) << " ]" << std::endl;
+  std::cout << INFO_PAD("Oscillator") << getOscillator() << std::endl;
+  std::cout << INFO_PAD("Interlacing") << "[ " << getInterlacing(SideType::A) << ", " << getInterlacing(SideType::B) << " ]" << std::endl;
   std::cout << std::endl;
 }
 

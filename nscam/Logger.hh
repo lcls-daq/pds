@@ -3,6 +3,7 @@
 
 #include <ctime>
 #include <iostream>
+#include <iomanip>
 #include <mutex>
 #include <string>
 #include <sstream>
@@ -18,6 +19,17 @@ namespace Pds {
 
       FormatBackup(const FormatBackup &rhs) = delete;
       FormatBackup& operator= (const FormatBackup& rhs) = delete;
+
+      static std::ostream& initFormat(std::ostream& ios);
+      static std::ostream& hexOn(std::ostream& ios);
+      static std::ostream& hexOff(std::ostream& ios);
+      static std::ostream& pad(std::ostream& ios);
+      static std::string section(const std::string& title);
+
+      static constexpr int InfoPrintWidth   = 25;
+      static constexpr int InfoPrintLeftPad = 1;
+      static const std::string InfoLeftPad;
+      static const std::string InfoElemSeparator;
 
     private:
       char fill_ch_;
@@ -107,6 +119,11 @@ namespace Pds {
 #define LOG_ERROR LogStream(Logger::Level::ERROR)
 #define LOG_EXCEPTION(exp, ...) Pds::NsCam::Logger::instance().exception(exp(__VA_ARGS__))
 #define LOG_STR(stream) (StreamHelper() << stream).str()
+#define INFO_FLT_PREC(prec) std::fixed << std::setprecision(prec)
+#define INFO_HEADER(msg, prec) FormatBackup::initFormat << msg + FormatBackup::InfoElemSeparator << "\n" << FormatBackup::section(msg) << INFO_FLT_PREC(prec)
+#define INFO_PAD(msg) FormatBackup::pad << msg + FormatBackup::InfoElemSeparator
+#define INFO_HEX(value) FormatBackup::hexOn << value << FormatBackup::hexOff
+#define INFO_INDENT FormatBackup::InfoLeftPad << FormatBackup::InfoLeftPad
 #endif
 
 #endif

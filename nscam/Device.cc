@@ -5,7 +5,6 @@
 
 #include <cmath>
 #include <iostream>
-#include <iomanip>
 
 static void msleep(long ms)
 {
@@ -359,12 +358,10 @@ void Device::potInfo() const
 {
   // save the i/o formatting before changing...
   FormatBackup fmt(std::cout);
-  std::cout << "Pot Status:" << std::endl;
-  std::cout << "=========================" << std::endl;
-  std::cout << std::fixed << std::setprecision(3);
+  std::cout << INFO_HEADER("Pot Status", 3) << std::endl;
   for (const auto& kv : aliases_) {
     if ((kv.second.rfind("POT", 0) == 0) || (kv.second.rfind("DAC", 0) == 0)) {
-      std::cout << " " << std::left << std::setw(18) << kv.first + ":" << getPotV(kv.first) << " V";
+      std::cout << INFO_PAD(kv.first) << getPotV(kv.first) << " V";
       if (hasMonitor(kv.first)) {
         std::cout << ", mon = " << getMonV(kv.first) << " V" << std::endl;
       } else {

@@ -5,7 +5,6 @@
 #include "Logger.hh"
 
 #include <iostream>
-#include <iomanip>
 #include <chrono>
 
 using namespace Pds::NsCam;
@@ -89,26 +88,22 @@ void Board::info() const
 {
   // save the i/o formatting before changing...
   FormatBackup fmt(std::cout);
-  std::cout << "Board Info:" << std::endl;
-  std::cout << "=========================" << std::endl;
-  std::cout << " Type:             " << name() << std::endl;
-  std::cout << std::hex << std::setfill('0') << std::setw(8);
-  std::cout << " Number:           " << fpgaNum() << std::endl;
-  std::cout << " Revision:         " << fpgaRev() << std::endl;
-  std::cout << " Rad-Tolerant:     " << fpgaRad() << std::endl;
-  std::cout << " Interfaces:       " << std::endl;
+  std::cout << INFO_HEADER("Board Info", 3) << std::endl;
+  std::cout << INFO_PAD("Type")             << name() << std::endl;
+  std::cout << INFO_PAD("Firmware Number")  << INFO_HEX(fpgaNum()) << std::endl;
+  std::cout << INFO_PAD("Firmware Version") << INFO_HEX(fpgaRev()) << std::endl;
+  std::cout << INFO_PAD("Rad-Tolerant")     << fpgaRad() << std::endl;
+  std::cout << INFO_PAD("Interfaces")       << std::endl;
   for (auto ctype : fpgaInterfaces()) {
-    std::cout << "   " << toString(ctype);
+    std::cout << INFO_INDENT << toString(ctype);
     if (ctype == commType()) {
       std::cout << " (active)";
     }
     std::cout << std::endl;
   }
-  // remove hex formatting
-  fmt.restore();
-  std::cout << " Vref:             " << vref() << std::endl;
-  std::cout << " ADC5 multiplier:  " << adc5_mult() << std::endl;
-  std::cout << " ADC5 bipolar:     " << adc5_bipolar() << std::endl;
+  std::cout << INFO_PAD("Vref")             << vref() << " V" << std::endl;
+  std::cout << INFO_PAD("ADC5 multiplier")  << adc5_mult() << std::endl;
+  std::cout << INFO_PAD("ADC5 bipolar")     << adc5_bipolar() << std::endl;
   std::cout << std::endl;
 }
 
@@ -118,26 +113,25 @@ void Board::status() const
   uint32_t statusbits2 = checkStatus2();
   // save the i/o formatting before changing...
   FormatBackup fmt(std::cout);
-  std::cout << "Board Status:" << std::endl;
-  std::cout << "=========================" << std::endl;
-  std::cout << " Sensor Read:      " << getBit(statusbits, 0) << std::endl;
-  std::cout << " Coarse Trigger:   " << getBit(statusbits, 1) << std::endl;
-  std::cout << " Fine Trigger:     " << getBit(statusbits, 2) << std::endl;
-  std::cout << " Readout Started:  " << getBit(statusbits, 5) << std::endl;
-  std::cout << " Reaout Complete:  " << getBit(statusbits, 6) << std::endl;
-  std::cout << " SRAM Started:     " << getBit(statusbits, 7) << std::endl;
-  std::cout << " SRAM Complete:    " << getBit(statusbits, 8) << std::endl;
-  std::cout << " TimingCfg Active: " << getBit(statusbits, 9) << std::endl;
-  std::cout << " ADCs Configured:  " << getBit(statusbits, 10) << std::endl;
-  std::cout << " DACs Configured:  " << getBit(statusbits, 11) << std::endl;
-  std::cout << " Timer Reset:      " << getBit(statusbits, 13) << std::endl;
-  std::cout << " Camera Armed:     " << getBit(statusbits, 14) << std::endl;
-  std::cout << " TimingCfg Done:   " << getBit(statusbits, 16) << std::endl;
-  std::cout << " FPA_IF_TO:        " << getBit(statusbits2, 0) << std::endl;
-  std::cout << " SRAM_RO_TO:       " << getBit(statusbits2, 1) << std::endl;
-  std::cout << " PixelRd Timeout:  " << getBit(statusbits2, 2) << std::endl;
-  std::cout << " UART_TX_TO_RST:   " << getBit(statusbits2, 3) << std::endl;
-  std::cout << " UART_RX_TO_RST:   " << getBit(statusbits2, 4) << std::endl;
+  std::cout << INFO_HEADER("Board Status", 1) << std::endl;
+  std::cout << INFO_PAD("Sensor Read Complete")     << getBit(statusbits, 0) << std::endl;
+  std::cout << INFO_PAD("Coarse Trigger Detected")  << getBit(statusbits, 1) << std::endl;
+  std::cout << INFO_PAD("Fine Trigger Detected")    << getBit(statusbits, 2) << std::endl;
+  std::cout << INFO_PAD("Sensor Readout Started")   << getBit(statusbits, 5) << std::endl;
+  std::cout << INFO_PAD("Sensor Reaout Complete")   << getBit(statusbits, 6) << std::endl;
+  std::cout << INFO_PAD("SRAM Readout Started")     << getBit(statusbits, 7) << std::endl;
+  std::cout << INFO_PAD("SRAM Readout Complete")    << getBit(statusbits, 8) << std::endl;
+  std::cout << INFO_PAD("HS Timing Config Started") << getBit(statusbits, 9) << std::endl;
+  std::cout << INFO_PAD("All ADCs Configured")      << getBit(statusbits, 10) << std::endl;
+  std::cout << INFO_PAD("All DACs Configured")      << getBit(statusbits, 11) << std::endl;
+  std::cout << INFO_PAD("Timer Reset")              << getBit(statusbits, 13) << std::endl;
+  std::cout << INFO_PAD("Camera Armed")             << getBit(statusbits, 14) << std::endl;
+  std::cout << INFO_PAD("HS Timing Config Done")    << getBit(statusbits, 16) << std::endl;
+  std::cout << INFO_PAD("FPA_IF_TO")                << getBit(statusbits2, 0) << std::endl;
+  std::cout << INFO_PAD("SRAM_RO_TO")               << getBit(statusbits2, 1) << std::endl;
+  std::cout << INFO_PAD("PixelRd Timeout Error")    << getBit(statusbits2, 2) << std::endl;
+  std::cout << INFO_PAD("UART_TX_TO_RST")           << getBit(statusbits2, 3) << std::endl;
+  std::cout << INFO_PAD("UART_RX_TO_RST")           << getBit(statusbits2, 4) << std::endl;
   std::cout << std::endl;
 }
 

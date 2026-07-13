@@ -25,6 +25,7 @@ namespace Pds {
       static std::ostream& hexOff(std::ostream& ios);
       static std::ostream& pad(std::ostream& ios);
       static std::string section(const std::string& title);
+      static int padding(const std::string& msg);
 
       static constexpr int InfoPrintWidth   = 25;
       static constexpr int InfoPrintLeftPad = 1;

@@ -43,6 +43,11 @@ std::string FormatBackup::section(const std::string& title)
   return std::string(title.length() + InfoElemSeparator.length(), '=');
 }
 
+int FormatBackup::padding(const std::string& msg)
+{
+  return msg.length() > FormatBackup::InfoPrintWidth ? 0 : FormatBackup::InfoPrintWidth - msg.length();;
+}
+
 const std::string FormatBackup::InfoLeftPad(InfoPrintLeftPad, ' ');
 const std::string FormatBackup::InfoElemSeparator(":");
 

@@ -74,6 +74,8 @@ namespace Pds {
       void setFrames(uint32_t minframe, uint32_t maxframe);
 
       /* Register read/write functions */
+      bool validRegister(const std::string& regname) const;
+      bool validSubRegister(const std::string& subregname) const;
       uint32_t getRegister(const std::string& regname) const;
       void setRegister(const std::string& regname, uint32_t value);
       uint32_t getSubRegister(const std::string& subregname) const;

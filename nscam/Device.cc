@@ -80,6 +80,18 @@ Device::Device(std::shared_ptr<Comm> comm,
   comm_(comm)
 {}
 
+bool Device::validRegister(const std::string& regname) const
+{
+  auto it = regnames_.find(resolveRegisterName(regname));
+  return it != regnames_.end();
+}
+
+bool Device::validSubRegister(const std::string& subregname) const
+{
+  auto it = subregnames_.find(resolveRegisterName(subregname));
+  return it != subregnames_.end();
+}
+
 uint32_t Device::getRegister(const std::string& regname) const
 {
   return Device::getRegister(lookupRegister(regname));

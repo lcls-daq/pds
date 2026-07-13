@@ -235,12 +235,12 @@ bool Board::armed() const
   return armed_;
 }
 
-void Board::arm(TriggerType mode)
+void Board::arm(TriggerType mode, bool manual_timing)
 {
   LOG_DEBUG << __func__ << " mode = " << mode;
   clearStatus();
   latchPots();
-  startCapture(mode);
+  startCapture(mode, manual_timing);
   armed_ = true;
 }
 
@@ -253,10 +253,15 @@ void Board::disarm()
   setSubRegister("SW_TRIG_EN", 0);
 }
 
-void Board::startCapture(TriggerType mode)
+void Board::startCapture(TriggerType mode, bool manual_timing)
 {
   LOG_DEBUG << __func__;
   setRegister("ADC_CTL", 0x0000001F);
+  if (manual_timing) {
+    setSubRegister("MANSHUT_MODE", 1);
+  } else {
+    setSubRegister("HST_MODE", 1);
+  }
   if (mode == TriggerType::SOFTWARE) {
     setSubRegister("HW_TRIG_EN", 0);
     setSubRegister("SW_TRIG_EN", 1);

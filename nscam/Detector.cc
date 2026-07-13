@@ -278,6 +278,16 @@ void Detector::setFrames(uint32_t minframe, uint32_t maxframe)
   sensor_->setFrames(minframe, maxframe);
 }
 
+bool Detector::validRegister(const std::string& regname) const
+{
+  return board_->validRegister(regname);
+}
+
+bool Detector::validSubRegister(const std::string& subregname) const
+{
+  return board_->validSubRegister(subregname);
+}
+
 uint32_t Detector::getRegister(const std::string& regname) const
 {
   return board_->getRegister(regname);
@@ -455,7 +465,7 @@ bool Detector::armed() const
 
 void Detector::arm(TriggerType mode)
 {
-  board_->arm(mode);
+  board_->arm(mode, sensor_->manualTiming());
 }
 
 void Detector::disarm()
@@ -465,7 +475,7 @@ void Detector::disarm()
 
 void Detector::startCapture(TriggerType mode)
 {
-  board_->startCapture(mode);
+  board_->startCapture(mode, sensor_->manualTiming());
 }
 
 bool Detector::waitForSRAM(uint32_t timeout_ms)

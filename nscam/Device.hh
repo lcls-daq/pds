@@ -48,6 +48,8 @@ namespace Pds {
              const std::map<std::string, std::string>& monitors);
       virtual ~Device() = default;
 
+      virtual bool validRegister(const std::string& regname) const;
+      virtual bool validSubRegister(const std::string& subregname) const;
       virtual uint32_t getRegister(const std::string& regname) const;
       virtual uint32_t getRegister(uint16_t address) const;
       virtual void setRegister(const std::string& regname, uint32_t value);

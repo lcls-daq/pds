@@ -56,9 +56,9 @@ namespace Pds {
       virtual void setLED(uint32_t led, bool status) = 0;
 
       virtual bool armed() const;
-      virtual void arm(TriggerType mode);
+      virtual void arm(TriggerType mode, bool manual_timing);
       virtual void disarm();
-      virtual void startCapture(TriggerType mode);
+      virtual void startCapture(TriggerType mode, bool manual_timing);
       virtual bool waitForSRAM(uint32_t timeout_ms);
       virtual bool abortReadoff(bool flag);
 

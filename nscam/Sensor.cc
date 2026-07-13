@@ -123,7 +123,7 @@ void Sensor::info() const
 {
   // save the i/o formatting before changing...
   FormatBackup fmt(std::cout);
-  std::cout << INFO_HEADER("Board Info", 1) << std::endl;
+  std::cout << INFO_HEADER("Sensor Info", 1) << std::endl;
   std::cout << INFO_PAD("Type") << name() << std::endl;
   std::cout << INFO_PAD("Min Frame") << minframe_ << std::endl;
   std::cout << INFO_PAD("Max Frame") << maxframe_ << std::endl;

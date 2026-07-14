@@ -360,14 +360,17 @@ Sequence Sensor::getActualTiming(SideType side) const
   Sequence timingSeq = getArbTiming(side);
   size_t actualLength = 2 * nframes();
   Sequence actual(actualLength);
-  uint64_t total = 0;
-  for (size_t idx_act=0, idx_reg=0; idx_act<actualLength; idx_act++, idx_reg=idx_act%timingSeq.size()) {
-    actual[idx_act] = timingSeq[idx_reg];
-    if ((idx_reg == 0) && (idx_act / timingSeq.size() > 0)) {
-      actual[idx_act] += timing_bits - total;
-      total = 0;
+
+  if (!timingSeq.empty()) {
+    uint64_t total = 0;
+    for (size_t idx_act=0, idx_reg=0; idx_act<actualLength; idx_act++, idx_reg=idx_act%timingSeq.size()) {
+      actual[idx_act] = timingSeq[idx_reg];
+      if ((idx_reg == 0) && (idx_act / timingSeq.size() > 0)) {
+        actual[idx_act] += timing_bits - total;
+        total = 0;
+      }
+      total += timingSeq[idx_reg];
     }
-    total += timingSeq[idx_reg];
   }
   return actual;
 }
@@ -475,22 +478,24 @@ void Sensor::setTiming(SideType side, const Timing& timing)
   Sequence sequence;
   Sequence expected;
 
-  // add the delay to the sequence
-  sequence.push_back(timing.delay);
-  count += timing.delay;
+  if (timing.open + timing.closed != 0) {
+    // add the delay to the sequence
+    sequence.push_back(timing.delay);
+    count += timing.delay;
 
-  // try to fill the whole 40bit register as closely as we can
-  while (count + timing.open <= timing_bits) {
-    sequence.push_back(timing.open);
-    count += timing.open;
+    // try to fill the whole 40bit register as closely as we can
+    while (count + timing.open <= timing_bits) {
+      sequence.push_back(timing.open);
+      count += timing.open;
 
-    if (count + timing.closed + timing.open > timing_bits) {
-      // another open won't fit so explicit close at end not needed
-      break;
+      if (count + timing.closed + timing.open > timing_bits) {
+        // another open won't fit so explicit close at end not needed
+        break;
+      }
+
+      sequence.push_back(timing.closed);
+      count += timing.closed;
     }
-
-    sequence.push_back(timing.closed);
-    count += timing.closed;
   }
 
   // construct the expected full sequence

@@ -15,7 +15,7 @@ static const unsigned UxiConfigMaxManualShutterSequence = Pds::Uxi::ConfigV4::Ma
 static const unsigned UxiConfigMaxTimingSequence = Pds::Uxi::ConfigV4::MaxTimingSequence;
 /* ddl supports infinite Registers but the rest of the code needs a max because of how buffers are allocated for configs
  * this can be changed to any higher number that is needed! */
-static const unsigned UxiConfigMaxRegisters = 200;
+static const unsigned UxiConfigMaxRegisters = 250;
 
 namespace Pds {
   namespace UxiConfig {

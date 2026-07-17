@@ -12,11 +12,12 @@ void Pds::UxiConfig::setPots(UxiConfigType& c,
                         c.numberOfFrames(),
                         c.numberOFBytesPerPixel(),
                         c.sensorType(),
-                        c.timeOn().data(),
-                        c.timeOff().data(),
-                        c.delay().data(),
+                        c.timingMode(),
+                        c.timingSequence().data(),
                         c.readOnlyPots(),
-                        p);
+                        p,
+                        c.numberOfRegisters(),
+                        c.registers().data());
 }
 
 void Pds::UxiConfig::setRoi(UxiConfigType& c,
@@ -36,11 +37,12 @@ void Pds::UxiConfig::setRoi(UxiConfigType& c,
                         c.numberOfFrames(),
                         c.numberOFBytesPerPixel(),
                         c.sensorType(),
-                        c.timeOn().data(),
-                        c.timeOff().data(),
-                        c.delay().data(),
+                        c.timingMode(),
+                        c.timingSequence().data(),
                         c.readOnlyPots(),
-                        c.pots().data());
+                        c.pots().data(),
+                        c.numberOfRegisters(),
+                        c.registers().data());
 }
 
 void Pds::UxiConfig::setSize(UxiConfigType& c,
@@ -59,9 +61,10 @@ void Pds::UxiConfig::setSize(UxiConfigType& c,
                         n,
                         b,
                         t,
-                        c.timeOn().data(),
-                        c.timeOff().data(),
-                        c.delay().data(),
+                        c.timingMode(),
+                        c.timingSequence().data(),
                         c.readOnlyPots(),
-                        c.pots().data());
+                        c.pots().data(),
+                        c.numberOfRegisters(),
+                        c.registers().data());
 }

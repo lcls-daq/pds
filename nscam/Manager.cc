@@ -233,24 +233,34 @@ namespace Pds {
         _l1(l1),
         _reader(reader),
         _cfgtc(_uxiConfigType,cfg.src()),
+        _config_buf(NULL),
+        _config_max_size(0),
         _occPool(sizeof(UserMessage),1),
         _error(false),
-        _max_num_frames(max_num_frames) {}
-      ~ConfigAction() {}
+        _max_num_frames(max_num_frames)
+      {
+        UxiConfigType uc_default(UxiConfigMaxRegisters);
+        _config_max_size = uc_default._sizeof();
+        _config_buf = new char[_config_max_size];
+      }
+      ~ConfigAction()
+      {
+        if (_config_buf) delete[] _config_buf;
+      }
       InDatagram* fire(InDatagram* dg) {
         if (_error) {
           printf("*** Found configuration errors\n");
           dg->datagram().xtc.damage.increase(Pds::Damage::UserDefined);
         } else {
           // insert assumes we have enough space in the input datagram
-          dg->insert(_cfgtc,    &_config);
+          dg->insert(_cfgtc,    _config_buf);
         }
         return dg;
       }
       Transition* fire(Transition* tr) {
         _error = false;
 
-        int len = _cfg.fetch( *tr, _uxiConfigType, &_config, sizeof(_config) );
+        int len = _cfg.fetch(*tr, _uxiConfigType, _config_buf, _config_max_size);
 
         if (len <= 0) {
           _error = true;
@@ -260,7 +270,15 @@ namespace Pds {
           UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: failed to retrieve configuration.\n");
           _mgr.appliance().post(msg);
         } else {
-          _cfgtc.extent = sizeof(Xtc) + sizeof(UxiConfigType);
+          UxiConfigType& config = *reinterpret_cast<UxiConfigType*>(_config_buf);
+          _cfgtc.extent = sizeof(Xtc) + config._sizeof();
+          if ((uint32_t) len < config._sizeof()) {
+            printf("ConfigAction: configuration data appears truncated: %d bytes read vs expected %u bytes\n", len, config._sizeof());
+            _error = true;
+            UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: configuration data appears truncated!\n");
+            _mgr.appliance().post(msg);
+            return tr;
+          }
 
           // Check if the detector has be initialized
           if (!_detector.isInitialized()) {
@@ -287,9 +305,9 @@ namespace Pds {
           printf("=========================\n");
           auto config_start = std::chrono::steady_clock::now();
           try {
-            if (_config.roiEnable()) {
-              const Pds::Uxi::RoiCoord& roi_rows = _config.roiRows();
-              const Pds::Uxi::RoiCoord& roi_frames = _config.roiFrames();
+            if (config.roiEnable()) {
+              const Pds::Uxi::RoiCoord& roi_rows = config.roiRows();
+              const Pds::Uxi::RoiCoord& roi_frames = config.roiFrames();
               printf(" Setting ROI rows (first, last): %u %u\n", roi_rows.first(), roi_rows.last());
               _detector.setRows(roi_rows.first(), roi_rows.last());
               printf(" Setting ROI frames (first, last): %u %u\n", roi_frames.first(), roi_frames.last());
@@ -308,10 +326,6 @@ namespace Pds {
 
           SideType side = SideType::AB;
           try {
-            ndarray<const uint32_t, 1> time_on  = _config.timeOn();
-            ndarray<const uint32_t, 1> time_off = _config.timeOff();
-            ndarray<const uint32_t, 1> delay    = _config.delay();
-
             if (numSideTypes != UxiConfigNumberOfSides) {
               printf("ConfigAction: configuration contains an unexpected number of timing sides: %u instead of the expected %zu\n",
                      UxiConfigNumberOfSides, numSideTypes);
@@ -322,11 +336,39 @@ namespace Pds {
             }
 
             // Send the timing configuration to the detector
-            for (unsigned iside=0; iside<UxiConfigNumberOfSides; iside++) {
-              side = sideTypes[iside];
-              printf(" Setting timing for side %s to open %u, closed %u, delay %u\n",
-                     toString(side), time_on[iside], time_off[iside], delay[iside]);
-              _detector.setTiming(side, {time_on[iside], time_off[iside], delay[iside]});
+            if (config.timingMode() == UxiConfigType::BasicTiming) {
+              ndarray<const uint32_t, 1> time_on  = config.timeOn();
+              ndarray<const uint32_t, 1> time_off = config.timeOff();
+              ndarray<const uint32_t, 1> delay    = config.delay();
+
+              for (unsigned iside=0; iside<UxiConfigNumberOfSides; iside++) {
+                side = sideTypes[iside];
+                printf(" Setting timing for side %s to open %u, closed %u, delay %u\n",
+                       toString(side), time_on[iside], time_off[iside], delay[iside]);
+                _detector.setTiming(side, {time_on[iside], time_off[iside], delay[iside]});
+              }
+            } else if ((config.timingMode() == UxiConfigType::ArbitraryTiming) || (config.timingMode() == UxiConfigType::ManualTiming)) {
+              for (unsigned iside=0; iside<UxiConfigNumberOfSides; iside++) {
+                side = sideTypes[iside];
+                ndarray<const uint32_t, 1> timing = config.timing(iside);
+                Sequence timingSeq;
+                for(const uint32_t* it=timing.begin(); it!=timing.end(); it++) {
+                  timingSeq.push_back((uint64_t) (*it));
+                }
+                if (config.timingMode() == UxiConfigType::ArbitraryTiming) {
+                  printf(" Setting arbitrary timing for side %s to %s\n", toString(side), toString(timingSeq).c_str());
+                  _detector.setArbTiming(side, timingSeq);
+                } else {
+                  printf(" Setting manual shutter timing for side %s to %s\n", toString(side), toString(timingSeq).c_str());
+                  _detector.setManualTiming(side, timingSeq);
+                }
+              }
+            } else {
+              printf("ConfigAction: configuration timing mode is not supported: %u\n", config.timingMode());
+              _error = true;
+              UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: configuration timing mode is not supported!\n");
+              _mgr.appliance().post(msg);
+              return tr;
             }
           } catch (const NsCamException& err) {
             printf("ConfigAction: failed to configure the timing of %s of the detector: %s\n", toString(side), err.what());
@@ -339,7 +381,7 @@ namespace Pds {
           std::string potname = "";
           try {
             // Send the pot configuration (excluding the readonly pots)
-            ndarray<const double, 1> pots = _config.pots();
+            ndarray<const double, 1> pots = config.pots();
             if (NumUxiConfigPotNames != UxiConfigNumberOfPots) {
               printf("ConfigAction: configuration contains an unexpected number of pots: %u instead of the expected %zu\n",
                      UxiConfigNumberOfPots, NumUxiConfigPotNames);
@@ -350,9 +392,9 @@ namespace Pds {
             }
             for (unsigned ipot=0; ipot<UxiConfigNumberOfPots; ipot++) {
               potname = UxiConfigPotNames[ipot];
-              if (!_config.potIsReadOnly(ipot)) {
-                printf(" Setting %s to %.3f V%s\n", potname.c_str(), pots[ipot], _config.potIsTuned(ipot) ? " tuned" : "");
-                _detector.setPotV(potname, pots[ipot], _config.potIsTuned(ipot));
+              if (!config.potIsReadOnly(ipot)) {
+                printf(" Setting %s to %.3f V%s\n", potname.c_str(), pots[ipot], config.potIsTuned(ipot) ? " tuned" : "");
+                _detector.setPotV(potname, pots[ipot], config.potIsTuned(ipot));
               }
             }
           } catch (const NsCamException& err) {
@@ -365,15 +407,43 @@ namespace Pds {
 
           try {
             // Send the oscillator configuration
-            OscillatorType oscmode = static_cast<OscillatorType>(_config.oscillator());
+            OscillatorType oscmode = static_cast<OscillatorType>(config.oscillator());
             printf(" Setting the oscillator to %s\n", toString(oscmode));
             _detector.setOscillator(oscmode);
           } catch (const NsCamException& err) {
-            printf("ConfigAction: failed to set oscillator mode of the detector to %u: %s\n", _config.oscillator(), err.what());
+            printf("ConfigAction: failed to set oscillator mode of the detector to %u: %s\n", config.oscillator(), err.what());
             _error = true;
             UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: failed to configure the oscillator mode the detector!\n");
             _mgr.appliance().post(msg);
             return tr;
+          }
+
+          // set the register values stored in the config
+          ndarray<const Pds::Uxi::Register, 1> registers = config.registers();
+          for(const Pds::Uxi::Register* reg=registers.begin(); reg!=registers.end(); reg++) {
+            try {
+              if (_detector.validRegister(reg->name())) {
+                printf(" Setting register %s to 0x%08x\n", reg->name(), reg->value());
+                _detector.setRegister(reg->name(), reg->value());
+              } else if (_detector.validSubRegister(reg->name())) {
+                printf(" Setting subregister %s to 0x%08x\n", reg->name(), reg->value());
+                _detector.setSubRegister(reg->name(), reg->value());
+              } else {
+                printf("ConfigAction: Invalid register %s cannot be set to 0x%08x\n", reg->name(), reg->value());
+                _error = true;
+                char buffer[128];
+                snprintf(buffer, sizeof(buffer), "Uxi Config Error: Invalid register %s cannot be set!\n", reg->name());
+                UserMessage* msg = new (&_occPool) UserMessage(buffer);
+                _mgr.appliance().post(msg);
+                return tr;
+              }
+            } catch (const NsCamException& err) {
+              printf("ConfigAction: failed to set register %s of the detector to 0x%08x: %s\n", reg->name(), reg->value(), err.what());
+              _error = true;
+              UserMessage* msg = new (&_occPool) UserMessage("Uxi Config Error: failed to configure detector registers!\n");
+              _mgr.appliance().post(msg);
+              return tr;
+            }
           }
           auto config_end = std::chrono::steady_clock::now();
           std::chrono::duration<double> config_elapsed_seconds = config_end - config_start;
@@ -411,11 +481,11 @@ namespace Pds {
             _server.set_frame_sz(_detector.payloadSize());
 
             // Add the actual frame size and roi to the config
-            UxiConfig::setSize(_config, width_rbv, height_rbv, num_frames_rbv, num_bytes_rbv, static_cast<unsigned>(sensor_type_rbv));
-            UxiConfig::setRoi(_config, first_row, last_row, first_frame, last_frame);
+            UxiConfig::setSize(config, width_rbv, height_rbv, num_frames_rbv, num_bytes_rbv, static_cast<unsigned>(sensor_type_rbv));
+            UxiConfig::setRoi(config, first_row, last_row, first_frame, last_frame);
 
             // Add the read back pots values to the config
-            UxiConfig::setPots(_config, pots_rbv);
+            UxiConfig::setPots(config, pots_rbv);
 
             // Finally configure the frame reader
             _reader.configure();
@@ -438,8 +508,9 @@ namespace Pds {
       CfgClientNfs&         _cfg;
       L1Action&             _l1;
       FrameReader&          _reader;
-      UxiConfigType         _config;
       Xtc                   _cfgtc;
+      char*                 _config_buf;
+      size_t                _config_max_size;
       GenericPool           _occPool;
       bool                  _error;
       unsigned              _max_num_frames;

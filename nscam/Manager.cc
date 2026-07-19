@@ -457,7 +457,12 @@ namespace Pds {
             _detector.statusInfo();
             _detector.potInfo();
 
+            // readback the pot setpoints including the 'readonly' ones
             double pots_rbv[UxiConfigNumberOfPots];
+            for (unsigned ipot=0; ipot<UxiConfigNumberOfPots; ipot++) {
+              potname = UxiConfigPotNames[ipot];
+              pots_rbv[ipot] = _detector.getPotV(potname);
+            }
             uint32_t width_rbv = _detector.width();
             uint32_t height_rbv = _detector.height();
             uint32_t num_frames_rbv = _detector.nframes();

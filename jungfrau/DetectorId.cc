@@ -297,7 +297,6 @@ void stripEcho(std::string& text, const char* cmd)
 
 }  // namespace
 
-
 using namespace Pds;
 using namespace Pds::Jungfrau;
 

@@ -86,7 +86,11 @@ Pgp::Pgp(bool use_aes, int f, bool pf, unsigned lane) :
     free(ptr);
   }
   _myG3Flag = _isDataDev ? true : ((version>>12) & 0xf) == 3;
-  printf("Pgp::Pgp found card version 0x%x which I see is %sa G3 card\n", version, _myG3Flag ? "" : "NOT ");
+  if (_isDataDev) {
+    printf("Pgp::Pgp found card version 0x%x which I see is a datadev card\n", version);
+  } else {
+    printf("Pgp::Pgp found card version 0x%x which I see is %sa G3 card\n", version, _myG3Flag ? "" : "NOT ");
+  }
   if (_isDataDev) {
     _status = new DataDevStatusWrap(_fd, 0, this, lane);
   } else if (_myG3Flag) {

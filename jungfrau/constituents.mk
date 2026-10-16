@@ -4,6 +4,10 @@ ifneq ($(findstring x86_64-rhel9,$(tgt_arch)),)
 libnames += jungfrau
 endif
 
+ifneq ($(findstring x86_64-rhel8,$(tgt_arch)),)
+libnames += jungfrau
+endif
+
 ifneq ($(findstring x86_64-rhel7,$(tgt_arch)),)
 libnames += jungfrau
 CPPFLAGS += -std=c++11
